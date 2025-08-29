@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# line_at_byte.sh FILE POS
+# Prints the 1-based line number of the byte at offset POS (0-based).
+# Works on macOS and Linux. Reads from a single open FD for stability.
+
+set -euo pipefail
+
+if [ $# -lt 2 ]; then
+  echo "usage: $0 FILE POS" >&2
+  exit 2
+fi
+
+file=$1
+pos=$2
+
+# Validate/normalize POS (integer; clamp to >= 0)
+case "$pos" in
+  ''|*[!0-9]*) echo "POS must be a non-negative integer" >&2; exit 2 ;;
+esac
+
+# Open exactly once on FD 3 (portable to macOS' Bash 3.2)
+exec 3<"$file"
+
+# Count newlines strictly before POS, then add 1 for the current line
+# If POS > file size, head will just read to EOF — which is fine.
+head -c "$pos" <&3 | wc -l | {
+  read nl || nl=0
+  echo $(( nl + 1 ))
+}

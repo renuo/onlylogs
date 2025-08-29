@@ -1,0 +1,87 @@
+<%# locals: (log_file_path:, tail: 100) %>
+
+<style>
+    .onlylogs-log-container {
+        background-color: white;
+        height: 100vh;
+        width: 100%;
+        overflow-y: auto;
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+        font-size: 0.8rem;
+        margin: 0;
+        padding: 10px;
+        border: none;
+        border-radius: 0;
+        box-sizing: border-box;
+
+        .color-success {
+            color: green;
+        }
+
+        .color-error {
+            color: red;
+        }
+
+        .request-row.selected {
+            background: #e0e7ff !important;
+        }
+
+        .fw-bold {
+            font-weight: 600;
+        }
+
+        .log-black {
+            color: lch(18% 0 0);
+        }
+
+        .log-red {
+            color: lch(55% 60 29);
+        }
+
+        .log-green {
+            color: lch(70% 45 135);
+        }
+
+        .log-yellow {
+            color: lch(85% 30 100);
+        }
+
+        .log-blue {
+            color: lch(65% 45 260);
+        }
+
+        .log-magenta {
+            color: lch(65% 40 320);
+        }
+
+        .log-cyan {
+            color: lch(75% 30 200);
+        }
+
+        .log-white {
+            color: lch(95% 2 0);
+        }
+
+        pre {
+            margin: 0 !important;
+            padding: 0.2rem;
+            white-space: pre-wrap;   /* preserve spaces + wrap when needed */
+            word-break: break-word;  /* allow breaking long tokens like UUIDs/SQL */
+        }
+    }
+    
+</style>
+
+<%
+    klass = params[:fast].present? ? Onlylogs::FastFile : Onlylogs::File
+    cursor_position = [File.size(log_file_path) - (tail * 100), 0].max
+%>
+
+<div data-controller="log-streamer"
+     data-log-streamer-file-path-value="<%= log_file_path %>"
+     data-log-streamer-stream-channel-value="<%= klass.stream_channel %>"
+     data-log-streamer-cursor-position-value="<%= cursor_position  %>"
+     data-log-streamer-auto-scroll-value="true"
+     data-log-streamer-auto-start-value="true"
+     class="onlylogs-log-container" >
+</div>
