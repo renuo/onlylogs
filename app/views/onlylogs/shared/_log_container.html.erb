@@ -3,17 +3,33 @@
 <style>
     .onlylogs-log-container {
         background-color: white;
-        height: 100vh;
         width: 100%;
-        overflow-y: auto;
+        height: 100vh; /* Set a specific height for the container */
+        display: flex;
+        flex-direction: column;
+
         font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
         font-size: 0.8rem;
         margin: 0;
-        padding: 10px;
         border: none;
         border-radius: 0;
         box-sizing: border-box;
 
+        .onlylogs-log-lines {
+            flex: 1 1 auto;
+            overflow-y: auto;
+            min-height: 0;
+            height: 0; /* This is crucial for flex items with overflow */
+        }
+
+        .onlylogs-log-toolbar {
+            flex-shrink: 0;
+            position: sticky;
+            bottom: 0;
+            z-index: 10;
+            padding: 0.5rem;
+        }
+        
         .color-success {
             color: green;
         }
@@ -68,8 +84,12 @@
             white-space: pre-wrap;   /* preserve spaces + wrap when needed */
             word-break: break-word;  /* allow breaking long tokens like UUIDs/SQL */
         }
+
+        a {
+            color: inherit;
+            text-decoration: underline;
+        }
     }
-    
 </style>
 
 <%
@@ -84,4 +104,13 @@
      data-log-streamer-auto-scroll-value="true"
      data-log-streamer-auto-start-value="true"
      class="onlylogs-log-container" >
+    <div data-log-streamer-target="logLines" class="onlylogs-log-lines">
+
+    </div>
+    <div class="onlylogs-log-toolbar">
+        <label>
+          <input id="autoscroll" type="checkbox" checked="checked" name="autoscroll" data-action="change->log-streamer#toggleAutoScroll">
+          Autoscroll
+        </label>
+    </div>
 </div>

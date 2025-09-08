@@ -14,7 +14,7 @@ module Onlylogs
     end
 
     def parsed_text
-      AnsiColorParser.parse(text)
+      AnsiColorParser.parse(FilePathParser.parse(text))
     end
 
     def to_a

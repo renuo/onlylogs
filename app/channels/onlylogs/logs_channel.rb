@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module Onlylogs
-  class LogsChannel < ApplicationCable::Channel
+  class LogsChannel < ActionCable::Channel::Base
     def subscribed
       # Wait for the client to send the cursor position
       # start_log_watcher will be called from the initialize_watcher method

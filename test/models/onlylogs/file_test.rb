@@ -28,7 +28,7 @@ class Onlylogs::FileTest < ActiveSupport::TestCase
     big_file = Onlylogs::File.new(File.expand_path("../../fixtures/files/big.log", __dir__))
     start_time = Time.now
     big_file.go_to_position(835_436_842)
-    end_time = Time.now    
+    end_time = Time.now
     assert_equal 1434016, big_file.last_line_number
     assert_in_delta 3.0, end_time - start_time, 3.0
   end

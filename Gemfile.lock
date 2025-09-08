@@ -90,6 +90,8 @@ GEM
     drb (2.2.3)
     erb (5.0.2)
     erubi (1.13.1)
+    faker (3.5.1)
+      i18n (>= 1.8.11, < 2)
     globalid (1.2.1)
       activesupport (>= 6.1)
     i18n (1.14.7)
@@ -245,6 +247,8 @@ GEM
     sqlite3 (2.7.3-x86_64-darwin)
     sqlite3 (2.7.3-x86_64-linux-gnu)
     sqlite3 (2.7.3-x86_64-linux-musl)
+    stimulus-rails (1.3.4)
+      railties (>= 6.0.0)
     stringio (3.1.7)
     thor (1.4.0)
     timeout (0.4.3)
@@ -272,12 +276,14 @@ PLATFORMS
   x86_64-linux-musl
 
 DEPENDENCIES
+  faker
   importmap-rails
   onlylogs!
   propshaft
   puma
   rubocop-rails-omakase
   sqlite3
+  stimulus-rails
 
 BUNDLED WITH
    2.6.9

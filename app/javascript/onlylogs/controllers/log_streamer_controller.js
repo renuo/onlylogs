@@ -10,12 +10,15 @@ export default class LogStreamerController extends Controller {
     autoScroll: { type: Boolean, default: true },
     autoStart: { type: Boolean, default: true }
   };
+
+  static targets = ["logLines"];
   
   connect() {
     console.log(`LogStreamerController connected for file: ${this.filePathValue}`);
     // Initialize ActionCable consumer
     this.consumer = createConsumer();
-    
+    console.log(this.logLinesTarget);
+
     // Internal state
     this.receivedLines = new Map();
     this.missingLinePlaceholders = new Map();
@@ -76,11 +79,13 @@ export default class LogStreamerController extends Controller {
    */
   toggleAutoScroll() {
     this.autoScrollValue = !this.autoScrollValue;
+    console.log("autoscroll?", this.autoScrollValue)
   }
 
   scroll() {
     if (this.autoScrollValue) {
-      this.element.scrollTop = this.element.scrollHeight;
+      console.log("scrolling to bottom", this.logLinesTarget.scrollHeight);
+      this.logLinesTarget.scrollTop = this.logLinesTarget.scrollHeight;
     }
   }
   
@@ -183,8 +188,7 @@ export default class LogStreamerController extends Controller {
         }
       }
       
-      // Update the display
-      this.#updateLogDisplay();            
+      this.#updateLogDisplay();
       
     } catch (error) {
       console.error('Error handling log line:', error);
@@ -200,11 +204,15 @@ export default class LogStreamerController extends Controller {
   }
   
   /**
-   * Update log display in the DOM
+   * Update log display in the DOM by re-rendering all log lines
+   * Further improvements:
+   * * set a maximum number of lines that can be displayed
+   * * render only new lines on the bottom
+   *
    */
   #updateLogDisplay() {
-    // Clear the container
-    this.element.innerHTML = '';
+    let container = this.logLinesTarget;
+    container.innerHTML = '';
     
     // Get all line numbers (both received and missing)
     const allLineNumbers = new Set([
@@ -219,12 +227,12 @@ export default class LogStreamerController extends Controller {
     sortedLineNumbers.forEach(lineNumber => {
       if (this.receivedLines.has(lineNumber)) {
         // Use the received line (this will override any placeholder)
-        this.element.insertAdjacentHTML('beforeend', this.receivedLines.get(lineNumber).html);
+        container.insertAdjacentHTML('beforeend', this.receivedLines.get(lineNumber).html);
         // Remove the placeholder if it exists
         this.missingLinePlaceholders.delete(lineNumber);
       } else if (this.missingLinePlaceholders.has(lineNumber)) {
         // Use the missing line placeholder
-        this.element.insertAdjacentHTML('beforeend', this.missingLinePlaceholders.get(lineNumber));
+        container.insertAdjacentHTML('beforeend', this.missingLinePlaceholders.get(lineNumber));
       }
     });
 

@@ -48,12 +48,8 @@ module Onlylogs
 
     attr_writer :path, :last_position
 
-    # uses bash commands to calculate the line number at the last_position
     def calculate_line_number!
-      puts "last_position: #{last_position}"
       @last_line_number = `head -c "#{last_position}" #{path} | wc -l`.strip.to_i
-      puts "last_line_number: #{@last_line_number}"
-      @last_line_number
     end
 
     def read_new_lines
