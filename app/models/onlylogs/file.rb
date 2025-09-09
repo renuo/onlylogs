@@ -53,7 +53,6 @@ module Onlylogs
     end
 
     def read_new_lines
-      puts "reading new lines from position #{last_position}"
       return [] unless exist?
 
       current_size = ::File.size(path)

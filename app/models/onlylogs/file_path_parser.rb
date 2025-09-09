@@ -50,12 +50,8 @@ module Onlylogs
     end
 
     def self.editor_from_environment_editor
-      if ENV["ONLYLOGS_EDITOR"]
-        editor = editor_from_command(ENV["ONLYLOGS_EDITOR"])
-        return editor if editor
-      end
-      if ENV["EDITOR"]
-        editor = editor_from_command(ENV["EDITOR"])
+      %w[ONLYLOGS_EDITOR RAILS_EDITOR EDITOR].each do |var|
+        editor = editor_from_command(ENV[var]) if ENV[var]
         return editor if editor
       end
       nil

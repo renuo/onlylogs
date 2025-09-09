@@ -1,4 +1,4 @@
-<%# locals: (log_file_path:, tail: 100) %>
+<%# locals: (log_file_path:, tail: 100, filter: "", autoscroll: true) %>
 
 <style>
     .onlylogs-log-container {
@@ -28,6 +28,9 @@
             bottom: 0;
             z-index: 10;
             padding: 0.5rem;
+            display: flex; 
+            align-items: center; 
+            gap: 2rem;
         }
         
         .color-success {
@@ -100,17 +103,34 @@
 <div data-controller="log-streamer"
      data-log-streamer-file-path-value="<%= log_file_path %>"
      data-log-streamer-stream-channel-value="<%= klass.stream_channel %>"
-     data-log-streamer-cursor-position-value="<%= cursor_position  %>"
-     data-log-streamer-auto-scroll-value="true"
+     data-log-streamer-cursor-position-value="<%= cursor_position %>"
+     data-log-streamer-filter-value="<%= filter %>"
+     data-log-streamer-auto-scroll-value="<%= autoscroll %>"
      data-log-streamer-auto-start-value="true"
      class="onlylogs-log-container" >
     <div data-log-streamer-target="logLines" class="onlylogs-log-lines">
 
     </div>
     <div class="onlylogs-log-toolbar">
-        <label>
-          <input id="autoscroll" type="checkbox" checked="checked" name="autoscroll" data-action="change->log-streamer#toggleAutoScroll">
-          Autoscroll
-        </label>
+        <div>
+          <label style="margin-bottom: 0;">
+            <input id="autoscroll" type="checkbox" <%= autoscroll ? "checked" : "" %> name="autoscroll" data-action="change->log-streamer#toggleAutoScroll">
+            Autoscroll
+          </label>
+        </div>
+        <div>
+          <label style="margin-bottom: 0;">
+            Filter:
+            <input type="text" 
+                   name="filter" 
+                   value="<%= filter %>"
+                   placeholder="Enter filter text..."
+                   data-log-streamer-target="filterInput"
+                   data-action="input->log-streamer#applyFilter">
+          </label>
+        </div>
+        <div>
+          <span data-log-streamer-target="lineRange" style="color: #666; font-size: 0.9em;">No lines</span>
+        </div>
     </div>
 </div>

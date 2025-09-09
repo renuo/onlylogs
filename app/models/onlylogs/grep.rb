@@ -22,7 +22,7 @@ module Onlylogs
     end
 
     def self.match_line?(line, string)
-      line.match?(Regexp.escape(string)) != nil
+      line.match?(Regexp.escape(string))
     end
   end
 end

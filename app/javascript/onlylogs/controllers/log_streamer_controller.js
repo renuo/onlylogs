@@ -8,10 +8,11 @@ export default class LogStreamerController extends Controller {
     cursorPosition: { type: Number, default: 0 },
     lastLineNumber: { type: Number, default: 0 },
     autoScroll: { type: Boolean, default: true },
-    autoStart: { type: Boolean, default: true }
+    autoStart: { type: Boolean, default: true },
+    filter: { type: String, default: '' }
   };
 
-  static targets = ["logLines"];
+  static targets = ["logLines", "filterInput", "lineRange"];
   
   connect() {
     console.log(`LogStreamerController connected for file: ${this.filePathValue}`);
@@ -72,6 +73,27 @@ export default class LogStreamerController extends Controller {
     this.receivedLines.clear();
     this.missingLinePlaceholders.clear();
     this.element.innerHTML = '';
+    this.#updateLineRangeDisplay();
+  }
+
+  /**
+   * Reset the log streamer with current filter
+   */
+  reset() {
+    console.log(`Resetting log streamer with filter: ${this.filterValue}`);
+    
+    // Stop current streaming
+    this.stop();
+    
+    // Clear all state
+    this.clear();
+    
+    // Reset cursor position to beginning of file to see all filtered content
+    // this.cursorPositionValue = 0;
+    // this.lastLineNumberValue = 0;
+    
+    // Restart streaming with new filter
+    this.start();
   }
   
   /**
@@ -79,7 +101,20 @@ export default class LogStreamerController extends Controller {
    */
   toggleAutoScroll() {
     this.autoScrollValue = !this.autoScrollValue;
-    console.log("autoscroll?", this.autoScrollValue)
+    this.scroll();
+  }
+
+  /**
+   * Apply filter and reset the log streamer
+   */
+  applyFilter() {
+    this.subscription.perform('update_filter', {
+      filter: this.filterInputTarget.value
+    });
+    
+    
+    // Reset the log streamer with the new filter
+    this.reset();
   }
 
   scroll() {
@@ -126,7 +161,8 @@ export default class LogStreamerController extends Controller {
     this.subscription.perform('initialize_watcher', {
       cursor_position: this.cursorPositionValue,
       last_line_number: this.lastLineNumberValue,
-      file_path: this.filePathValue
+      file_path: this.filePathValue,
+      filter: this.filterValue
     });
     
     this.element.classList.add("log-streamer--connected");
@@ -178,8 +214,7 @@ export default class LogStreamerController extends Controller {
       this.receivedLines.set(lineNumber, { content, html });
       
       // Check if we need to insert missing line placeholders
-      const maxLineNumber = Math.max(...this.receivedLines.keys());
-      const minLineNumber = Math.min(...this.receivedLines.keys());
+      const { min: minLineNumber, max: maxLineNumber } = this.#getLineNumberRange();
       
       // Add missing line placeholders for any gaps
       for (let i = minLineNumber; i <= maxLineNumber; i++) {
@@ -214,14 +249,8 @@ export default class LogStreamerController extends Controller {
     let container = this.logLinesTarget;
     container.innerHTML = '';
     
-    // Get all line numbers (both received and missing)
-    const allLineNumbers = new Set([
-      ...this.receivedLines.keys(),
-      ...this.missingLinePlaceholders.keys()
-    ]);
-    
-    // Sort line numbers
-    const sortedLineNumbers = Array.from(allLineNumbers).sort((a, b) => a - b);
+    // Get sorted line numbers
+    const sortedLineNumbers = this.#getSortedLineNumbers();
     
     // Build the HTML in order
     sortedLineNumbers.forEach(lineNumber => {
@@ -230,15 +259,74 @@ export default class LogStreamerController extends Controller {
         container.insertAdjacentHTML('beforeend', this.receivedLines.get(lineNumber).html);
         // Remove the placeholder if it exists
         this.missingLinePlaceholders.delete(lineNumber);
-      } else if (this.missingLinePlaceholders.has(lineNumber)) {
-        // Use the missing line placeholder
+      } else if (
+        this.missingLinePlaceholders.has(lineNumber) &&
+        (!this.filterInputTarget.value || this.filterInputTarget.value.trim() === "")
+      ) {
+        // Use the missing line placeholder only if no filter is applied
         container.insertAdjacentHTML('beforeend', this.missingLinePlaceholders.get(lineNumber));
       }
     });
 
     console.log("updated log display.scrolling...", this.autoScrollValue);
 
+    this.#updateLineRangeDisplay();
     this.scroll();
+  }
+  
+  /**
+   * Update the line range display in the toolbar
+   */
+  #updateLineRangeDisplay() {
+    if (!this.hasLineRangeTarget) {
+      return;
+    }
+    
+    const { min: minLineNumber, max: maxLineNumber } = this.#getLineNumberRange();
+    
+    if (minLineNumber === null || maxLineNumber === null) {
+      this.lineRangeTarget.textContent = "No lines";
+      return;
+    }
+    
+    if (minLineNumber === maxLineNumber) {
+      this.lineRangeTarget.textContent = `Line ${minLineNumber}`;
+    } else {
+      this.lineRangeTarget.textContent = `Lines ${minLineNumber}-${maxLineNumber}`;
+    }
+  }
+  
+  /**
+   * Get all line numbers (both received and missing)
+   */
+  #getAllLineNumbers() {
+    return new Set([
+      ...this.receivedLines.keys(),
+      ...this.missingLinePlaceholders.keys()
+    ]);
+  }
+  
+  /**
+   * Get sorted array of all line numbers
+   */
+  #getSortedLineNumbers() {
+    return Array.from(this.#getAllLineNumbers()).sort((a, b) => a - b);
+  }
+  
+  /**
+   * Get min and max line numbers
+   */
+  #getLineNumberRange() {
+    const allLineNumbers = this.#getAllLineNumbers();
+    
+    if (allLineNumbers.size === 0) {
+      return { min: null, max: null };
+    }
+    
+    return {
+      min: Math.min(...allLineNumbers),
+      max: Math.max(...allLineNumbers)
+    };
   }
   
   /**
