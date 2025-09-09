@@ -27,12 +27,12 @@ module Onlylogs
       # return enum_for(:watch) unless block
 
       loop do
+        sleep 0.5
+
         new_lines = read_new_lines
         next if new_lines.empty?
 
         yield new_lines
-
-        sleep 0.5
       end
     end
 
@@ -53,6 +53,7 @@ module Onlylogs
     end
 
     def read_new_lines
+      puts "reading new lines from position #{last_position}"
       return [] unless exist?
 
       current_size = ::File.size(path)
