@@ -38,10 +38,8 @@ module Onlylogs
 
       @log_file = Onlylogs::File.new(file_path, last_position: cursor_position)
 
-
       @log_watcher_thread = Thread.new do
         Rails.logger.info "Starting log file watcher for connection #{connection.connection_identifier} from cursor position #{cursor_position} for file: #{file_path}."
-
 
          @log_file.watch do |new_lines|
            break unless @log_watcher_running
@@ -83,12 +81,8 @@ module Onlylogs
     end
 
     def read_entire_file_with_filter(file_path, filter = nil)
-      Rails.logger.info "Reading entire file with filter: #{filter}"
       @log_file = Onlylogs::File.new(file_path, last_position: 0)
-      start_time = Time.now
       @log_file.grep(filter) do |log_line|
-        fetched_time = Time.now
-        Rails.logger.info "Fetched log line #{log_line.number} after #{((fetched_time - start_time) * 1000).round(2)} ms"
         Rails.logger.silence(Logger::ERROR) do
           transmit(
             { action: "append_log",
@@ -97,9 +91,6 @@ module Onlylogs
               html: render_log_line(log_line) }
           )
         end
-        transmission_time = Time.now
-        Rails.logger.info "Transmitted log line #{log_line.number} after #{((transmission_time - fetched_time) * 1000).round(2)} ms"
-        start_time = Time.now
       end
     end
 

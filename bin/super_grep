@@ -9,4 +9,4 @@ color_regex="\\\e\\\[(1|30|31|32|33|34|35|36|37|39|0)m"
 # Replace each space with a regex that matches a space or a color code
 query_regex=$(echo "$escaped_query" | sed -E "s/ +/([[:space:]]|$color_regex)+/g")
 #grep --color=never -n -E "$query_regex" "$2"
-rg --color=never -n -e "$query_regex" "$2"
+rg --color=never -m 1000 -n -e "$query_regex" "$2"
