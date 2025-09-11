@@ -13,7 +13,6 @@ module Onlylogs
       self.last_position = last_position
       validate!
       calculate_line_number!
-      Rails.logger.info "Initialized Onlylogs::File for #{path} at position #{last_position}, line #{@last_line_number}"
     end
 
     def go_to_position(position)
@@ -42,6 +41,12 @@ module Onlylogs
 
     def exist?
       ::File.exist?(path)
+    end
+
+    def grep(filter, &block)
+      Grep.grep(filter, path) do |line_number, content|
+        yield Onlylogs::LogLine.new(line_number, content)
+      end
     end
 
     private

@@ -1,0 +1,186 @@
+#!/usr/bin/env bash
+# Usage:
+#   ./simulate_latency enable [latency_ms] [jitter_ms]   # start latency simulation (default: 120ms ±30ms)
+#   ./simulate_latency disable                           # stop and clean up
+#   ./simulate_latency status                            # show current state
+#   ./simulate_latency test                              # test with 10 HTTP and 10 WebSocket requests
+
+set -euo pipefail
+
+TARGET="127.0.0.1"
+PORT="3000"
+PIPE_ID="3000"
+PIDFILE="/tmp/simlatency.${PORT}.pid"
+BASE_LATENCY="120"  # Default latency in milliseconds
+JITTER="30"         # Default jitter in milliseconds
+
+_pf_enable() {
+  # Enable PF (no-op if already enabled)
+  sudo pfctl -e 2>/dev/null || true
+}
+
+load_rules() {
+  # Apply dummynet rules directly to main ruleset
+  # Note: These rules affect all traffic to/from localhost, not just port 3000
+  # This is a limitation of the current approach but works for testing
+  echo "dummynet in from any to ${TARGET} pipe ${PIPE_ID}" | sudo pfctl -f -
+  echo "dummynet out from ${TARGET} to any pipe ${PIPE_ID}" | sudo pfctl -f -
+}
+
+start_jitter_loop() {
+  local base_latency="${1:-$BASE_LATENCY}"
+  local jitter="${2:-$JITTER}"
+  # Randomize delay around base_latency ±jitter every 2 seconds (requires `jot`, present on macOS)
+  local min_delay=$((base_latency - jitter))
+  local max_delay=$((base_latency + jitter))
+  ( while true; do
+      d=$(jot -r 1 $min_delay $max_delay)
+      sudo dnctl pipe $PIPE_ID config delay "${d}ms"
+      sleep 2
+    done ) &
+  echo $! > "$PIDFILE"
+}
+
+stop_jitter_loop() {
+  if [[ -f "$PIDFILE" ]]; then
+    kill "$(cat "$PIDFILE")" 2>/dev/null || true
+    rm -f "$PIDFILE"
+  fi
+}
+
+enable() {
+  # Check if latency parameter was provided
+  if [[ -n "${2:-}" ]]; then
+    if [[ "$2" =~ ^[0-9]+$ ]]; then
+      BASE_LATENCY="$2"
+    else
+      echo "[!] Error: Latency must be a positive integer (milliseconds)"
+      exit 1
+    fi
+  fi
+  
+  # Check if jitter parameter was provided
+  if [[ -n "${3:-}" ]]; then
+    if [[ "$3" =~ ^[0-9]+$ ]]; then
+      JITTER="$3"
+    else
+      echo "[!] Error: Jitter must be a positive integer (milliseconds)"
+      exit 1
+    fi
+  fi
+  
+  echo "[*] Enabling latency simulation (target ~${BASE_LATENCY}±${JITTER}ms) on ${TARGET}:${PORT}"
+  _pf_enable
+  # Set an initial fixed delay; jitter loop will keep updating it
+  sudo dnctl pipe $PIPE_ID config delay "${BASE_LATENCY}ms"
+  load_rules
+  start_jitter_loop "$BASE_LATENCY" "$JITTER"
+  echo "[✓] Enabled. Jitter PID: $(cat "$PIDFILE")"
+  echo "    Tip: test with ->  curl -w 'time_total: %{time_total}\n' -o /dev/null -s http://${TARGET}:${PORT}"
+}
+
+disable() {
+  echo "[*] Disabling latency simulation…"
+  stop_jitter_loop
+  # Flush dummynet rules and pipes
+  sudo dnctl -q flush 2>/dev/null || true
+  sudo dnctl -q pipe flush 2>/dev/null || true
+  # Reload original pf.conf to restore normal rules
+  sudo pfctl -f /etc/pf.conf 2>/dev/null || true
+  echo "[✓] Disabled. (PF rules restored to original state.)"
+}
+
+status() {
+  echo "PF enabled status:"; sudo pfctl -s info | head -n 1
+  echo; echo "Dummynet pipes:"; sudo dnctl list || true
+  if [[ -f "$PIDFILE" ]]; then
+    echo; echo "Jitter loop PID: $(cat "$PIDFILE")"
+  else
+    echo; echo "Jitter loop not running."
+  fi
+}
+
+test_latency() {
+  echo "[*] Testing latency simulation with 10 HTTP requests and 10 WebSocket connections"
+  echo "    Target: ${TARGET}:${PORT}"
+  echo
+  
+  # Check if latency simulation is enabled
+  if ! sudo dnctl list | grep -q "0${PIPE_ID}:"; then
+    echo "[!] Warning: No dummynet pipe found. Run 'enable' first to start latency simulation."
+    echo
+  else
+    echo "[✓] Dummynet pipe ${PIPE_ID} is active"
+    echo
+  fi
+  
+  # Test HTTP requests
+  echo "=== HTTP Request Tests ==="
+  echo "Request # | Response Time (ms)"
+  echo "----------|------------------"
+  
+  total_http_time=0
+  for i in {1..10}; do
+    # Use curl with timing and convert to milliseconds
+    response_time=$(curl -w '%{time_total}' -o /dev/null -s "http://${TARGET}:${PORT}" 2>/dev/null || echo "0")
+    response_time_ms=$(echo "$response_time * 1000" | bc -l 2>/dev/null || echo "0")
+    printf "   %2d     | %8.2f ms\n" "$i" "$response_time_ms"
+    total_http_time=$(echo "$total_http_time + $response_time_ms" | bc -l 2>/dev/null || echo "$total_http_time")
+    sleep 0.5
+  done
+  
+  avg_http_time=$(echo "scale=2; $total_http_time / 10" | bc -l 2>/dev/null || echo "0")
+  echo "----------|------------------"
+  printf "Average   | %8.2f ms\n" "$avg_http_time"
+  echo
+  
+  # Test WebSocket connections (simulated with HTTP requests to WebSocket-like endpoints)
+  echo "=== WebSocket Connection Tests ==="
+  echo "Connection # | Connect Time (ms)"
+  echo "-------------|------------------"
+  
+  total_ws_time=0
+  for i in {1..10}; do
+    # Simulate WebSocket connection timing with HTTP request
+    # In a real scenario, this would be a WebSocket handshake
+    # Use curl's built-in timing instead of manual calculation
+    response_time=$(curl -w '%{time_total}' -s --connect-timeout 3 --max-time 5 "http://${TARGET}:${PORT}/" 2>/dev/null || echo "0")
+    response_time_ms=$(echo "$response_time * 1000" | bc -l 2>/dev/null || echo "0")
+    
+    if [ "$response_time_ms" != "0" ]; then
+      printf "     %2d      | %8.2f ms\n" "$i" "$response_time_ms"
+    else
+      printf "     %2d      | %8.2f ms (timeout/error)\n" "$i" "$response_time_ms"
+    fi
+    
+    total_ws_time=$(echo "$total_ws_time + $response_time_ms" | bc -l 2>/dev/null || echo "$total_ws_time")
+    sleep 0.5
+  done
+  
+  avg_ws_time=$(echo "scale=2; $total_ws_time / 10" | bc -l 2>/dev/null || echo "0")
+  echo "-------------|------------------"
+  printf "Average      | %8.2f ms\n" "$avg_ws_time"
+  echo
+  
+  # Summary
+  echo "=== Summary ==="
+  echo "HTTP Average Response Time: ${avg_http_time} ms"
+  echo "WebSocket Average Connect Time: ${avg_ws_time} ms"
+  echo
+  
+  # Check current dummynet pipe status
+  if sudo dnctl list | grep -q "0${PIPE_ID}:"; then
+    current_delay=$(sudo dnctl list | grep "0${PIPE_ID}:" | awk '{print $3}')
+    echo "Current dummynet delay: ${current_delay}"
+  else
+    echo "No dummynet pipe active"
+  fi
+}
+
+case "${1:-}" in
+  enable)  enable "$@" ;;
+  disable) disable ;;
+  status)  status ;;
+  test)    test_latency ;;
+  *) echo "Usage: $0 {enable|disable|status|test}"; exit 1 ;;
+esac

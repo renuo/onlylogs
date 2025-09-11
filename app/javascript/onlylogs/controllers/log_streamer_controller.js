@@ -9,13 +9,14 @@ export default class LogStreamerController extends Controller {
     lastLineNumber: { type: Number, default: 0 },
     autoScroll: { type: Boolean, default: true },
     autoStart: { type: Boolean, default: true },
-    filter: { type: String, default: '' }
+    filter: { type: String, default: '' },
+    mode: { type: String, default: 'live' }
   };
 
-  static targets = ["logLines", "filterInput", "lineRange"];
+  static targets = ["logLines", "filterInput", "lineRange", "liveMode"];
   
   connect() {
-    console.log(`LogStreamerController connected for file: ${this.filePathValue}`);
+    console.log(`LogStreamerController connected for file: ${this.filePathValue} in ${this.modeValue} mode`);
     // Initialize ActionCable consumer
     this.consumer = createConsumer();
     console.log(this.logLinesTarget);
@@ -25,21 +26,35 @@ export default class LogStreamerController extends Controller {
     this.missingLinePlaceholders = new Map();
     this.subscription = null;
     this.isRunning = false;
+    this.filterTimeout = null;
+    this.lastRenderedLineNumber = 0; // Track the last line number that was rendered
+    
+    // Batching state for performance optimization
+    this.pendingLines = new Map(); // Lines waiting to be rendered
+    this.batchUpdateTimer = null; // Timer for batch updates
+    this.batchInterval = 50;
 
-    if (this.autoStartValue) {
-      this.start();
-    }
-
+    this.start();
+    this.updateLiveModeState();
     this.scroll();
   }
   
   disconnect() {
     this.stop();
+    
+    // Clear any pending filter timeout
+    if (this.filterTimeout) {
+      clearTimeout(this.filterTimeout);
+      this.filterTimeout = null;
+    }
+    
+    // Clear batch update timer
+    if (this.batchUpdateTimer) {
+      clearTimeout(this.batchUpdateTimer);
+      this.batchUpdateTimer = null;
+    }
   }
   
-  /**
-   * Start log streaming
-   */
   start() {
     if (this.isRunning) {
       return;
@@ -50,9 +65,6 @@ export default class LogStreamerController extends Controller {
     this.#createSubscription();
   }
   
-  /**
-   * Stop log streaming
-   */
   stop() {
     if (!this.isRunning) {
       return;
@@ -65,62 +77,126 @@ export default class LogStreamerController extends Controller {
       this.subscription = null;
     }
   }
-  
-  /**
-   * Clear log display
-   */
+
+  reset() {
+    console.log(`Resetting log streamer with filter: ${this.filterInputTarget.value}`);
+    this.stop();
+    this.clear();
+    this.start();
+  }
+
   clear() {
     this.receivedLines.clear();
     this.missingLinePlaceholders.clear();
-    this.element.innerHTML = '';
+    this.pendingLines.clear(); // Clear pending lines
+    this.logLinesTarget.innerHTML = '';
+    this.lastRenderedLineNumber = 0; // Reset the last rendered line number
+    
+    // Clear any pending batch update timer
+    if (this.batchUpdateTimer) {
+      clearTimeout(this.batchUpdateTimer);
+      this.batchUpdateTimer = null;
+    }
+    
     this.#updateLineRangeDisplay();
   }
 
-  /**
-   * Reset the log streamer with current filter
-   */
-  reset() {
-    console.log(`Resetting log streamer with filter: ${this.filterValue}`);
-    
-    // Stop current streaming
-    this.stop();
-    
-    // Clear all state
-    this.clear();
-    
-    // Reset cursor position to beginning of file to see all filtered content
-    // this.cursorPositionValue = 0;
-    // this.lastLineNumberValue = 0;
-    
-    // Restart streaming with new filter
-    this.start();
-  }
-  
-  /**
-   * Toggle auto-scroll
-   */
   toggleAutoScroll() {
     this.autoScrollValue = !this.autoScrollValue;
     this.scroll();
   }
 
-  /**
-   * Apply filter and reset the log streamer
-   */
+  toggleLiveMode() {
+    // this condition looks revered, but the value here has been changed already. so the live mode has been enabled.
+    if (this.isLiveMode()) {
+      console.log("Clearing filter and restarting live mode");
+      this.clearFilter();
+      this.modeValue = 'live';      
+      this.reconnectWithNewMode();
+      return;
+    }
+    else {
+      console.log("Cannot disable live mode");
+      this.liveModeTarget.checked = true;
+      return false;
+    }
+  }
+
   applyFilter() {
-    this.subscription.perform('update_filter', {
-      filter: this.filterInputTarget.value
-    });
+    // Clear any existing timeout
+    if (this.filterTimeout) {
+      clearTimeout(this.filterTimeout);
+    }
     
-    
-    // Reset the log streamer with the new filter
-    this.reset();
+    // Set a new timeout for 500ms (0.5 seconds)
+    this.filterTimeout = setTimeout(() => {
+      // If filter is applied, disable live mode
+      if (this.filterInputTarget.value && this.filterInputTarget.value.trim() !== '') {
+        this.liveModeTarget.checked = false;
+        this.modeValue = 'search';
+      } else {
+        // If no filter, enable live mode
+        this.liveModeTarget.checked = true;
+        this.modeValue = 'live';
+      }
+      
+      // Update visual state
+      this.updateLiveModeState();
+      
+      // Clear any pending batch updates when filter changes
+      if (this.batchUpdateTimer) {
+        clearTimeout(this.batchUpdateTimer);
+        this.batchUpdateTimer = null;
+      }
+      
+      // Reconnect with new mode and filter
+      this.reconnectWithNewMode();
+    }, 500);
+  }
+
+  isLiveMode() {    
+    return this.liveModeTarget.checked;
   }
 
   scroll() {
     if (this.autoScrollValue) {
-      console.log("scrolling to bottom", this.logLinesTarget.scrollHeight);
       this.logLinesTarget.scrollTop = this.logLinesTarget.scrollHeight;
+    }
+  }
+
+  reconnectWithNewMode() {
+    // Stop current connection
+    this.stop();
+    
+    // Clear current logs
+    this.clear();
+    
+    // Start new connection with updated mode
+    this.start();
+  }
+
+  clearFilter() {
+    // Clear the filter input
+    this.filterInputTarget.value = '';
+    
+    // Re-enable live mode
+    this.liveModeTarget.checked = true;
+    this.modeValue = 'live';
+    
+    // Update visual state
+    this.updateLiveModeState();
+    
+    // Reconnect with cleared filter and live mode
+    this.reconnectWithNewMode();
+  }
+
+  updateLiveModeState() {
+    const liveModeLabel = this.liveModeTarget.closest('label');
+    
+    if (this.isLiveMode()) {
+      liveModeLabel.classList.remove('live-mode-sticky');
+    } else {
+      liveModeLabel.classList.add('live-mode-sticky');
     }
   }
   
@@ -156,13 +232,14 @@ export default class LogStreamerController extends Controller {
    * Handle successful connection
    */
   #handleConnected() {
-    console.log(`Sending last line number: ${this.lastLineNumberValue}, cursor position: ${this.cursorPositionValue} for file: ${this.filePathValue}`);
+    console.log(`Sending last line number: ${this.lastLineNumberValue}, cursor position: ${this.cursorPositionValue} for file: ${this.filePathValue} in mode: ${this.modeValue}`);
     
     this.subscription.perform('initialize_watcher', {
       cursor_position: this.cursorPositionValue,
       last_line_number: this.lastLineNumberValue,
       file_path: this.filePathValue,
-      filter: this.filterValue
+      filter: this.filterInputTarget.value,
+      mode: this.modeValue
     });
     
     this.element.classList.add("log-streamer--connected");
@@ -198,32 +275,38 @@ export default class LogStreamerController extends Controller {
           content: preElement.textContent.trim(),
           html: preElement.outerHTML
         });
+        // Update the last rendered line number
+        this.lastRenderedLineNumber = Math.max(this.lastRenderedLineNumber, lineNumber);
       }
     });
     
-    console.log(`Initialized with ${this.receivedLines.size} existing lines`);
+    console.log(`Initialized with ${this.receivedLines.size} existing lines, last rendered: ${this.lastRenderedLineNumber}`);
   }
   
   /**
-   * Handle incoming log line
+   * Handle incoming log line - now uses batching for better performance
    */
   #handleLogLine(lineNumber, content, html) {
     try {
-      console.log("received line", lineNumber, content, html);
+      console.log("received line", lineNumber);
       // Store the received line
       this.receivedLines.set(lineNumber, { content, html });
       
+      // Add to pending lines for batch processing
+      this.pendingLines.set(lineNumber, { content, html });
+      
       // Check if we need to insert missing line placeholders
-      const { min: minLineNumber, max: maxLineNumber } = this.#getLineNumberRange();
+      // const { min: minLineNumber, max: maxLineNumber } = this.#getLineNumberRange();
       
       // Add missing line placeholders for any gaps
-      for (let i = minLineNumber; i <= maxLineNumber; i++) {
-        if (!this.receivedLines.has(i) && !this.missingLinePlaceholders.has(i)) {
-          this.#addMissingLinePlaceholder(i);
-        }
-      }
+      // for (let i = minLineNumber; i <= maxLineNumber; i++) {
+      //   if (!this.receivedLines.has(i) && !this.missingLinePlaceholders.has(i)) {
+      //     this.#addMissingLinePlaceholder(i);
+      //   }
+      // }
       
-      this.#updateLogDisplay();
+      // Schedule batch update if not already scheduled
+      this.#scheduleBatchUpdate();
       
     } catch (error) {
       console.error('Error handling log line:', error);
@@ -239,21 +322,59 @@ export default class LogStreamerController extends Controller {
   }
   
   /**
-   * Update log display in the DOM by re-rendering all log lines
-   * Further improvements:
-   * * set a maximum number of lines that can be displayed
-   * * render only new lines on the bottom
-   *
+   * Schedule a batch update if not already scheduled
+   */
+  #scheduleBatchUpdate() {
+    if (this.batchUpdateTimer) {
+      return; // Already scheduled
+    }
+    
+    this.batchUpdateTimer = setTimeout(() => {
+      this.#processBatchUpdate();
+    }, this.batchInterval);
+  }
+  
+  /**
+   * Process all pending lines in a batch update
+   */
+  #processBatchUpdate() {
+    if (this.pendingLines.size === 0) {
+      this.batchUpdateTimer = null;
+      return;
+    }
+    
+    // Clear the timer
+    this.batchUpdateTimer = null;
+    
+    // Process all pending lines
+    this.#updateLogDisplay();
+    
+    // Clear pending lines after processing
+    this.pendingLines.clear();
+  }
+  
+  /**
+   * Update log display progressively by only appending new lines
+   * This is much more efficient than re-rendering everything
    */
   #updateLogDisplay() {
     let container = this.logLinesTarget;
-    container.innerHTML = '';
     
     // Get sorted line numbers
     const sortedLineNumbers = this.#getSortedLineNumbers();
     
-    // Build the HTML in order
-    sortedLineNumbers.forEach(lineNumber => {
+    // Find the range of new lines to append
+    const newLinesToRender = sortedLineNumbers.filter(lineNumber => lineNumber > this.lastRenderedLineNumber);
+    
+    if (newLinesToRender.length === 0) {
+      // No new lines to render, just update the display info
+      this.#updateLineRangeDisplay();
+      this.scroll();
+      return;
+    }
+    
+    // Append only the new lines
+    newLinesToRender.forEach(lineNumber => {
       if (this.receivedLines.has(lineNumber)) {
         // Use the received line (this will override any placeholder)
         container.insertAdjacentHTML('beforeend', this.receivedLines.get(lineNumber).html);
@@ -261,14 +382,15 @@ export default class LogStreamerController extends Controller {
         this.missingLinePlaceholders.delete(lineNumber);
       } else if (
         this.missingLinePlaceholders.has(lineNumber) &&
-        (!this.filterInputTarget.value || this.filterInputTarget.value.trim() === "")
+        this.isLiveMode() // Only show placeholders in live mode, not when filtering
       ) {
-        // Use the missing line placeholder only if no filter is applied
+        // Use the missing line placeholder only in live mode
         container.insertAdjacentHTML('beforeend', this.missingLinePlaceholders.get(lineNumber));
       }
+      
+      // Update the last rendered line number
+      this.lastRenderedLineNumber = Math.max(this.lastRenderedLineNumber, lineNumber);
     });
-
-    console.log("updated log display.scrolling...", this.autoScrollValue);
 
     this.#updateLineRangeDisplay();
     this.scroll();
@@ -300,33 +422,55 @@ export default class LogStreamerController extends Controller {
    * Get all line numbers (both received and missing)
    */
   #getAllLineNumbers() {
-    return new Set([
-      ...this.receivedLines.keys(),
-      ...this.missingLinePlaceholders.keys()
-    ]);
+    const allNumbers = new Set();
+    
+    // Add received line numbers
+    for (const lineNumber of this.receivedLines.keys()) {
+      allNumbers.add(lineNumber);
+    }
+    
+    // Add missing line numbers
+    for (const lineNumber of this.missingLinePlaceholders.keys()) {
+      allNumbers.add(lineNumber);
+    }
+    
+    return allNumbers;
   }
   
   /**
    * Get sorted array of all line numbers
    */
   #getSortedLineNumbers() {
-    return Array.from(this.#getAllLineNumbers()).sort((a, b) => a - b);
+    const allNumbers = this.#getAllLineNumbers();
+    const sortedArray = [];
+    
+    // Convert Set to Array efficiently
+    for (const lineNumber of allNumbers) {
+      sortedArray.push(lineNumber);
+    }
+    
+    return sortedArray.sort((a, b) => a - b);
   }
   
   /**
-   * Get min and max line numbers
+   * Get min and max line numbers - optimized for large datasets
    */
   #getLineNumberRange() {
-    const allLineNumbers = this.#getAllLineNumbers();
+    let min = null;
+    let max = null;
     
-    if (allLineNumbers.size === 0) {
-      return { min: null, max: null };
+    // Find min and max in a single pass without using spread operator
+    for (const lineNumber of this.receivedLines.keys()) {
+      if (min === null || lineNumber < min) min = lineNumber;
+      if (max === null || lineNumber > max) max = lineNumber;
     }
     
-    return {
-      min: Math.min(...allLineNumbers),
-      max: Math.max(...allLineNumbers)
-    };
+    for (const lineNumber of this.missingLinePlaceholders.keys()) {
+      if (min === null || lineNumber < min) min = lineNumber;
+      if (max === null || lineNumber > max) max = lineNumber;
+    }
+    
+    return { min, max };
   }
   
   /**

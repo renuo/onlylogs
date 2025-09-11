@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 # Replace spaces in $1 with a regex that matches a space or ANSI color codes for the specified codes
 query="$1"
 # Escape special regex characters in the query first
@@ -6,4 +8,5 @@ escaped_query=$(echo "$query" | sed -E 's/([][{}()*+?.\\^$|])/\\\1/g')
 color_regex="\\\e\\\[(1|30|31|32|33|34|35|36|37|39|0)m"
 # Replace each space with a regex that matches a space or a color code
 query_regex=$(echo "$escaped_query" | sed -E "s/ +/([[:space:]]|$color_regex)+/g")
-grep --color=never -n -E "$query_regex" "$2"
+#grep --color=never -n -E "$query_regex" "$2"
+rg --color=never -n -e "$query_regex" "$2"
