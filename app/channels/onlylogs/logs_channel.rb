@@ -33,6 +33,9 @@ module Onlylogs
 
       @log_watcher_running = true
       @filter = filter
+
+      transmit({ action: "message", content: "Reading file. Please wait..." })
+
       @log_file = Onlylogs::File.new(file_path, last_position: cursor_position)
 
 

@@ -13,7 +13,7 @@ export default class LogStreamerController extends Controller {
     mode: { type: String, default: 'live' }
   };
 
-  static targets = ["logLines", "filterInput", "lineRange", "liveMode"];
+  static targets = ["logLines", "filterInput", "lineRange", "liveMode", "message"];
   
   connect() {
     console.log(`LogStreamerController connected for file: ${this.filePathValue} in ${this.modeValue} mode`);
@@ -221,8 +221,11 @@ export default class LogStreamerController extends Controller {
       },
       
       received: (data) => {
+        this.#hideMessage();
         if (data.action === 'append_log') {
           this.#handleLogLine(data.line_number, data.content, data.html);
+        } else if (data.action === 'message') {
+          this.#handleMessage(data.content);
         }
       }
     });
@@ -294,7 +297,8 @@ export default class LogStreamerController extends Controller {
       
       // Add to pending lines for batch processing
       this.pendingLines.set(lineNumber, { content, html });
-      
+
+      // TODO: re-enable?
       // Check if we need to insert missing line placeholders
       // const { min: minLineNumber, max: maxLineNumber } = this.#getLineNumberRange();
       
@@ -313,6 +317,15 @@ export default class LogStreamerController extends Controller {
     }
   }
   
+  #handleMessage(message) {
+    const loadingIcon = '<span class="onlylogs-spin-animation">⟳</span>';
+    this.messageTarget.innerHTML = loadingIcon + message;
+  }
+
+  #hideMessage() {
+    this.messageTarget.innerHTML = '';
+  }
+
   /**
    * Add missing line placeholder
    */

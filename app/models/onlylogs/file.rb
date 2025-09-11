@@ -54,7 +54,7 @@ module Onlylogs
     attr_writer :path, :last_position
 
     def calculate_line_number!
-      @last_line_number = `head -c "#{last_position}" #{path} | wc -l`.strip.to_i
+      @last_line_number = `head -c "#{last_position}" #{path} | rg --count ''`.strip.to_i
     end
 
     def read_new_lines

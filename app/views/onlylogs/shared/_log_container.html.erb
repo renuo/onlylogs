@@ -1,6 +1,11 @@
 <%# locals: (log_file_path:, tail: 100, filter: "", autoscroll: true) %>
 
 <style>
+    @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+
     .onlylogs-log-container {
         background-color: white;
         width: 100%;
@@ -14,6 +19,12 @@
         border: none;
         border-radius: 0;
         box-sizing: border-box;
+
+        .onlylogs-spin-animation {
+            display: inline-block;
+            animation: spin 1s linear infinite;
+            margin-right: 0.5em;
+        }
 
         .onlylogs-log-lines {
             flex: 1 1 auto;
@@ -176,5 +187,6 @@
         <div>
           <span data-log-streamer-target="lineRange" style="color: #666; font-size: 0.9em;">No lines</span>
         </div>
+        <div data-log-streamer-target="message"></div>
     </div>
 </div>
