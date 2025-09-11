@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Usage:
-#   ./simulate_latency enable [latency_ms] [jitter_ms]   # start latency simulation (default: 120ms ±30ms)
-#   ./simulate_latency disable                           # stop and clean up
-#   ./simulate_latency status                            # show current state
-#   ./simulate_latency test                              # test with 10 HTTP and 10 WebSocket requests
+#   ./simulate_latency enable [latency[/jitter]] [options] # start latency simulation (default: 120/30ms on port 3000)
+#   ./simulate_latency enable [latency[/jitter]] -p 8080   # start latency simulation on custom port
+#   ./simulate_latency disable                             # stop and clean up
+#   ./simulate_latency status                              # show current state
+#   ./simulate_latency test                                # test with 10 HTTP and 10 WebSocket requests
 
 set -euo pipefail
 
@@ -13,6 +14,36 @@ PIPE_ID="3000"
 PIDFILE="/tmp/simlatency.${PORT}.pid"
 BASE_LATENCY="120"  # Default latency in milliseconds
 JITTER="30"         # Default jitter in milliseconds
+
+parse_args() {
+  local args=("$@")
+  local i=0
+  
+  while [[ $i -lt ${#args[@]} ]]; do
+    case "${args[$i]}" in
+      -p)
+        if [[ $((i + 1)) -lt ${#args[@]} ]]; then
+          PORT="${args[$((i + 1))]}"
+          PIPE_ID="$PORT"
+          PIDFILE="/tmp/simlatency.${PORT}.pid"
+          i=$((i + 2))
+        else
+          echo "[!] Error: -p requires a port number"
+          exit 1
+        fi
+        ;;
+      *)
+        # Non-flag arguments
+        break
+        ;;
+    esac
+  done
+  
+  # Return remaining arguments as a space-separated string
+  if [[ $i -lt ${#args[@]} ]]; then
+    printf '%s ' "${args[@]:$i}"
+  fi
+}
 
 _pf_enable() {
   # Enable PF (no-op if already enabled)
@@ -49,22 +80,49 @@ stop_jitter_loop() {
 }
 
 enable() {
-  # Check if latency parameter was provided
-  if [[ -n "${2:-}" ]]; then
-    if [[ "$2" =~ ^[0-9]+$ ]]; then
-      BASE_LATENCY="$2"
-    else
-      echo "[!] Error: Latency must be a positive integer (milliseconds)"
-      exit 1
-    fi
-  fi
+  # Parse arguments manually to handle -p flag
+  local latency_jitter_param=""
+  local i=2
   
-  # Check if jitter parameter was provided
-  if [[ -n "${3:-}" ]]; then
-    if [[ "$3" =~ ^[0-9]+$ ]]; then
-      JITTER="$3"
+  while [[ $i -le $# ]]; do
+    local arg="${!i}"
+    case "$arg" in
+      -p)
+        if [[ $((i + 1)) -le $# ]]; then
+          local next_i=$((i + 1))
+          PORT="${!next_i}"
+          i=$((i + 2))
+        else
+          echo "[!] Error: -p requires a port number"
+          exit 1
+        fi
+        ;;
+      *)
+        if [[ -z "$latency_jitter_param" ]]; then
+          latency_jitter_param="$arg"
+        fi
+        i=$((i + 1))
+        ;;
+    esac
+  done
+  
+  # Update PIPE_ID and PIDFILE based on the parsed PORT
+  PIPE_ID="$PORT"
+  PIDFILE="/tmp/simlatency.${PORT}.pid"
+  
+  # Parse latency/jitter parameter
+  if [[ -n "$latency_jitter_param" ]]; then
+    if [[ "$latency_jitter_param" =~ ^[0-9]+(/[0-9]+)?$ ]]; then
+      # Split on '/' if present
+      if [[ "$latency_jitter_param" == *"/"* ]]; then
+        BASE_LATENCY="${latency_jitter_param%%/*}"
+        JITTER="${latency_jitter_param##*/}"
+      else
+        # Only latency provided
+        BASE_LATENCY="$latency_jitter_param"
+      fi
     else
-      echo "[!] Error: Jitter must be a positive integer (milliseconds)"
+      echo "[!] Error: Parameter must be in format 'latency' or 'latency/jitter' (e.g., '150' or '150/50')"
       exit 1
     fi
   fi

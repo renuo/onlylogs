@@ -36,14 +36,20 @@ For testing how onlylogs behaves under production-like network conditions, you c
 ### Usage
 
 ```bash
-# Enable latency simulation (120±30ms jitter)
+# Enable latency simulation (120±30ms jitter on port 3000)
 ./bin/simulate_latency enable
 
-# Enable custom latency simulation (150±30ms jitter)
+# Enable custom latency simulation (150±30ms jitter on port 3000)
 ./bin/simulate_latency enable 150
 
-# Enable custom latency and jitter (200±50ms jitter)
-./bin/simulate_latency enable 200 50
+# Enable custom latency and jitter (200±50ms jitter on port 3000)
+./bin/simulate_latency enable 200/50
+
+# Enable latency simulation on custom port (120±30ms jitter on port 8080)
+./bin/simulate_latency enable -p 8080
+
+# Enable custom latency and jitter on custom port (150±50ms jitter on port 8080)
+./bin/simulate_latency enable 150/50 -p 8080
 
 # Test the latency
 ./bin/simulate_latency test
