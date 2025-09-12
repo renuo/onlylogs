@@ -40,7 +40,6 @@ module Onlylogs
                 action: "append_logs",
                 lines: [ {
                   line_number: last_line_number,
-                  content: line,
                   html: render_log_line(log_line)
                 } ]
               })

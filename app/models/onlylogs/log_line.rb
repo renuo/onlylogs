@@ -10,7 +10,7 @@ module Onlylogs
     end
 
     def parsed_number
-      number.to_s.rjust(4)
+      number.to_s.reverse.gsub(/(\d{3})(?=\d)/, "\\1'").reverse.rjust(7)
     end
 
     def parsed_text

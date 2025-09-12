@@ -55,7 +55,6 @@ module Onlylogs
                  { action: "append_logs",
                    lines: [ {
                    line_number: log_line.number,
-                   content: log_line,
                    html: render_log_line(log_line) }
                  ] }
                )
@@ -90,7 +89,6 @@ module Onlylogs
             { action: "append_logs",
               lines: [ {
                 line_number: log_line.number,
-                content: log_line,
                 html: render_log_line(log_line) }
               ]
             }

@@ -34,6 +34,10 @@ export default class LogStreamerController extends Controller {
     this.batchUpdateTimer = null; // Timer for batch updates
     this.batchInterval = 50;
 
+    // Line range tracking
+    this.minLineNumber = null;
+    this.maxLineNumber = null;
+
     this.start();
     this.updateLiveModeState();
     this.scroll();
@@ -91,6 +95,10 @@ export default class LogStreamerController extends Controller {
     this.pendingLines.clear(); // Clear pending lines
     this.logLinesTarget.innerHTML = '';
     this.lastRenderedLineNumber = 0; // Reset the last rendered line number
+    
+    // Reset line range tracking
+    this.minLineNumber = null;
+    this.maxLineNumber = null;
     
     // Clear any pending batch update timer
     if (this.batchUpdateTimer) {
@@ -276,11 +284,18 @@ export default class LogStreamerController extends Controller {
       const lineNumber = parseInt(preElement.getAttribute('data-line-number'));
       if (!isNaN(lineNumber)) {
         this.receivedLines.set(lineNumber, {
-          content: preElement.textContent.trim(),
           html: preElement.outerHTML
         });
         // Update the last rendered line number
         this.lastRenderedLineNumber = Math.max(this.lastRenderedLineNumber, lineNumber);
+        
+        // Update line range tracking
+        if (this.minLineNumber === null || lineNumber < this.minLineNumber) {
+          this.minLineNumber = lineNumber;
+        }
+        if (this.maxLineNumber === null || lineNumber > this.maxLineNumber) {
+          this.maxLineNumber = lineNumber;
+        }
       }
     });
     
@@ -293,13 +308,21 @@ export default class LogStreamerController extends Controller {
       
       // Process all lines in the batch
       lines.forEach(line => {
-        const { line_number, content, html } = line;
+        const { line_number, html } = line;
         
         // Store the received line
-        this.receivedLines.set(line_number, { content, html });
+        this.receivedLines.set(line_number, { html });
+        
+        // Update line range tracking
+        if (this.minLineNumber === null || line_number < this.minLineNumber) {
+          this.minLineNumber = line_number;
+        }
+        if (this.maxLineNumber === null || line_number > this.maxLineNumber) {
+          this.maxLineNumber = line_number;
+        }
         
         // Add to pending lines for batch processing
-        this.pendingLines.set(line_number, { content, html });
+        this.pendingLines.set(line_number, { html });
       });
       
       // Schedule batch update if not already scheduled
@@ -359,28 +382,29 @@ export default class LogStreamerController extends Controller {
     this.pendingLines.clear();
   }
   
-  /**
-   * Update log display progressively by only appending new lines
-   * This is much more efficient than re-rendering everything
-   */
   #updateLogDisplay() {
     let container = this.logLinesTarget;
     
-    // Get sorted line numbers
-    const sortedLineNumbers = this.#getSortedLineNumbers();
+    // If no lines have been received yet, nothing to render
+    if (this.maxLineNumber === null) {
+      this.#updateLineRangeDisplay();
+      this.scroll();
+      return;
+    }
     
-    // Find the range of new lines to append
-    const newLinesToRender = sortedLineNumbers.filter(lineNumber => lineNumber > this.lastRenderedLineNumber);
+    // Find the range of new lines to append (from lastRenderedLineNumber + 1 to maxLineNumber)
+    const startLineNumber = this.lastRenderedLineNumber + 1;
+    const endLineNumber = this.maxLineNumber;
     
-    if (newLinesToRender.length === 0) {
+    if (startLineNumber > endLineNumber) {
       // No new lines to render, just update the display info
       this.#updateLineRangeDisplay();
       this.scroll();
       return;
     }
     
-    // Append only the new lines
-    newLinesToRender.forEach(lineNumber => {
+    // Append only the new lines in sequence
+    for (let lineNumber = startLineNumber; lineNumber <= endLineNumber; lineNumber++) {
       if (this.receivedLines.has(lineNumber)) {
         // Use the received line (this will override any placeholder)
         container.insertAdjacentHTML('beforeend', this.receivedLines.get(lineNumber).html);
@@ -396,7 +420,7 @@ export default class LogStreamerController extends Controller {
       
       // Update the last rendered line number
       this.lastRenderedLineNumber = Math.max(this.lastRenderedLineNumber, lineNumber);
-    });
+    }
 
     this.#updateLineRangeDisplay();
     this.scroll();
@@ -410,73 +434,16 @@ export default class LogStreamerController extends Controller {
       return;
     }
     
-    const { min: minLineNumber, max: maxLineNumber } = this.#getLineNumberRange();
-    
-    if (minLineNumber === null || maxLineNumber === null) {
+    if (this.minLineNumber === null || this.maxLineNumber === null) {
       this.lineRangeTarget.textContent = "No lines";
       return;
     }
     
-    if (minLineNumber === maxLineNumber) {
-      this.lineRangeTarget.textContent = `Line ${minLineNumber}`;
+    if (this.minLineNumber === this.maxLineNumber) {
+      this.lineRangeTarget.textContent = `Line ${this.minLineNumber}`;
     } else {
-      this.lineRangeTarget.textContent = `Lines ${minLineNumber}-${maxLineNumber}`;
+      this.lineRangeTarget.textContent = `Lines ${this.minLineNumber}-${this.maxLineNumber}`;
     }
-  }
-  
-  /**
-   * Get all line numbers (both received and missing)
-   */
-  #getAllLineNumbers() {
-    const allNumbers = new Set();
-    
-    // Add received line numbers
-    for (const lineNumber of this.receivedLines.keys()) {
-      allNumbers.add(lineNumber);
-    }
-    
-    // Add missing line numbers
-    for (const lineNumber of this.missingLinePlaceholders.keys()) {
-      allNumbers.add(lineNumber);
-    }
-    
-    return allNumbers;
-  }
-  
-  /**
-   * Get sorted array of all line numbers
-   */
-  #getSortedLineNumbers() {
-    const allNumbers = this.#getAllLineNumbers();
-    const sortedArray = [];
-    
-    // Convert Set to Array efficiently
-    for (const lineNumber of allNumbers) {
-      sortedArray.push(lineNumber);
-    }
-    
-    return sortedArray.sort((a, b) => a - b);
-  }
-  
-  /**
-   * Get min and max line numbers - optimized for large datasets
-   */
-  #getLineNumberRange() {
-    let min = null;
-    let max = null;
-    
-    // Find min and max in a single pass without using spread operator
-    for (const lineNumber of this.receivedLines.keys()) {
-      if (min === null || lineNumber < min) min = lineNumber;
-      if (max === null || lineNumber > max) max = lineNumber;
-    }
-    
-    for (const lineNumber of this.missingLinePlaceholders.keys()) {
-      if (min === null || lineNumber < min) min = lineNumber;
-      if (max === null || lineNumber > max) max = lineNumber;
-    }
-    
-    return { min, max };
   }
   
   /**
