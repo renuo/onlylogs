@@ -4,10 +4,6 @@ module Onlylogs
   class File
     attr_reader :path, :last_position, :last_line_number
 
-    def self.stream_channel
-      "Onlylogs::LogsChannel"
-    end
-
     def initialize(path, last_position: 0)
       self.path = path
       self.last_position = last_position

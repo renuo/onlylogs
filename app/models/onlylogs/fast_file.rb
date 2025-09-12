@@ -4,15 +4,13 @@ module Onlylogs
   class FastFile
     CHUNK_SIZE = 1 * 1024 * 1024 # 1MB chunks for reading backwards
 
-    attr_reader :path, :last_position
+    attr_reader :path, :last_position, :last_line_number
 
-    def self.stream_channel
-      "Onlylogs::FastLogsChannel"
-    end
 
     def initialize(path, last_position: 0)
       self.path = path
       self.last_position = last_position
+      self.last_line_number = 0
       validate!
     end
 
@@ -20,23 +18,30 @@ module Onlylogs
       return if position < 0
 
       self.last_position = position
+      self.last_line_number = 0
     end
 
     def watch(&block)
-      return enum_for(:watch) unless block
+      # return enum_for(:watch) unless block
 
       loop do
+        sleep 0.5
+
         new_lines = read_new_lines
         next if new_lines.empty?
 
         yield new_lines
-
-        sleep 0.5
       end
     end
 
     def exist?
       ::File.exist?(path)
+    end
+
+    def grep(filter, &block)
+      Grep.grep(filter, path) do |line_number, content|
+        yield Onlylogs::LogLine.new(line_number, content)
+      end
     end
 
     def read_new_lines
@@ -111,6 +116,8 @@ module Onlylogs
         self.last_position = current_size
       end
 
+      lines = lines.map.with_index { |line, index| Onlylogs::LogLine.new(self.last_line_number + index, line) }
+      self.last_line_number += lines.length
       lines
     end
 
@@ -120,7 +127,7 @@ module Onlylogs
 
     private
 
-    attr_writer :path, :last_position
+    attr_writer :path, :last_position, :last_line_number
 
     def last_n_lines_from_snapshot(file, file_size, n)
       need = n

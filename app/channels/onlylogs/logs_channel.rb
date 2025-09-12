@@ -12,13 +12,14 @@ module Onlylogs
       cursor_position = data["cursor_position"] || 0
       filter = data["filter"].presence
       mode = data["mode"] || "live"
+      fast = data["fast"] == true || data["fast"] == "true"
 
       if mode == "search"
         # For search mode, read the entire file with filter and send all matching lines
-        read_entire_file_with_filter(file_path, filter)
+        read_entire_file_with_filter(file_path, filter, fast)
       else
         # For live mode, start the watcher
-        start_log_watcher(file_path, cursor_position, filter)
+        start_log_watcher(file_path, cursor_position, filter, fast)
       end
     end
 
@@ -28,7 +29,7 @@ module Onlylogs
 
     private
 
-    def start_log_watcher(file_path, cursor_position, filter = nil)
+    def start_log_watcher(file_path, cursor_position, filter = nil, fast = false)
       return if @log_watcher_running
 
       @log_watcher_running = true
@@ -36,7 +37,8 @@ module Onlylogs
 
       transmit({ action: "message", content: "Reading file. Please wait..." })
 
-      @log_file = Onlylogs::File.new(file_path, last_position: cursor_position)
+      klass = fast ? Onlylogs::FastFile : Onlylogs::File
+      @log_file = klass.new(file_path, last_position: cursor_position)
 
       @log_watcher_thread = Thread.new do
         Rails.logger.info "Starting log file watcher for connection #{connection.connection_identifier} from cursor position #{cursor_position} for file: #{file_path}."
@@ -81,8 +83,9 @@ module Onlylogs
       @log_watcher_thread.join(1)
     end
 
-    def read_entire_file_with_filter(file_path, filter = nil)
-      @log_file = Onlylogs::File.new(file_path, last_position: 0)
+    def read_entire_file_with_filter(file_path, filter = nil, fast = false)
+      klass = fast ? Onlylogs::FastFile : Onlylogs::File
+      @log_file = klass.new(file_path, last_position: 0)
       @log_file.grep(filter) do |log_line|
         Rails.logger.silence(Logger::ERROR) do
           transmit(

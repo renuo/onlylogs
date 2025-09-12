@@ -4,13 +4,13 @@ import { createConsumer } from "@rails/actioncable";
 export default class LogStreamerController extends Controller {
   static values = {
     filePath: { type: String },
-    streamChannel: { type: String },
     cursorPosition: { type: Number, default: 0 },
     lastLineNumber: { type: Number, default: 0 },
     autoScroll: { type: Boolean, default: true },
     autoStart: { type: Boolean, default: true },
     filter: { type: String, default: '' },
-    mode: { type: String, default: 'live' }
+    mode: { type: String, default: 'live' },
+    fast: { type: Boolean, default: false }
   };
 
   static targets = ["logLines", "filterInput", "lineRange", "liveMode", "message"];
@@ -212,7 +212,7 @@ export default class LogStreamerController extends Controller {
    * Create ActionCable subscription
    */
   #createSubscription() {
-    this.subscription = this.consumer.subscriptions.create(this.streamChannelValue, {
+    this.subscription = this.consumer.subscriptions.create("Onlylogs::LogsChannel", {
       connected: () => {
         console.log('Connected to logs channel');
         this.#handleConnected();
@@ -244,14 +244,15 @@ export default class LogStreamerController extends Controller {
    * Handle successful connection
    */
   #handleConnected() {
-    console.log(`Sending last line number: ${this.lastLineNumberValue}, cursor position: ${this.cursorPositionValue} for file: ${this.filePathValue} in mode: ${this.modeValue}`);
+    console.log(`Sending last line number: ${this.lastLineNumberValue}, cursor position: ${this.cursorPositionValue} for file: ${this.filePathValue} in mode: ${this.modeValue}. Fast: ${this.fastValue}`);
     
     this.subscription.perform('initialize_watcher', {
       cursor_position: this.cursorPositionValue,
       last_line_number: this.lastLineNumberValue,
       file_path: this.filePathValue,
       filter: this.filterInputTarget.value,
-      mode: this.modeValue
+      mode: this.modeValue,
+      fast: this.fastValue
     });
     
     this.element.classList.add("log-streamer--connected");

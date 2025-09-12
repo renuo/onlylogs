@@ -1,4 +1,4 @@
-<%# locals: (log_file_path:, tail: 100, filter: "", autoscroll: true) %>
+<%# locals: (log_file_path:, tail: 100, filter: "", autoscroll: true, fast: false) %>
 
 <style>
     @keyframes spin {
@@ -141,12 +141,12 @@
 %>
 
 <div data-controller="log-streamer"
-     data-log-streamer-file-path-value="<%= log_file_path %>"
-     data-log-streamer-stream-channel-value="<%= klass.stream_channel %>"
+     data-log-streamer-file-path-value="<%= log_file_path %>"     
      data-log-streamer-cursor-position-value="<%= cursor_position %>"
      data-log-streamer-filter-value="<%= filter %>"
      data-log-streamer-auto-scroll-value="<%= autoscroll %>"     
      data-log-streamer-mode-value="<%= mode %>"
+     data-log-streamer-fast-value="<%= fast %>"
      class="onlylogs-log-container" >
     <div data-log-streamer-target="logLines" class="onlylogs-log-lines">
 

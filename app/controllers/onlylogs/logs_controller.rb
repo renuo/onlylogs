@@ -10,6 +10,7 @@ module Onlylogs
       @filter = params[:filter]
       @autoscroll = params[:autoscroll] != "false"
       @mode = @filter.blank? ? (params[:mode] || "live") : "search" # "live" or "search"
+      @fast = params[:fast] == "true"
     end
   end
 end
