@@ -440,10 +440,17 @@ export default class LogStreamerController extends Controller {
     }
     
     if (this.minLineNumber === this.maxLineNumber) {
-      this.lineRangeTarget.textContent = `Line ${this.minLineNumber}`;
+      this.lineRangeTarget.textContent = `Line ${this.#formatNumber(this.minLineNumber)}`;
     } else {
-      this.lineRangeTarget.textContent = `Lines ${this.minLineNumber}-${this.maxLineNumber}`;
+      this.lineRangeTarget.textContent = `Lines ${this.#formatNumber(this.minLineNumber)} - ${this.#formatNumber(this.maxLineNumber)}`;
     }
+  }
+
+  /**
+   * Format number with Ruby-style thousands separator (single quote)
+   */
+  #formatNumber(number) {
+    return number.toString().replace(/\B(?=(\d{3})+(?!\d))/g, "'");
   }
   
   /**
