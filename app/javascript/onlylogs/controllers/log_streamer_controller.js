@@ -222,8 +222,9 @@ export default class LogStreamerController extends Controller {
       
       received: (data) => {
         this.#hideMessage();
-        if (data.action === 'append_log') {
-          this.#handleLogLine(data.line_number, data.content, data.html);
+        if (data.action === 'append_logs') {
+          // Handle lines (can be single or multiple)
+          this.#handleLogLines(data.lines);
         } else if (data.action === 'message') {
           this.#handleMessage(data.content);
         }
@@ -286,34 +287,26 @@ export default class LogStreamerController extends Controller {
     console.log(`Initialized with ${this.receivedLines.size} existing lines, last rendered: ${this.lastRenderedLineNumber}`);
   }
   
-  /**
-   * Handle incoming log line - now uses batching for better performance
-   */
-  #handleLogLine(lineNumber, content, html) {
+  #handleLogLines(lines) {
     try {
-      console.log("received line", lineNumber);
-      // Store the received line
-      this.receivedLines.set(lineNumber, { content, html });
+      console.log(`received ${lines.length} line(s)`);
       
-      // Add to pending lines for batch processing
-      this.pendingLines.set(lineNumber, { content, html });
-
-      // TODO: re-enable?
-      // Check if we need to insert missing line placeholders
-      // const { min: minLineNumber, max: maxLineNumber } = this.#getLineNumberRange();
-      
-      // Add missing line placeholders for any gaps
-      // for (let i = minLineNumber; i <= maxLineNumber; i++) {
-      //   if (!this.receivedLines.has(i) && !this.missingLinePlaceholders.has(i)) {
-      //     this.#addMissingLinePlaceholder(i);
-      //   }
-      // }
+      // Process all lines in the batch
+      lines.forEach(line => {
+        const { line_number, content, html } = line;
+        
+        // Store the received line
+        this.receivedLines.set(line_number, { content, html });
+        
+        // Add to pending lines for batch processing
+        this.pendingLines.set(line_number, { content, html });
+      });
       
       // Schedule batch update if not already scheduled
       this.#scheduleBatchUpdate();
       
     } catch (error) {
-      console.error('Error handling log line:', error);
+      console.error('Error handling log lines:', error);
     }
   }
   

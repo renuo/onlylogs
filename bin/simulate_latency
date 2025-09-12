@@ -134,7 +134,6 @@ enable() {
   load_rules
   start_jitter_loop "$BASE_LATENCY" "$JITTER"
   echo "[✓] Enabled. Jitter PID: $(cat "$PIDFILE")"
-  echo "    Tip: test with ->  curl -w 'time_total: %{time_total}\n' -o /dev/null -s http://${TARGET}:${PORT}"
 }
 
 disable() {

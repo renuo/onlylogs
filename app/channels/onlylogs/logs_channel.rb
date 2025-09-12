@@ -52,10 +52,12 @@ module Onlylogs
                end
 
                transmit(
-                 { action: "append_log",
+                 { action: "append_logs",
+                   lines: [ {
                    line_number: log_line.number,
                    content: log_line,
                    html: render_log_line(log_line) }
+                 ] }
                )
              end
            end
@@ -85,10 +87,13 @@ module Onlylogs
       @log_file.grep(filter) do |log_line|
         Rails.logger.silence(Logger::ERROR) do
           transmit(
-            { action: "append_log",
-              line_number: log_line.number,
-              content: log_line,
-              html: render_log_line(log_line) }
+            { action: "append_logs",
+              lines: [ {
+                line_number: log_line.number,
+                content: log_line,
+                html: render_log_line(log_line) }
+              ]
+            }
           )
         end
       end

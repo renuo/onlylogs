@@ -37,10 +37,12 @@ module Onlylogs
               last_line_number += 1
               log_line = Onlylogs::LogLine.new(last_line_number, line)
               transmit({
-                action: "append_log",
-                line_number: last_line_number,
-                content: line,
-                html: render_log_line(log_line)
+                action: "append_logs",
+                lines: [ {
+                  line_number: last_line_number,
+                  content: line,
+                  html: render_log_line(log_line)
+                } ]
               })
             end
           end
