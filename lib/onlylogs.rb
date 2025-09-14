@@ -1,5 +1,6 @@
 require "onlylogs/version"
 require "onlylogs/engine"
+require "onlylogs/configuration"
 
 # require "zeitwerk"
 #
