@@ -137,7 +137,6 @@
 
     mode = filter.blank? ? "live" : "search"
     cursor_position = mode == "search" ? 0 : [File.size(log_file_path) - (tail * 100), 0].max
-
 %>
 
 <div data-controller="log-streamer"
