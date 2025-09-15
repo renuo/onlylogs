@@ -12,6 +12,7 @@ gem "propshaft"
 gem "importmap-rails"
 gem "stimulus-rails"
 gem "faker"
+gem "better_errors"
 
 
 # Omakase Ruby styling [https://github.com/rails/rubocop-rails-omakase/]

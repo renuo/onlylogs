@@ -137,10 +137,14 @@
 
     mode = filter.blank? ? "live" : "search"
     cursor_position = mode == "search" ? 0 : [File.size(log_file_path) - (tail * 100), 0].max
+     
+    raise SecurityError, "File path not allowed" unless Onlylogs.allowed_file_path?(log_file_path)
+        
+    encrypted_log_file_path = Onlylogs::SecureFilePath.encrypt(log_file_path)
 %>
 
 <div data-controller="log-streamer"
-     data-log-streamer-file-path-value="<%= log_file_path %>"     
+     data-log-streamer-file-path-value="<%= encrypted_log_file_path %>"     
      data-log-streamer-cursor-position-value="<%= cursor_position %>"
      data-log-streamer-filter-value="<%= filter %>"
      data-log-streamer-auto-scroll-value="<%= autoscroll %>"     

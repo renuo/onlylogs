@@ -8,7 +8,28 @@ module Onlylogs
     end
 
     def initialize_watcher(data)
-      file_path = data["file_path"].presence || Rails.root.join("log/#{Rails.env}.log")
+      # Decrypt and verify the file path
+      begin
+        encrypted_file_path = data["file_path"]
+        if encrypted_file_path.present?
+          file_path = Onlylogs::SecureFilePath.decrypt(encrypted_file_path)
+
+          # Verify the decrypted path is still allowed
+          unless Onlylogs.allowed_file_path?(file_path)
+            Rails.logger.error "Onlylogs: Attempted to access non-allowed file: #{file_path}"
+            transmit({ action: "error", content: "Access denied" })
+            return
+          end
+        else
+           # Fallback to default if no encrypted path provided
+           file_path = Onlylogs.default_log_file_path
+        end
+      rescue Onlylogs::SecureFilePath::SecurityError => e
+        Rails.logger.error "Onlylogs: Security violation - #{e.message}"
+        transmit({ action: "error", content: "Access denied" })
+        return
+      end
+
       cursor_position = data["cursor_position"] || 0
       filter = data["filter"].presence
       mode = data["mode"] || "live"

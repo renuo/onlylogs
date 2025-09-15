@@ -25,8 +25,21 @@ module Onlylogs
 
     test "default configuration includes Rails log file" do
       assert Onlylogs.allowed_file_path?(Rails.root.join("log/#{Rails.env}.log"))
-      assert Onlylogs.allowed_file_path?(Rails.root.join("log/#{Rails.env}.log.1"))
-      assert Onlylogs.allowed_file_path?(Rails.root.join("log/#{Rails.env}.log.12"))
+    end
+
+    test "default_log_file_path returns Rails log file path" do
+      expected_path = Rails.root.join("log/#{Rails.env}.log").to_s
+      assert_equal expected_path, Onlylogs.default_log_file_path
+    end
+
+    test "default_log_file_path can be configured" do
+      custom_path = @test_dir.join("custom.log").to_s
+
+      Onlylogs.configure do |config|
+        config.default_log_file_path = custom_path
+      end
+
+      assert_equal custom_path, Onlylogs.default_log_file_path
     end
 
     test "configure block sets allowed files" do
@@ -38,48 +51,6 @@ module Onlylogs
       refute Onlylogs.allowed_file_path?(@disallowed_file.to_s)
     end
 
-    test "allowed_file_path? returns true for rotated files" do
-      Onlylogs.configure do |config|
-        config.allowed_files = [ @allowed_file.to_s ]
-      end
-
-      rotated_files = [
-        @test_dir.join("allowed.log.0"),
-        @test_dir.join("allowed.log.1"),
-        @test_dir.join("allowed.log.2"),
-        @test_dir.join("allowed.log.999")
-      ]
-
-      rotated_files.each do |file|
-        ::File.write(file, "rotated content")
-      end
-
-      rotated_files.each do |file|
-        assert Onlylogs.allowed_file_path?(file.to_s), "#{file} should be allowed"
-      end
-    end
-
-    test "allowed_file_path? returns false for non-numeric rotated files" do
-      Onlylogs.configure do |config|
-        config.allowed_files = [ @allowed_file.to_s ]
-      end
-
-      non_rotated_files = [
-        @test_dir.join("allowed.log.backup"),
-        @test_dir.join("allowed.log.old"),
-        @test_dir.join("allowed.log.tmp"),
-        @test_dir.join("allowed.log.1a"),
-        @test_dir.join("allowed.log.a1")
-      ]
-
-      non_rotated_files.each do |file|
-        ::File.write(file, "non-rotated content")
-      end
-
-      non_rotated_files.each do |file|
-        refute Onlylogs.allowed_file_path?(file.to_s), "#{file} should not be allowed"
-      end
-    end
 
     test "allowed_file_path? handles multiple allowed files" do
       another_allowed = @test_dir.join("another.log")
@@ -91,9 +62,6 @@ module Onlylogs
 
       assert Onlylogs.allowed_file_path?(@allowed_file.to_s)
       assert Onlylogs.allowed_file_path?(another_allowed.to_s)
-
-      assert Onlylogs.allowed_file_path?(@test_dir.join("allowed.log.1").to_s)
-      assert Onlylogs.allowed_file_path?(@test_dir.join("another.log.1").to_s)
 
       refute Onlylogs.allowed_file_path?(@disallowed_file.to_s)
     end
@@ -122,9 +90,6 @@ module Onlylogs
       assert Onlylogs.allowed_file_path?(@allowed_file.to_s)
       assert Onlylogs.allowed_file_path?(other_allowed.to_s)
 
-      assert Onlylogs.allowed_file_path?(@test_dir.join("allowed.log.1").to_s)
-      assert Onlylogs.allowed_file_path?(other_dir.join("other.log.1").to_s)
-
       wrong_dir_file = other_dir.join("allowed.log")
       ::File.write(wrong_dir_file, "wrong content")
       refute Onlylogs.allowed_file_path?(wrong_dir_file.to_s)
@@ -139,6 +104,43 @@ module Onlylogs
 
       refute Onlylogs.allowed_file_path?(@allowed_file.to_s)
       refute Onlylogs.allowed_file_path?(@disallowed_file.to_s)
+    end
+
+    test "allowed_file_path? supports glob patterns" do
+      # Create various log files
+      log_files = [
+        @test_dir.join("app.log"),
+        @test_dir.join("api.log"),
+        @test_dir.join("debug.log"),
+        @test_dir.join("error.log")
+      ]
+
+      # Create non-log files
+      non_log_files = [
+        @test_dir.join("app.log.1"),
+        @test_dir.join("config.txt"),
+        @test_dir.join("data.json"),
+        @test_dir.join("script.rb")
+      ]
+
+      # Create all files
+      (log_files + non_log_files).each do |file|
+        ::File.write(file, "content")
+      end
+
+      Onlylogs.configure do |config|
+        config.allowed_files = [ @test_dir.join("*.log").to_s ]
+      end
+
+      # All .log files should be allowed
+      log_files.each do |file|
+        assert Onlylogs.allowed_file_path?(file.to_s), "#{file} should be allowed by *.log pattern"
+      end
+
+      # Non-log files should not be allowed
+      non_log_files.each do |file|
+        refute Onlylogs.allowed_file_path?(file.to_s), "#{file} should not be allowed by *.log pattern"
+      end
     end
   end
 end
