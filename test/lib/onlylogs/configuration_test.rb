@@ -142,5 +142,43 @@ module Onlylogs
         refute Onlylogs.allowed_file_path?(file.to_s), "#{file} should not be allowed by *.log pattern"
       end
     end
+
+    test "default authentication credentials are nil" do
+      assert_nil Onlylogs.http_basic_auth_user
+      assert_nil Onlylogs.http_basic_auth_password
+    end
+
+    test "basic auth is not configured by default" do
+      assert_not Onlylogs.basic_auth_configured?
+    end
+
+    test "authentication credentials can be configured" do
+      Onlylogs.configure do |config|
+        config.http_basic_auth_user = "admin"
+        config.http_basic_auth_password = "secure_password"
+      end
+
+      assert_equal "admin", Onlylogs.http_basic_auth_user
+      assert_equal "secure_password", Onlylogs.http_basic_auth_password
+      assert Onlylogs.basic_auth_configured?
+    end
+
+    test "parent_controller can be configured" do
+      Onlylogs.configure do |config|
+        config.parent_controller = "AdminController"
+      end
+
+      assert_equal "AdminController", Onlylogs.parent_controller
+    end
+
+    test "disable_basic_authentication can be configured" do
+      assert_equal false, Onlylogs.disable_basic_authentication?
+
+      Onlylogs.configure do |config|
+        config.disable_basic_authentication = true
+      end
+
+      assert_equal true, Onlylogs.disable_basic_authentication?
+    end
   end
 end

@@ -29,6 +29,95 @@ Head to `/onlylogs` and enjoy your logs streamed right into your face!
 
 Here you can grep your logs with regular expressions.
 
+
+## Installation
+
+Add this line to your application's Gemfile:
+
+```ruby
+gem "onlylogs"
+```
+
+And then execute:
+
+```bash
+$ bundle
+```
+
+## Secure the Engine
+
+The engine has one Controller and one ActionCable channel that **must be protected**.
+
+Please be sure to secure them properly, because they give access to your log files.
+
+**⚠️ IMPORTANT: By default, onlylogs endpoints are completely inaccessible until basic auth credentials are configured.**
+
+### Basic Authentication Setup
+
+Credentials are fetched from Rails credentials and can be configured with:
+
+```yml
+onlylogs:
+  http_basic_auth_user: your_username
+  http_basic_auth_password: your_password
+```
+
+User and password can also be configured programmatically:
+
+```ruby
+Onlylogs.configure do |config|
+  config.http_basic_auth_user = "your_username"
+  config.http_basic_auth_password = "your_password"
+end
+```
+
+### Custom Authentication
+
+If you need custom authentication logic beyond basic auth, you can override the default authentication by configuring a parent controller that defines the `authenticate_onlylogs_user!` method.
+
+#### Using a Parent Controller
+
+Configure a custom parent controller in your initializer:
+
+```ruby
+# config/initializers/onlylogs.rb
+Onlylogs.configure do |config|
+  config.disable_basic_authentication = true
+  config.parent_controller = "ApplicationController" # or any other controller
+end
+```
+
+#### Implementing Custom Authentication
+
+In your parent controller, define the `authenticate_onlylogs_user!` method:
+
+```ruby
+# app/controllers/application_controller.rb
+class ApplicationController < ActionController::Base
+  private
+
+  def authenticate_onlylogs_user!
+    raise unless current_user.can_access_logs?      
+  end
+end
+```
+
+#### Disabling Authentication
+
+For development or when using external authentication systems, you can disable basic authentication entirely:
+
+```ruby
+# config/initializers/onlylogs.rb
+Onlylogs.configure do |config|
+  config.disable_basic_authentication = true
+end
+```
+
+### WebSocket Authentication
+
+Logs are streamed through a WebSocket connection, the Websocket is not protected, but in order to stream a file,
+the file path must be white-listed (see section below) and the file path encrypted using `Onlylogs::SecureFilePath.encrypt`
+
 ## Configuration
 
 ### File Access Security
@@ -148,19 +237,6 @@ For testing how onlylogs behaves under production-like network conditions, you c
 ./bin/simulate_latency disable
 ```
 
-## Installation
-
-Add this line to your application's Gemfile:
-
-```ruby
-gem "onlylogs"
-```
-
-And then execute:
-
-```bash
-$ bundle
-```
 
 ## Contributing
 
