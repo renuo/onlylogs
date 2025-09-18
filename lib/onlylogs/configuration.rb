@@ -2,14 +2,14 @@
 
 module Onlylogs
   class Configuration
-    attr_accessor :allowed_files, :default_log_file_path, :http_basic_auth_user, :http_basic_auth_password,
+    attr_accessor :allowed_files, :default_log_file_path, :basic_auth_user, :basic_auth_password,
                   :parent_controller, :disable_basic_authentication
 
     def initialize
       @allowed_files = default_allowed_files
       @default_log_file_path = default_log_file_path_value
-      @http_basic_auth_user = default_http_basic_auth_user
-      @http_basic_auth_password = default_http_basic_auth_password
+      @basic_auth_user = default_basic_auth_user
+      @basic_auth_password = default_basic_auth_password
       @parent_controller = nil
       @disable_basic_authentication = false
     end
@@ -31,12 +31,12 @@ module Onlylogs
       Rails.root.join("log/#{Rails.env}.log").to_s
     end
 
-    def default_http_basic_auth_user
-      Rails.application.credentials.dig(:onlylogs, :http_basic_auth_user)
+    def default_basic_auth_user
+      ENV["ONLYLOGS_BASIC_AUTH_USER"] || Rails.application.credentials.dig(:onlylogs, :basic_auth_user)
     end
 
-    def default_http_basic_auth_password
-      Rails.application.credentials.dig(:onlylogs, :http_basic_auth_password)
+    def default_basic_auth_password
+      ENV["ONLYLOGS_BASIC_AUTH_PASSWORD"] || Rails.application.credentials.dig(:onlylogs, :basic_auth_password)
     end
   end
 
@@ -61,12 +61,12 @@ module Onlylogs
     configuration.default_log_file_path
   end
 
-  def self.http_basic_auth_user
-    configuration.http_basic_auth_user
+  def self.basic_auth_user
+    configuration.basic_auth_user
   end
 
-  def self.http_basic_auth_password
-    configuration.http_basic_auth_password
+  def self.basic_auth_password
+    configuration.basic_auth_password
   end
 
   def self.parent_controller
@@ -78,6 +78,6 @@ module Onlylogs
   end
 
   def self.basic_auth_configured?
-    http_basic_auth_user.present? && http_basic_auth_password.present?
+    basic_auth_user.present? && basic_auth_password.present?
   end
 end

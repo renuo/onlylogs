@@ -144,8 +144,8 @@ module Onlylogs
     end
 
     test "default authentication credentials are nil" do
-      assert_nil Onlylogs.http_basic_auth_user
-      assert_nil Onlylogs.http_basic_auth_password
+      assert_nil Onlylogs.basic_auth_user
+      assert_nil Onlylogs.basic_auth_password
     end
 
     test "basic auth is not configured by default" do
@@ -154,12 +154,12 @@ module Onlylogs
 
     test "authentication credentials can be configured" do
       Onlylogs.configure do |config|
-        config.http_basic_auth_user = "admin"
-        config.http_basic_auth_password = "secure_password"
+        config.basic_auth_user = "admin"
+        config.basic_auth_password = "secure_password"
       end
 
-      assert_equal "admin", Onlylogs.http_basic_auth_user
-      assert_equal "secure_password", Onlylogs.http_basic_auth_password
+      assert_equal "admin", Onlylogs.basic_auth_user
+      assert_equal "secure_password", Onlylogs.basic_auth_password
       assert Onlylogs.basic_auth_configured?
     end
 

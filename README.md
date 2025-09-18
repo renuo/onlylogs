@@ -54,20 +54,36 @@ Please be sure to secure them properly, because they give access to your log fil
 
 ### Basic Authentication Setup
 
-Credentials are fetched from Rails credentials and can be configured with:
+Credentials can be configured using environment variables, Rails credentials, or programmatically. 
+Environment variables take precedence over Rails credentials.
+
+#### Environment Variables (Recommended)
+
+Set the following environment variables:
+
+```bash
+export ONLYLOGS_BASIC_AUTH_USER="your_username"
+export ONLYLOGS_BASIC_AUTH_PASSWORD="your_password"
+```
+
+#### Rails Credentials
+
+Configure credentials in your Rails credentials file:
 
 ```yml
 onlylogs:
-  http_basic_auth_user: your_username
-  http_basic_auth_password: your_password
+  basic_auth_user: your_username
+  basic_auth_password: your_password
 ```
+
+#### Programmatic Configuration
 
 User and password can also be configured programmatically:
 
 ```ruby
 Onlylogs.configure do |config|
-  config.http_basic_auth_user = "your_username"
-  config.http_basic_auth_password = "your_password"
+  config.basic_auth_user = "your_username"
+  config.basic_auth_password = "your_password"
 end
 ```
 

@@ -15,7 +15,7 @@ module Onlylogs
       end
 
       authenticate_or_request_with_http_basic("onlylogs") do |username, password|
-        username == Onlylogs.http_basic_auth_user && password == Onlylogs.http_basic_auth_password
+        username == Onlylogs.basic_auth_user && password == Onlylogs.basic_auth_password
       end
     end
   end
