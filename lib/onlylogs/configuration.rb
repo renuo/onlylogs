@@ -2,7 +2,8 @@
 
 module Onlylogs
   class Configuration
-    attr_accessor :allowed_files, :default_log_file_path, :http_basic_auth_user, :http_basic_auth_password, :parent_controller, :disable_basic_authentication
+    attr_accessor :allowed_files, :default_log_file_path, :http_basic_auth_user, :http_basic_auth_password,
+                  :parent_controller, :disable_basic_authentication
 
     def initialize
       @allowed_files = default_allowed_files
