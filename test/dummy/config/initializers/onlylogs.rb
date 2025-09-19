@@ -6,4 +6,5 @@ Onlylogs.configure do |config|
 
   # config.parent_controller = "ApplicationController"
   config.disable_basic_authentication = true
+  # config.ripgrep_enabled = false
 end

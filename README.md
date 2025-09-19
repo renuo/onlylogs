@@ -231,16 +231,12 @@ end
 
 #### Configuring Search Engine
 
-You can manually configure which search engine to use although you should not need to do this.
+You can manually configure whether to use ripgrep or standard grep, although you should not need to do this.
 
 ```ruby
 # config/initializers/onlylogs.rb
 Onlylogs.configure do |config|
-  # Force use of ripgrep (requires ripgrep to be installed)
-  config.grep_command = :rg
-  
-  # Force use of standard grep
-  config.grep_command = :grep
+  config.ripgrep_enabled = false
 end
 ```
 

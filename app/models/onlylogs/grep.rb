@@ -2,7 +2,7 @@ module Onlylogs
   class Grep
     def self.grep(pattern, file_path, start_position: 0, end_position: 100, &block)
       # Use the appropriate script based on configuration
-      script_name = Onlylogs.grep_command == :rg ? "super_ripgrep" : "super_grep"
+      script_name = Onlylogs.ripgrep_enabled? ? "super_ripgrep" : "super_grep"
       super_grep_path = ::File.expand_path("../../../bin/#{script_name}", __dir__)
       results = []
 
@@ -31,10 +31,6 @@ module Onlylogs
       # Normalize multiple spaces to single spaces
       normalized_line = stripped_line.gsub(/\s+/, " ")
       normalized_line.match?(Regexp.escape(string))
-    end
-
-    def self.using_grep?
-      Onlylogs.grep_command == :grep
     end
   end
 end

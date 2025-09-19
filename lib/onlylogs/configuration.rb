@@ -3,7 +3,7 @@
 module Onlylogs
   class Configuration
     attr_accessor :allowed_files, :default_log_file_path, :basic_auth_user, :basic_auth_password,
-                  :parent_controller, :disable_basic_authentication, :grep_command
+                  :parent_controller, :disable_basic_authentication, :ripgrep_enabled
 
     def initialize
       @allowed_files = default_allowed_files
@@ -12,7 +12,7 @@ module Onlylogs
       @basic_auth_password = default_basic_auth_password
       @parent_controller = nil
       @disable_basic_authentication = false
-      @grep_command = default_grep_command
+      @ripgrep_enabled = default_ripgrep_enabled
     end
 
     def configure
@@ -40,13 +40,8 @@ module Onlylogs
       ENV["ONLYLOGS_BASIC_AUTH_PASSWORD"] || Rails.application.credentials.dig(:onlylogs, :basic_auth_password)
     end
 
-    def default_grep_command
-      # Check if ripgrep is available, otherwise fall back to grep
-      if system("which rg > /dev/null 2>&1")
-        :rg
-      else
-        :grep
-      end
+    def default_ripgrep_enabled
+      system("which rg > /dev/null 2>&1")
     end
   end
 
@@ -91,7 +86,7 @@ module Onlylogs
     basic_auth_user.present? && basic_auth_password.present?
   end
 
-  def self.grep_command
-    configuration.grep_command
+  def self.ripgrep_enabled?
+    configuration.ripgrep_enabled
   end
 end

@@ -197,7 +197,7 @@
           <span data-log-streamer-target="lineRange" style="color: #666; font-size: 0.9em;">No lines</span>
         </div>
         <div data-log-streamer-target="message"></div>
-        <% if Onlylogs::Grep.using_grep? %>
+        <% unless Onlylogs.ripgrep_enabled? %>
           <span class="grep-warning" title="Search is slow. Install ripgrep for better performance">⚠️</span>
         <% end %>
     </div>
