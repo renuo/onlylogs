@@ -175,7 +175,7 @@
     encrypted_log_file_path = Onlylogs::SecureFilePath.encrypt(log_file_path)
 %>
 
-<div data-controller="log-streamer text-selection"
+<div data-controller="log-streamer text-selection keyboard-shortcuts"
      data-log-streamer-file-path-value="<%= encrypted_log_file_path %>"     
      data-log-streamer-cursor-position-value="<%= cursor_position %>"
      data-log-streamer-filter-value="<%= filter %>"
@@ -199,14 +199,14 @@
     <div class="onlylogs-log-toolbar">
         <div>
           <label style="margin-bottom: 0;">
-            <input id="liveMode" type="checkbox" <%= mode == "live" ? "checked" : "" %> name="liveMode" data-log-streamer-target="liveMode" data-action="change->log-streamer#toggleLiveMode">
-            Live Mode
+            <input id="liveMode" type="checkbox" <%= mode == "live" ? "checked" : "" %> name="liveMode" data-log-streamer-target="liveMode" data-keyboard-shortcuts-target="liveMode" data-action="change->log-streamer#toggleLiveMode">
+            <u>L</u>ive Mode
           </label>
         </div>
         <div>
           <label style="margin-bottom: 0;">
-            <input id="autoscroll" type="checkbox" <%= autoscroll ? "checked" : "" %> name="autoscroll" data-action="change->log-streamer#toggleAutoScroll">
-            Autoscroll
+            <input id="autoscroll" type="checkbox" <%= autoscroll ? "checked" : "" %> name="autoscroll" data-keyboard-shortcuts-target="autoscroll" data-action="change->log-streamer#toggleAutoScroll">
+            <u>A</u>utoscroll
           </label>
         </div>
         <div>
