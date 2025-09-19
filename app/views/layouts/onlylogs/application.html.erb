@@ -8,6 +8,16 @@
   <%= yield :head %>
 
   <%= javascript_importmap_tags "application", importmap: Onlylogs.importmap  %>
+  
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      width: 100%;
+      overflow: hidden;
+    }
+  </style>
 </head>
 <body>
 
