@@ -2,6 +2,6 @@
 
 query="$1"
 escaped_query=$(echo "$query" | sed -E 's/([][{}()*+?.\\^$|])/\\\1/g')
-color_regex="\\\e\\\[(1|30|31|32|33|34|35|36|37|39|0)m"
+color_regex="\\x1b\\\[(1|30|31|32|33|34|35|36|37|39|0)m"
 query_regex=$(echo "$escaped_query" | sed -E "s/ +/([[:space:]]|$color_regex)+/g")
-grep --color=never -n -E "$query_regex" "$2"
+rg --color=never -n -e "$query_regex" "$2"

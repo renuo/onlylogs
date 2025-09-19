@@ -129,6 +129,13 @@
         .live-mode-sticky input[type="checkbox"] {
             cursor: not-allowed;
         }
+
+        .grep-warning {
+            color: #f59e0b;
+            font-size: 1.2em;
+            cursor: help;
+            margin-left: 0.5rem;
+        }
     }
 </style>
 
@@ -191,5 +198,8 @@
           <span data-log-streamer-target="lineRange" style="color: #666; font-size: 0.9em;">No lines</span>
         </div>
         <div data-log-streamer-target="message"></div>
+        <% if Onlylogs::Grep.using_grep? %>
+          <span class="grep-warning" title="Search is slow. Install ripgrep for better performance">⚠️</span>
+        <% end %>
     </div>
 </div>

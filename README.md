@@ -29,6 +29,10 @@ Head to `/onlylogs` and enjoy your logs streamed right into your face!
 
 Here you can grep your logs with regular expressions.
 
+**Performance Note:** Onlylogs automatically detects and uses [ripgrep (rg)](https://github.com/BurntSushi/ripgrep) if available, which provides significantly faster search performance. 
+If ripgrep is not installed, onlylogs falls back to standard grep. 
+A warning icon (⚠️) will be displayed in the toolbar when using standard grep to indicate slower search performance.
+
 
 ## Installation
 
@@ -43,6 +47,10 @@ And then execute:
 ```bash
 $ bundle
 ```
+
+### Installing ripgrep for Better Performance
+
+For optimal search performance, we recommend installing [ripgrep](https://github.com/BurntSushi/ripgrep). Onlylogs will automatically detect and use ripgrep if available.
 
 ## Secure the Engine
 
@@ -220,6 +228,21 @@ end
 **Important Notes:**
 - Patterns are directory-specific - `log/*.log` only matches files in the `log/` directory
 - Multiple patterns can be combined in the same configuration
+
+#### Configuring Search Engine
+
+You can manually configure which search engine to use although you should not need to do this.
+
+```ruby
+# config/initializers/onlylogs.rb
+Onlylogs.configure do |config|
+  # Force use of ripgrep (requires ripgrep to be installed)
+  config.grep_command = :rg
+  
+  # Force use of standard grep
+  config.grep_command = :grep
+end
+```
 
 ## Latency Simulation
 
