@@ -16,10 +16,7 @@ export default class LogStreamerController extends Controller {
   static targets = ["logLines", "filterInput", "lineRange", "liveMode", "message"];
   
   connect() {
-    console.log(`LogStreamerController connected for file: ${this.filePathValue} in ${this.modeValue} mode`);
-    // Initialize ActionCable consumer
     this.consumer = createConsumer();
-    console.log(this.logLinesTarget);
 
     // Internal state
     this.receivedLines = new Map();
@@ -27,7 +24,7 @@ export default class LogStreamerController extends Controller {
     this.subscription = null;
     this.isRunning = false;
     this.filterTimeout = null;
-    this.lastRenderedLineNumber = 0; // Track the last line number that was rendered
+    this.lastRenderedLineNumber = 0;
     
     // Batching state for performance optimization
     this.pendingLines = new Map(); // Lines waiting to be rendered
@@ -83,7 +80,6 @@ export default class LogStreamerController extends Controller {
   }
 
   reset() {
-    console.log(`Resetting log streamer with filter: ${this.filterInputTarget.value}`);
     this.stop();
     this.clear();
     this.start();
@@ -117,14 +113,12 @@ export default class LogStreamerController extends Controller {
   toggleLiveMode() {
     // this condition looks revered, but the value here has been changed already. so the live mode has been enabled.
     if (this.isLiveMode()) {
-      console.log("Clearing filter and restarting live mode");
       this.clearFilter();
       this.modeValue = 'live';      
       this.reconnectWithNewMode();
       return;
     }
     else {
-      console.log("Cannot disable live mode");
       this.liveModeTarget.checked = true;
       return false;
     }
@@ -214,17 +208,14 @@ export default class LogStreamerController extends Controller {
   #createSubscription() {
     this.subscription = this.consumer.subscriptions.create("Onlylogs::LogsChannel", {
       connected: () => {
-        console.log('Connected to logs channel');
         this.#handleConnected();
       },
       
       disconnected: () => {
-        console.log('Disconnected from logs channel');
         this.#handleDisconnected();
       },
       
       rejected: () => {
-        console.log('Failed to connect to logs channel');
         this.#handleRejected();
       },
       
@@ -244,8 +235,6 @@ export default class LogStreamerController extends Controller {
    * Handle successful connection
    */
   #handleConnected() {
-    console.log(`Sending last line number: ${this.lastLineNumberValue}, cursor position: ${this.cursorPositionValue} for file: ${this.filePathValue} in mode: ${this.modeValue}. Fast: ${this.fastValue}`);
-    
     this.subscription.perform('initialize_watcher', {
       cursor_position: this.cursorPositionValue,
       last_line_number: this.lastLineNumberValue,
@@ -299,14 +288,10 @@ export default class LogStreamerController extends Controller {
         }
       }
     });
-    
-    console.log(`Initialized with ${this.receivedLines.size} existing lines, last rendered: ${this.lastRenderedLineNumber}`);
   }
   
   #handleLogLines(lines) {
     try {
-      console.log(`received ${lines.length} line(s)`);
-      
       // Process all lines in the batch
       lines.forEach(line => {
         const { line_number, html } = line;

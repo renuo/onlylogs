@@ -133,7 +133,33 @@
             color: #f59e0b;
             font-size: 1.2em;
             cursor: help;
-            margin-left: 0.5rem;
+            margin-left: auto;
+        }
+
+        .onlylogs-context-menu {
+            position: absolute;
+            z-index: 1000;
+            background: #e3f2fd;
+            border: 1px solid #90caf9;
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            padding: 6px 12px;
+            font-size: 0.9em;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            color: #1976d2;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+
+            &:active {
+              background-color: #90caf9;
+            }
+
+            &:hover {
+              background-color: #bbdefb;
+            }        
         }
     }
 </style>
@@ -149,7 +175,7 @@
     encrypted_log_file_path = Onlylogs::SecureFilePath.encrypt(log_file_path)
 %>
 
-<div data-controller="log-streamer"
+<div data-controller="log-streamer text-selection"
      data-log-streamer-file-path-value="<%= encrypted_log_file_path %>"     
      data-log-streamer-cursor-position-value="<%= cursor_position %>"
      data-log-streamer-filter-value="<%= filter %>"
@@ -160,6 +186,16 @@
     <div data-log-streamer-target="logLines" class="onlylogs-log-lines">
 
     </div>
+    
+    <button type="button" 
+            data-text-selection-target="button" 
+            class="onlylogs-context-menu" 
+            data-action="click->text-selection#searchSelectedText" 
+            title="Search selected text"
+            style="display: none;">
+      🔍 Search
+    </button>
+
     <div class="onlylogs-log-toolbar">
         <div>
           <label style="margin-bottom: 0;">
@@ -182,6 +218,7 @@
                      value="<%= filter %>"
                      placeholder="Enter filter text..."
                      data-log-streamer-target="filterInput"
+                     data-text-selection-target="filterInput"
                      data-action="input->log-streamer#applyFilter"
                      style="padding-right: 1.5rem;">
               <button type="button"                       
