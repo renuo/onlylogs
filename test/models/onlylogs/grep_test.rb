@@ -43,7 +43,6 @@ class Onlylogs::GrepTest < ActiveSupport::TestCase
 
     test "it can grep a string when the line contains ansi colors with #{ripgrep_enabled ? 'ripgrep' : 'grep'}" do
       Onlylogs.configuration.ripgrep_enabled = ripgrep_enabled
-      # Create a temporary file with ANSI colors for this test
       temp_file = ::File.join(::File.dirname(@fixture_path), "temp_ansi_test.log")
       # Write a line similar to a Rails log line with ANSI colors
       # Example: "\e[1m\e[36mActiveRecord::SchemaMigration Load (0.0ms)\e[0m  \e[1m\e[34mSELECT ...\e[0m"
@@ -55,6 +54,16 @@ class Onlylogs::GrepTest < ActiveSupport::TestCase
 
       # Clean up the temporary file
       ::File.delete(temp_file) if ::File.exist?(temp_file)
+    end
+
+    test "it can grep a string with special regex characters with #{ripgrep_enabled ? 'ripgrep' : 'grep'}" do
+      Onlylogs.configuration.ripgrep_enabled = ripgrep_enabled
+      file_path = File.expand_path("../../fixtures/files/log_special_lines.txt", __dir__)
+      lines = Onlylogs::Grep.grep("watcher", file_path)
+      assert_equal 1, lines.length
+
+      lines = Onlylogs::Grep.grep("watcher({\"", file_path)
+      assert_equal 1, lines.length
     end
 
     test "it returns empty array when no matches found with #{ripgrep_enabled ? 'ripgrep' : 'grep'}" do
@@ -72,6 +81,7 @@ class Onlylogs::GrepTest < ActiveSupport::TestCase
     assert Onlylogs::Grep.match_line?("[INFO] Application started - Line 1", "[INFO]")
     assert Onlylogs::Grep.match_line?("[INFO] Application started - Line 1", "[INFO] Application")
     assert Onlylogs::Grep.match_line?("\e[1m\e[36mActiveRecord::SchemaMigration Load (0.0ms)\e[0m  \e[1m\e[34mSELECT ...\e[0m", "(0.0ms) SELECT")
+    assert Onlylogs::Grep.match_line?("initialize_watcher({\"cursor_position\"", "watcher({\"cursor")
     # assert Onlylogs::Grep.match_line?("[d310974f-969e-4f61-8502-07b7f51fdaef]   [1m[36mCACHE Book Count (0.0ms)[0m  [1m[34mSELECT COUNT(*) FROM \"books\"[0m", "07b7f51fdaef]   CACHE")
   end
 end

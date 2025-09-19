@@ -6,7 +6,7 @@ module Onlylogs
       super_grep_path = ::File.expand_path("../../../bin/#{script_name}", __dir__)
       results = []
 
-      IO.popen("#{super_grep_path} \"#{pattern}\" \"#{file_path}\" 2>/dev/null") do |io|
+      IO.popen([super_grep_path, pattern, file_path], err: "/dev/null") do |io|
         io.each_line do |line|
           # Parse each line as it comes in - super_grep returns grep output with line numbers (format: line_number:content)
           if match = line.strip.match(/^(\d+):(.*)/)
