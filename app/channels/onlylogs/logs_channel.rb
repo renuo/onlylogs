@@ -34,13 +34,14 @@ module Onlylogs
       filter = data["filter"].presence
       mode = data["mode"] || "live"
       fast = data["fast"] == true || data["fast"] == "true"
+      regexp_mode = data["regexp_mode"] == true || data["regexp_mode"] == "true"
 
       if mode == "search"
         # For search mode, read the entire file with filter and send all matching lines
-        read_entire_file_with_filter(file_path, filter, fast)
+        read_entire_file_with_filter(file_path, filter, fast, regexp_mode)
       else
         # For live mode, start the watcher
-        start_log_watcher(file_path, cursor_position, filter, fast)
+        start_log_watcher(file_path, cursor_position, filter, fast, regexp_mode)
       end
     end
 
@@ -50,11 +51,12 @@ module Onlylogs
 
     private
 
-    def start_log_watcher(file_path, cursor_position, filter = nil, fast = false)
+    def start_log_watcher(file_path, cursor_position, filter = nil, fast = false, regexp_mode = false)
       return if @log_watcher_running
 
       @log_watcher_running = true
       @filter = filter
+      @regexp_mode = regexp_mode
 
       transmit({ action: "message", content: "Reading file. Please wait..." })
 
@@ -70,7 +72,7 @@ module Onlylogs
            Rails.logger.silence(Logger::ERROR) do
              new_lines.each do |log_line|
                # Apply filter if present
-               if @filter.present? && !Onlylogs::Grep.match_line?(log_line.text, @filter)
+               if @filter.present? && !Onlylogs::Grep.match_line?(log_line.text, @filter, regexp_mode: @regexp_mode)
                  next
                end
 
@@ -104,10 +106,10 @@ module Onlylogs
       @log_watcher_thread.join(1)
     end
 
-    def read_entire_file_with_filter(file_path, filter = nil, fast = false)
+    def read_entire_file_with_filter(file_path, filter = nil, fast = false, regexp_mode = false)
       klass = fast ? Onlylogs::FastFile : Onlylogs::File
       @log_file = klass.new(file_path, last_position: 0)
-      @log_file.grep(filter) do |log_line|
+      @log_file.grep(filter, regexp_mode: regexp_mode) do |log_line|
         Rails.logger.silence(Logger::ERROR) do
           transmit(
             { action: "append_logs",

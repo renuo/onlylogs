@@ -1,7 +1,18 @@
 #!/usr/bin/env bash
 
-query="$1"
-escaped_query=$(echo "$query" | sed -E 's/([][{}()*+?.\\^$|])/\\\1/g')
-color_regex="\\\e\\\[(1|30|31|32|33|34|35|36|37|39|0)m"
-query_regex=$(echo "$escaped_query" | sed -E "s/ +/([[:space:]]|$color_regex)+/g")
-grep --color=never -n -E "$query_regex" "$2"
+if [ "$1" = "--regexp" ]; then
+  # Regexp mode: use the pattern as-is
+  query="$2"
+  file="$3"
+  color_regex="\\\e\\\[(1|30|31|32|33|34|35|36|37|39|0)m"
+  query_regex=$(echo "$query" | sed -E "s/ +/([[:space:]]|$color_regex)+/g")
+  grep --color=never -n -E "$query_regex" "$file"
+else
+  # Literal mode: escape special characters
+  query="$1"
+  file="$2"
+  escaped_query=$(echo "$query" | sed -E 's/([][{}()*+?.\\^$|])/\\\1/g')
+  color_regex="\\\e\\\[(1|30|31|32|33|34|35|36|37|39|0)m"
+  query_regex=$(echo "$escaped_query" | sed -E "s/ +/([[:space:]]|$color_regex)+/g")
+  grep --color=never -n -E "$query_regex" "$file"
+fi

@@ -10,10 +10,11 @@ export default class LogStreamerController extends Controller {
     autoStart: { type: Boolean, default: true },
     filter: { type: String, default: '' },
     mode: { type: String, default: 'live' },
-    fast: { type: Boolean, default: false }
+    fast: { type: Boolean, default: false },
+    regexpMode: { type: Boolean, default: false }
   };
 
-  static targets = ["logLines", "filterInput", "lineRange", "liveMode", "message"];
+  static targets = ["logLines", "filterInput", "lineRange", "liveMode", "message", "regexpMode"];
   
   connect() {
     this.consumer = createConsumer();
@@ -108,6 +109,14 @@ export default class LogStreamerController extends Controller {
   toggleAutoScroll() {
     this.autoScrollValue = !this.autoScrollValue;
     this.scroll();
+  }
+
+  toggleRegexpMode() {
+    this.regexpModeValue = this.regexpModeTarget.checked;
+    // If we have a filter applied, reconnect to apply the new regexp mode
+    if (this.filterInputTarget.value && this.filterInputTarget.value.trim() !== '') {
+      this.reconnectWithNewMode();
+    }
   }
 
   toggleLiveMode() {
@@ -241,7 +250,8 @@ export default class LogStreamerController extends Controller {
       file_path: this.filePathValue,
       filter: this.filterInputTarget.value,
       mode: this.modeValue,
-      fast: this.fastValue
+      fast: this.fastValue,
+      regexp_mode: this.regexpModeValue
     });
     
     this.element.classList.add("log-streamer--connected");

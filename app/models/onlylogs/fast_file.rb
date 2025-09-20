@@ -38,8 +38,8 @@ module Onlylogs
       ::File.exist?(path)
     end
 
-    def grep(filter, &block)
-      Grep.grep(filter, path) do |line_number, content|
+    def grep(filter, regexp_mode: false, &block)
+      Grep.grep(filter, path, regexp_mode: regexp_mode) do |line_number, content|
         yield Onlylogs::LogLine.new(line_number, content)
       end
     end
