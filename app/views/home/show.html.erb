@@ -1,3 +1,7 @@
+<% content_for :head do %>
+  <meta http-equiv="refresh" content="5">
+<% end %>
+
 <p>
 <%= link_to "Check logs in Real Time", onlylogs.root_path, target: :_blank %>
 </p>
@@ -6,3 +10,4 @@
 </p>
 
 <p>When loading this page, some lines are added to the logs, for testing purposes.</p>
+<p><em>This page refreshes automatically every 5 seconds.</em></p>
