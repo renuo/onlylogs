@@ -17,15 +17,31 @@ module Onlylogs
       { symbols: [ :vscodium, :codium ], sniff: /codium/i, url: "vscodium://file/%{file}:%{line}" }
     ].freeze
 
+    # Pre-compiled regex for better performance
+    FILE_PATH_PATTERN = %r{
+      (?<![a-zA-Z0-9_/])  # Negative lookbehind - not preceded by word chars or /
+      (?:\./)?             # Optional relative path indicator
+      (?:/[a-zA-Z0-9_\-\.\s]+)+  # File path with allowed characters
+      (?:\.rb|\.js|\.ts|\.tsx|\.jsx|\.py|\.java|\.go|\.rs|\.php|\.html|\.erb|\.haml|\.slim|\.css|\.scss|\.sass|\.less|\.xml|\.json|\.yml|\.yaml|\.md|\.txt|\.log)  # File extensions
+      (?::\d+)?            # Optional line number
+      (?![a-zA-Z0-9_/])    # Negative lookahead - not followed by word chars or /
+    }x.freeze
+
+    # Pre-built HTML template to avoid string interpolation
+    HTML_TEMPLATE = '<a href="%{url}" class="file-link">%{match}</a>'.freeze
+
     def self.parse(string)
       return string if string.blank?
 
+      # Early return if no file paths present
+      return string unless string.match?(FILE_PATH_PATTERN)
+
       editor = default_editor
-      string.gsub(file_path_pattern) do |match|
+      string.gsub(FILE_PATH_PATTERN) do |match|
         file_path = extract_file_path(match)
         line_number = extract_line_number(match)
         url = editor.url(file_path, line_number)
-        %(<a href="#{url}" class="file-link">#{match}</a>)
+        HTML_TEMPLATE % { url: url, match: match }
       end
     end
 
@@ -106,22 +122,6 @@ module Onlylogs
 
     def host_path
       @host_path ||= ENV["ONLYLOGS_HOST_PATH"]
-    end
-
-    # Regex pattern to match file paths with optional line numbers
-    # Matches paths like:
-    # - /path/to/file.rb:42
-    # - ./relative/path.rb:10
-    # - /path/to/file.rb (without line number)
-    def self.file_path_pattern
-      %r{
-        (?<![a-zA-Z0-9_/])  # Negative lookbehind - not preceded by word chars or /
-        (?:\./)?             # Optional relative path indicator
-        (?:/[a-zA-Z0-9_\-\.\s]+)+  # File path with allowed characters
-        (?:\.rb|\.js|\.ts|\.tsx|\.jsx|\.py|\.java|\.go|\.rs|\.php|\.html|\.erb|\.haml|\.slim|\.css|\.scss|\.sass|\.less|\.xml|\.json|\.yml|\.yaml|\.md|\.txt|\.log)  # File extensions
-        (?::\d+)?            # Optional line number
-        (?![a-zA-Z0-9_/])    # Negative lookahead - not followed by word chars or /
-      }x
     end
 
     def self.extract_file_path(match)
