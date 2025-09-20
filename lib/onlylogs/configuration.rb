@@ -3,7 +3,7 @@
 module Onlylogs
   class Configuration
     attr_accessor :allowed_files, :default_log_file_path, :basic_auth_user, :basic_auth_password,
-                  :parent_controller, :disable_basic_authentication, :ripgrep_enabled
+                  :parent_controller, :disable_basic_authentication, :ripgrep_enabled, :editor
 
     def initialize
       @allowed_files = default_allowed_files
@@ -13,13 +13,34 @@ module Onlylogs
       @parent_controller = nil
       @disable_basic_authentication = false
       @ripgrep_enabled = default_ripgrep_enabled
+      @editor = default_editor
     end
 
     def configure
       yield self
     end
 
-    private
+    def default_editor
+      if (credentials_editor = Rails.application.credentials.dig(:onlylogs, :editor))
+        return credentials_editor
+      end
+      
+      # 2. Check environment variables (ONLYLOGS_EDITOR > RAILS_EDITOR > EDITOR)
+      if ENV["ONLYLOGS_EDITOR"]
+        return ENV["ONLYLOGS_EDITOR"].to_sym
+      end
+      
+      if ENV["RAILS_EDITOR"]
+        return ENV["RAILS_EDITOR"].to_sym
+      end
+      
+      if ENV["EDITOR"]
+        return ENV["EDITOR"].to_sym
+      end
+      
+      # 3. Default fallback
+      :vscode
+    end
 
     def default_allowed_files
       # Default to environment-specific log files (without rotation suffixes)
@@ -88,5 +109,15 @@ module Onlylogs
 
   def self.ripgrep_enabled?
     configuration.ripgrep_enabled
+  end
+
+  def self.editor
+    configuration.default_editor
+  end
+
+  def self.editor=(editor_symbol)
+    configuration.editor = editor_symbol
+    # Clear the cached editor instance when editor changes
+    Onlylogs::FilePathParser.clear_editor_cache
   end
 end

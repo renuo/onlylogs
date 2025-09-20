@@ -95,6 +95,42 @@ Onlylogs.configure do |config|
 end
 ```
 
+### Configuring Code Editor for File Path Links
+
+Onlylogs automatically detects file paths in log messages and converts them into clickable links that open in your preferred code editor.
+
+#### Supported Editors
+
+For a complete list of supported editors, see [lib/onlylogs/editor_detector.rb](lib/onlylogs/editor_detector.rb).
+
+#### Configuration Methods
+
+The editor can be configured using environment variables, Rails credentials, or programmatically. Environment variables take precedence over Rails credentials and programmatic configuration.
+
+##### Environment Variables (Highest Priority)
+
+```bash
+export EDITOR="vscode"
+export ONLYLOGS_EDITOR="vscode"
+export RAILS_EDITOR="vscode"
+```
+
+##### Rails Credentials
+
+```yml
+# config/credentials.yml.enc
+onlylogs:
+  editor: vscode
+```
+
+##### Programmatic Configuration
+
+```ruby
+# config/initializers/onlylogs.rb
+Onlylogs.configure do |config|
+  config.editor = :vscode
+end
+
 ### Custom Authentication
 
 If you need custom authentication logic beyond basic auth, you can override the default authentication by configuring a parent controller that defines the `authenticate_onlylogs_user!` method.

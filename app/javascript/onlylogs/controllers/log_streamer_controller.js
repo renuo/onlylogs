@@ -24,7 +24,7 @@ export default class LogStreamerController extends Controller {
     this.missingLinePlaceholders = new Map();
     this.subscription = null;
     this.isRunning = false;
-    this.filterTimeout = null;
+    this.reconnectTimeout = null;
     this.lastRenderedLineNumber = 0;
     
     // Batching state for performance optimization
@@ -44,10 +44,10 @@ export default class LogStreamerController extends Controller {
   disconnect() {
     this.stop();
     
-    // Clear any pending filter timeout
-    if (this.filterTimeout) {
-      clearTimeout(this.filterTimeout);
-      this.filterTimeout = null;
+    // Clear any pending reconnect timeout
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+      this.reconnectTimeout = null;
     }
     
     // Clear batch update timer
@@ -134,35 +134,21 @@ export default class LogStreamerController extends Controller {
   }
 
   applyFilter() {
-    // Clear any existing timeout
-    if (this.filterTimeout) {
-      clearTimeout(this.filterTimeout);
+    // If filter is applied, disable live mode
+    if (this.filterInputTarget.value && this.filterInputTarget.value.trim() !== '') {
+      this.liveModeTarget.checked = false;
+      this.modeValue = 'search';
+    } else {
+      // If no filter, enable live mode
+      this.liveModeTarget.checked = true;
+      this.modeValue = 'live';
     }
     
-    // Set a new timeout for 500ms (0.5 seconds)
-    this.filterTimeout = setTimeout(() => {
-      // If filter is applied, disable live mode
-      if (this.filterInputTarget.value && this.filterInputTarget.value.trim() !== '') {
-        this.liveModeTarget.checked = false;
-        this.modeValue = 'search';
-      } else {
-        // If no filter, enable live mode
-        this.liveModeTarget.checked = true;
-        this.modeValue = 'live';
-      }
-      
-      // Update visual state
-      this.updateLiveModeState();
-      
-      // Clear any pending batch updates when filter changes
-      if (this.batchUpdateTimer) {
-        clearTimeout(this.batchUpdateTimer);
-        this.batchUpdateTimer = null;
-      }
-      
-      // Reconnect with new mode and filter
-      this.reconnectWithNewMode();
-    }, 500);
+    // Update visual state
+    this.updateLiveModeState();
+    
+    // Use the global debounced reconnection (300ms delay)
+    this.reconnectWithNewMode();
   }
 
   isLiveMode() {    
@@ -176,14 +162,24 @@ export default class LogStreamerController extends Controller {
   }
 
   reconnectWithNewMode() {
-    // Stop current connection
-    this.stop();
+    // Clear any existing reconnect timeout
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+    }
     
-    // Clear current logs
-    this.clear();
+    // Clear any pending batch updates when reconnecting
+    if (this.batchUpdateTimer) {
+      clearTimeout(this.batchUpdateTimer);
+      this.batchUpdateTimer = null;
+    }
     
-    // Start new connection with updated mode
-    this.start();
+    // Debounce reconnection to avoid multiple rapid reconnections
+    this.reconnectTimeout = setTimeout(() => {
+      this.stop();
+      this.clear();
+      this.start();
+      this.reconnectTimeout = null;
+    }, 300);
   }
 
   clearFilter() {

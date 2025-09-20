@@ -36,11 +36,10 @@ module Onlylogs
       # Early return if no file paths present
       return string unless string.match?(FILE_PATH_PATTERN)
 
-      editor = default_editor
       string.gsub(FILE_PATH_PATTERN) do |match|
         file_path = extract_file_path(match)
         line_number = extract_line_number(match)
-        url = editor.url(file_path, line_number)
+        url = cached_editor_instance.url(file_path, line_number)
         HTML_TEMPLATE % { url: url, match: match }
       end
     end
@@ -55,39 +54,20 @@ module Onlylogs
       new url_proc
     end
 
-    # Automatically sniffs a default editor preset based on
-    # environment variables.
-    #
-    # @return [FilePathParser]
-    def self.default_editor
-      editor_from_environment_formatting_string ||
-        editor_from_environment_editor ||
-        editor_from_symbol(:textmate)
-    end
+    # Cache for the editor instance
+    @cached_editor_instance = nil
 
-    def self.editor_from_environment_editor
-      %w[ONLYLOGS_EDITOR RAILS_EDITOR EDITOR].each do |var|
-        editor = editor_from_command(ENV[var]) if ENV[var]
-        return editor if editor
-      end
-      nil
+    def self.cached_editor_instance
+      return @cached_editor_instance if @cached_editor_instance      
+      @cached_editor_instance = editor_from_symbol(Onlylogs.editor)      
     end
-
-    def self.editor_from_command(editor_command)
-      env_preset = KNOWN_EDITORS.find { |preset| editor_command =~ preset[:sniff] }
-      for_formatting_string(env_preset[:url]) if env_preset
-    end
-
-    def self.editor_from_environment_formatting_string
-      return unless ENV["ONLYLOGS_EDITOR_URL"]
-
-      for_formatting_string(ENV["ONLYLOGS_EDITOR_URL"])
-    end
+    
 
     def self.editor_from_symbol(symbol)
       KNOWN_EDITORS.each do |preset|
         return for_formatting_string(preset[:url]) if preset[:symbols].include?(symbol)
       end
+      editor_from_symbol(:vscode)
     end
 
     def initialize(url_proc)
