@@ -21,8 +21,8 @@ module Onlylogs
             return
           end
         else
-           # Fallback to default if no encrypted path provided
-           file_path = Onlylogs.default_log_file_path
+          # Fallback to default if no encrypted path provided
+          file_path = Onlylogs.default_log_file_path
         end
       rescue Onlylogs::SecureFilePath::SecurityError => e
         Rails.logger.error "Onlylogs: Security violation - #{e.message}"
@@ -66,26 +66,26 @@ module Onlylogs
       @log_watcher_thread = Thread.new do
         Rails.logger.info "Starting log file watcher for connection #{connection.connection_identifier} from cursor position #{cursor_position} for file: #{file_path}."
 
-         @log_file.watch do |new_lines|
-           break unless @log_watcher_running
+        @log_file.watch do |new_lines|
+          break unless @log_watcher_running
 
-           Rails.logger.silence(Logger::ERROR) do
-             new_lines.each do |log_line|
-               # Apply filter if present
-               if @filter.present? && !Onlylogs::Grep.match_line?(log_line.text, @filter, regexp_mode: @regexp_mode)
-                 next
-               end
+          Rails.logger.silence(Logger::ERROR) do
+            new_lines.each do |log_line|
+              # Apply filter if present
+              if @filter.present? && !Onlylogs::Grep.match_line?(log_line.text, @filter, regexp_mode: @regexp_mode)
+                next
+              end
 
-               transmit(
-                 { action: "append_logs",
-                   lines: [ {
-                   line_number: log_line.number,
-                   html: render_log_line(log_line) }
-                 ] }
-               )
-             end
-           end
-         end
+              transmit(
+                { action: "append_logs",
+                  lines: [{
+                            line_number: log_line.number,
+                            html: render_log_line(log_line) }
+                  ] }
+              )
+            end
+          end
+        end
       rescue StandardError => e
         Rails.logger.error "Log watcher error: #{e.message}"
         Rails.logger.error e.backtrace.join("\n")
@@ -109,13 +109,14 @@ module Onlylogs
     def read_entire_file_with_filter(file_path, filter = nil, fast = false, regexp_mode = false)
       klass = fast ? Onlylogs::FastFile : Onlylogs::File
       @log_file = klass.new(file_path, last_position: 0)
-      @log_file.grep(filter, regexp_mode: regexp_mode) do |log_line|
-        Rails.logger.silence(Logger::ERROR) do
+      Rails.logger.silence(Logger::ERROR) do
+        @log_file.grep(filter, regexp_mode: regexp_mode) do |log_line|
+
           transmit(
             { action: "append_logs",
-              lines: [ {
-                line_number: log_line.number,
-                html: render_log_line(log_line) }
+              lines: [{
+                        line_number: log_line.number,
+                        html: render_log_line(log_line) }
               ]
             }
           )
