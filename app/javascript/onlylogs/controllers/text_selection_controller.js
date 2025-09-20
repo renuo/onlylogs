@@ -1,7 +1,7 @@
 import { Controller } from "@hotwired/stimulus"
 
 export default class TextSelectionController extends Controller {
-  static targets = ["button", "filterInput", "logLines"]
+  static targets = ["button", "filterInput", "logLines", "regexpMode"]
 
   connect() {
     this.boundHandleTextSelection = this.handleTextSelection.bind(this)
@@ -76,6 +76,11 @@ export default class TextSelectionController extends Controller {
 
   searchSelectedText() {
     if (this.selectedText) {
+      if (thisthis.regexpModeTarget.checked) {
+        this.regexpModeTarget.checked = false
+        this.regexpModeTarget.dispatchEvent(new Event('change', { bubbles: true }))
+      }
+      
       this.filterInputTarget.value = this.selectedText
       this.filterInputTarget.dispatchEvent(new Event('input', { bubbles: true }))
       this.hideButton()
