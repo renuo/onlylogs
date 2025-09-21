@@ -125,7 +125,8 @@ module Onlylogs
     end
 
     def render_log_line(log_line)
-      ApplicationController.renderer.render(partial: "onlylogs/shared/log_line", locals: { log_line: log_line })
+      "<pre data-line-number=\"#{log_line.number}\">" \
+      "<span style=\"color: #aaa; user-select: none; margin-right: 0.5em;\">#{log_line.parsed_number}</span> #{log_line.parsed_text}</pre>"
     end
   end
 end
