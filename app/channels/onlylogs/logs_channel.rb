@@ -65,26 +65,33 @@ module Onlylogs
 
       @log_watcher_thread = Thread.new do
         Rails.logger.info "Starting log file watcher for connection #{connection.connection_identifier} from cursor position #{cursor_position} for file: #{file_path}."
+        Rails.logger.silence(Logger::ERROR) do
 
-        @log_file.watch do |new_lines|
-          break unless @log_watcher_running
+          @log_file.watch do |new_lines|
+            break unless @log_watcher_running
 
-          Rails.logger.silence(Logger::ERROR) do
+            # Collect all filtered lines from this batch
+            lines_to_send = []
+
             new_lines.each do |log_line|
-              # Apply filter if present
               if @filter.present? && !Onlylogs::Grep.match_line?(log_line.text, @filter, regexp_mode: @regexp_mode)
                 next
               end
 
-              transmit(
-                { action: "append_logs",
-                  lines: [{
-                            line_number: log_line.number,
-                            html: render_log_line(log_line) }
-                  ] }
-              )
+              lines_to_send << {
+                line_number: log_line.number,
+                html: render_log_line(log_line)
+              }
+            end
+
+            if lines_to_send.any?
+              transmit({
+                         action: "append_logs",
+                         lines: lines_to_send
+                       })
             end
           end
+
         end
       rescue StandardError => e
         Rails.logger.error "Log watcher error: #{e.message}"
@@ -109,24 +116,32 @@ module Onlylogs
     def read_entire_file_with_filter(file_path, filter = nil, fast = false, regexp_mode = false)
       klass = fast ? Onlylogs::FastFile : Onlylogs::File
       @log_file = klass.new(file_path, last_position: 0)
+      start_time = Time.now
+
+      # Initialize batching for search mode
+      @batch_sender = BatchSender.new(self)
+      @batch_sender.start
+
       Rails.logger.silence(Logger::ERROR) do
         @log_file.grep(filter, regexp_mode: regexp_mode) do |log_line|
-
-          transmit(
-            { action: "append_logs",
-              lines: [{
-                        line_number: log_line.number,
-                        html: render_log_line(log_line) }
-              ]
-            }
-          )
+          # Add to batch buffer (sender thread will handle sending)
+          @batch_sender.add_line({
+                                   line_number: log_line.number,
+                                   html: render_log_line(log_line)
+                                 })
         end
       end
+
+      # Stop batch sender and flush any remaining lines
+      @batch_sender.stop
+
+      duration = Time.now - start_time
+      puts "Completed grep of file #{file_path} in #{duration.round(2)} seconds"
     end
 
     def render_log_line(log_line)
       "<pre data-line-number=\"#{log_line.number}\">" \
-      "<span style=\"color: #aaa; user-select: none; margin-right: 0.5em;\">#{log_line.parsed_number}</span> #{log_line.parsed_text}</pre>"
+        "<span style=\"color: #aaa; user-select: none; margin-right: 0.5em;\">#{log_line.parsed_number}</span> #{log_line.parsed_text}</pre>"
     end
   end
 end
