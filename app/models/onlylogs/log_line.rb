@@ -14,7 +14,7 @@ module Onlylogs
     end
 
     def parsed_text
-      AnsiColorParser.parse(FilePathParser.parse(text))
+      FilePathParser.parse(AnsiColorParser.parse(ERB::Util.html_escape(text)))
     end
 
     def to_a

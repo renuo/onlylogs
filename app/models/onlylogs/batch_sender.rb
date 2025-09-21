@@ -2,7 +2,7 @@
 
 module Onlylogs
   class BatchSender
-    def initialize(channel, interval: 0.02)
+    def initialize(channel, interval: 0.05)
       @channel = channel
       @interval = interval
       @buffer = []
