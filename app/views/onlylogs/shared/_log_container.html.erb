@@ -1,4 +1,5 @@
 <%# locals: (log_file_path:, tail: 100, filter: "", autoscroll: true, fast: false) %>
+<script src="https://cdn.jsdelivr.net/npm/clusterize.js@0.18.1/clusterize.min.js"></script>
 <style>
     @keyframes spin {
         from { transform: rotate(0deg); }
@@ -31,6 +32,11 @@
             overflow-x: auto;
             min-height: 0;
             height: 0; /* This is crucial for flex items with overflow */
+            max-height: 100%;
+        }
+
+        .clusterize-content {
+            outline: 0;
         }
 
         .onlylogs-log-toolbar {
@@ -189,8 +195,9 @@
      data-log-streamer-mode-value="<%= mode %>"
      data-log-streamer-fast-value="<%= fast %>"
      class="onlylogs-log-container" >
-    <div data-log-streamer-target="logLines" data-text-selection-target="logLines" class="onlylogs-log-lines">
-
+    <div data-log-streamer-target="logLines" data-text-selection-target="logLines" id="scrollArea" class="onlylogs-log-lines clusterize-scroll">
+      <div id="contentArea" class="clusterize-content">
+      </div>
     </div>
     
     <button type="button" 

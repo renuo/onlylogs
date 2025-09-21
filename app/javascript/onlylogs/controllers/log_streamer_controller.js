@@ -19,22 +19,15 @@ export default class LogStreamerController extends Controller {
   connect() {
     this.consumer = createConsumer();
 
-    // Internal state
-    this.receivedLines = new Map();
-    this.missingLinePlaceholders = new Map();
     this.subscription = null;
     this.isRunning = false;
     this.reconnectTimeout = null;
-    this.lastRenderedLineNumber = 0;
-    
-    // Batching state for performance optimization
-    this.pendingLines = new Map(); // Lines waiting to be rendered
-    this.batchUpdateTimer = null; // Timer for batch updates
-    this.batchInterval = 50;
-
-    // Line range tracking
     this.minLineNumber = null;
-    this.maxLineNumber = null;
+    this.maxLineNumber = 0;
+
+    // Initialize clusterize
+    this.clusterize = null;
+    this.#initializeClusterize();
 
     this.start();
     this.updateLiveModeState();
@@ -50,10 +43,10 @@ export default class LogStreamerController extends Controller {
       this.reconnectTimeout = null;
     }
     
-    // Clear batch update timer
-    if (this.batchUpdateTimer) {
-      clearTimeout(this.batchUpdateTimer);
-      this.batchUpdateTimer = null;
+    // Destroy clusterize instance
+    if (this.clusterize) {
+      this.clusterize.destroy();
+      this.clusterize = null;
     }
   }
   
@@ -63,7 +56,6 @@ export default class LogStreamerController extends Controller {
     }
     
     this.isRunning = true;
-    this.#initializeExistingLines();
     this.#createSubscription();
   }
   
@@ -83,25 +75,15 @@ export default class LogStreamerController extends Controller {
   reset() {
     this.stop();
     this.clear();
+    this.#reinitializeClusterize();
     this.start();
   }
 
   clear() {
-    this.receivedLines.clear();
-    this.missingLinePlaceholders.clear();
-    this.pendingLines.clear(); // Clear pending lines
-    this.logLinesTarget.innerHTML = '';
-    this.lastRenderedLineNumber = 0; // Reset the last rendered line number
-    
-    // Reset line range tracking
     this.minLineNumber = null;
-    this.maxLineNumber = null;
+    this.maxLineNumber = 0;
     
-    // Clear any pending batch update timer
-    if (this.batchUpdateTimer) {
-      clearTimeout(this.batchUpdateTimer);
-      this.batchUpdateTimer = null;
-    }
+    this.clusterize.clear();
     
     this.#updateLineRangeDisplay();
   }
@@ -167,16 +149,11 @@ export default class LogStreamerController extends Controller {
       clearTimeout(this.reconnectTimeout);
     }
     
-    // Clear any pending batch updates when reconnecting
-    if (this.batchUpdateTimer) {
-      clearTimeout(this.batchUpdateTimer);
-      this.batchUpdateTimer = null;
-    }
-    
     // Debounce reconnection to avoid multiple rapid reconnections
     this.reconnectTimeout = setTimeout(() => {
       this.stop();
       this.clear();
+      this.#reinitializeClusterize();
       this.start();
       this.reconnectTimeout = null;
     }, 300);
@@ -227,7 +204,6 @@ export default class LogStreamerController extends Controller {
       received: (data) => {
         this.#hideMessage();
         if (data.action === 'append_logs') {
-          // Handle lines (can be single or multiple)
           this.#handleLogLines(data.lines);
         } else if (data.action === 'message') {
           this.#handleMessage(data.content);
@@ -270,55 +246,28 @@ export default class LogStreamerController extends Controller {
     this.element.classList.remove("log-streamer--connected", "log-streamer--disconnected");
   }
   
-  /**
-   * Initialize with existing lines from the DOM
-   */
-  #initializeExistingLines() {
-    const existingPreElements = this.element.querySelectorAll('pre[data-line-number]');
-    
-    existingPreElements.forEach(preElement => {
-      const lineNumber = parseInt(preElement.getAttribute('data-line-number'));
-      if (!isNaN(lineNumber)) {
-        this.receivedLines.set(lineNumber, {
-          html: preElement.outerHTML
-        });
-        // Update the last rendered line number
-        this.lastRenderedLineNumber = Math.max(this.lastRenderedLineNumber, lineNumber);
-        
-        // Update line range tracking
-        if (this.minLineNumber === null || lineNumber < this.minLineNumber) {
-          this.minLineNumber = lineNumber;
-        }
-        if (this.maxLineNumber === null || lineNumber > this.maxLineNumber) {
-          this.maxLineNumber = lineNumber;
-        }
-      }
-    });
-  }
-  
   #handleLogLines(lines) {
     try {
-      // Process all lines in the batch
+      const newLines = [];
+      
       lines.forEach(line => {
         const { line_number, html } = line;
         
-        // Store the received line
-        this.receivedLines.set(line_number, { html });
-        
-        // Update line range tracking
         if (this.minLineNumber === null || line_number < this.minLineNumber) {
           this.minLineNumber = line_number;
         }
-        if (this.maxLineNumber === null || line_number > this.maxLineNumber) {
-          this.maxLineNumber = line_number;
-        }
+        this.maxLineNumber = Math.max(this.maxLineNumber, line_number);
         
-        // Add to pending lines for batch processing
-        this.pendingLines.set(line_number, { html });
+        // Add to new lines array for clusterize
+        newLines.push(html);
       });
       
-      // Schedule batch update if not already scheduled
-      this.#scheduleBatchUpdate();
+      // Append new lines to clusterize
+      if (newLines.length > 0) {
+        this.clusterize.append(newLines);
+        this.#updateLineRangeDisplay();
+        this.scroll();
+      }
       
     } catch (error) {
       console.error('Error handling log lines:', error);
@@ -333,90 +282,6 @@ export default class LogStreamerController extends Controller {
   #hideMessage() {
     this.messageTarget.innerHTML = '';
   }
-
-  /**
-   * Add missing line placeholder
-   */
-  #addMissingLinePlaceholder(lineNumber) {
-    const placeholderHtml = `<pre data-line-number="${lineNumber}"><span style="color: #aaa; user-select: none; margin-right: 0.5em;">${lineNumber.toString().padStart(4)}</span> <span style="color: #ff6b6b; font-style: italic;">[NOT RECEIVED]</span></pre>`;
-    this.missingLinePlaceholders.set(lineNumber, placeholderHtml);
-  }
-  
-  /**
-   * Schedule a batch update if not already scheduled
-   */
-  #scheduleBatchUpdate() {
-    if (this.batchUpdateTimer) {
-      return; // Already scheduled
-    }
-    
-    this.batchUpdateTimer = setTimeout(() => {
-      this.#processBatchUpdate();
-    }, this.batchInterval);
-  }
-  
-  /**
-   * Process all pending lines in a batch update
-   */
-  #processBatchUpdate() {
-    if (this.pendingLines.size === 0) {
-      this.batchUpdateTimer = null;
-      return;
-    }
-    
-    // Clear the timer
-    this.batchUpdateTimer = null;
-    
-    // Process all pending lines
-    this.#updateLogDisplay();
-    
-    // Clear pending lines after processing
-    this.pendingLines.clear();
-  }
-  
-  #updateLogDisplay() {
-    let container = this.logLinesTarget;
-    
-    // If no lines have been received yet, nothing to render
-    if (this.maxLineNumber === null) {
-      this.#updateLineRangeDisplay();
-      this.scroll();
-      return;
-    }
-    
-    // Find the range of new lines to append (from lastRenderedLineNumber + 1 to maxLineNumber)
-    const startLineNumber = this.lastRenderedLineNumber + 1;
-    const endLineNumber = this.maxLineNumber;
-    
-    if (startLineNumber > endLineNumber) {
-      // No new lines to render, just update the display info
-      this.#updateLineRangeDisplay();
-      this.scroll();
-      return;
-    }
-    
-    // Append only the new lines in sequence
-    for (let lineNumber = startLineNumber; lineNumber <= endLineNumber; lineNumber++) {
-      if (this.receivedLines.has(lineNumber)) {
-        // Use the received line (this will override any placeholder)
-        container.insertAdjacentHTML('beforeend', this.receivedLines.get(lineNumber).html);
-        // Remove the placeholder if it exists
-        this.missingLinePlaceholders.delete(lineNumber);
-      } else if (
-        this.missingLinePlaceholders.has(lineNumber) &&
-        this.isLiveMode() // Only show placeholders in live mode, not when filtering
-      ) {
-        // Use the missing line placeholder only in live mode
-        container.insertAdjacentHTML('beforeend', this.missingLinePlaceholders.get(lineNumber));
-      }
-      
-      // Update the last rendered line number
-      this.lastRenderedLineNumber = Math.max(this.lastRenderedLineNumber, lineNumber);
-    }
-
-    this.#updateLineRangeDisplay();
-    this.scroll();
-  }
   
   /**
    * Update the line range display in the toolbar
@@ -426,7 +291,7 @@ export default class LogStreamerController extends Controller {
       return;
     }
     
-    if (this.minLineNumber === null || this.maxLineNumber === null) {
+    if (this.minLineNumber === null || this.maxLineNumber === 0) {
       this.lineRangeTarget.textContent = "No lines";
       return;
     }
@@ -453,9 +318,41 @@ export default class LogStreamerController extends Controller {
       isRunning: this.isRunning,
       filePath: this.filePathValue,
       cursorPosition: this.cursorPositionValue,
-      lineCount: this.receivedLines.size,
-      missingLines: this.missingLinePlaceholders.size,
+      lineCount: this.clusterize.getRowsAmount(),
+      maxLineNumber: this.maxLineNumber,
       connected: this.subscription && this.subscription.identifier
     };
+  }
+
+  #initializeClusterize() {
+    this.clusterize = new window.Clusterize({
+      scrollId: 'scrollArea',
+      contentId: 'contentArea',
+      rows: [],
+      tag: 'pre',
+      rows_in_block: 50,
+      blocks_in_cluster: 4,
+      show_no_data_row: false,
+      no_data_text: 'No log lines available',
+      no_data_class: 'clusterize-no-data',
+      keep_parity: true,
+      callbacks: {
+        clusterWillChange: () => {
+          // Optional: handle cluster change
+        },
+        clusterChanged: () => {
+          // Optional: handle after cluster change
+        },
+        scrollingProgress: (progress) => {
+          // Optional: handle scrolling progress
+        }
+      }
+    });
+  }
+
+  #reinitializeClusterize() {
+    this.clusterize.destroy();
+    this.clusterize = null;
+    this.#initializeClusterize();
   }
 }
