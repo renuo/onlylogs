@@ -276,6 +276,21 @@ Onlylogs.configure do |config|
 end
 ```
 
+#### Configuring Maximum Search Results
+
+By default, onlylogs limits search results to 100,000 lines to prevent memory issues and ensure responsive performance. You can configure this limit based on your needs:
+
+```ruby
+# config/initializers/onlylogs.rb
+Onlylogs.configure do |config|
+  # Set a custom limit (e.g., 50,000 lines)
+  config.max_line_matches = 50_000
+  
+  # Or remove the limit entirely (use with caution)
+  config.max_line_matches = nil
+end
+```
+
 ## Latency Simulation
 
 For testing how onlylogs behaves under production-like network conditions, you can simulate latency for HTTP requests and WebSocket connections using the included latency simulation tool.

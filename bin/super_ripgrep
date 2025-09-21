@@ -1,12 +1,25 @@
 #!/usr/bin/env bash
 
+# Default to no limit
+max_matches=""
+
+# Parse arguments
+if [ "$1" = "--max-matches" ]; then
+  max_matches="$2"
+  shift 2
+fi
+
 if [ "$1" = "--regexp" ]; then
   # Regexp mode: use the pattern as-is
   query="$2"
   file="$3"
   color_regex="\\x1b\\\[(1|30|31|32|33|34|35|36|37|39|0)m"
   query_regex=$(echo "$query" | sed -E "s/ +/([[:space:]]|$color_regex)+/g")
-  rg --color=never -n -e "$query_regex" "$file"
+  if [ -n "$max_matches" ]; then
+    rg --color=never -n --max-count="$max_matches" -e "$query_regex" "$file"
+  else
+    rg --color=never -n -e "$query_regex" "$file"
+  fi
 else
   # Literal mode: escape special characters
   query="$1"
@@ -14,5 +27,9 @@ else
   escaped_query=$(echo "$query" | sed -E 's/([][{}()*+?.\\^$|])/\\\1/g')
   color_regex="\\x1b\\\[(1|30|31|32|33|34|35|36|37|39|0)m"
   query_regex=$(echo "$escaped_query" | sed -E "s/ +/([[:space:]]|$color_regex)+/g")
-  rg --color=never -n -e "$query_regex" "$file"
+  if [ -n "$max_matches" ]; then
+    rg --color=never -n --max-count="$max_matches" -e "$query_regex" "$file"
+  else
+    rg --color=never -n -e "$query_regex" "$file"
+  fi
 fi

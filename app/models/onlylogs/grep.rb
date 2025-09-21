@@ -4,10 +4,13 @@ module Onlylogs
       # Use the appropriate script based on configuration
       script_name = Onlylogs.ripgrep_enabled? ? "super_ripgrep" : "super_grep"
       super_grep_path = ::File.expand_path("../../../bin/#{script_name}", __dir__)
-      results = []
 
-      # Build command arguments based on regexp mode
-      command_args = regexp_mode ? [super_grep_path, "--regexp", pattern, file_path] : [super_grep_path, pattern, file_path]
+      command_args = [super_grep_path]
+      command_args += ["--max-matches", Onlylogs.max_line_matches.to_s] if Onlylogs.max_line_matches.present?
+      command_args << "--regexp" if regexp_mode
+      command_args += [pattern, file_path]
+
+      results = []
 
       IO.popen(command_args, err: "/dev/null") do |io|
         io.each_line do |line|

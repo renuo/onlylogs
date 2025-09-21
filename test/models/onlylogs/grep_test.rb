@@ -140,4 +140,30 @@ class Onlylogs::GrepTest < ActiveSupport::TestCase
     line_with_numbers = "Error 404: Page not found"
     assert Onlylogs::Grep.match_line?(line_with_numbers, "Error \\d+:", regexp_mode: true)
   end
+
+  test_both_engine_modes "it respects max_line_matches configuration" do |engine_name|
+    # Set a very low max_line_matches to test limiting
+    original_max_matches = Onlylogs.max_line_matches
+    Onlylogs.configuration.max_line_matches = 5
+    
+    # This should return only 5 results even though there are more matches
+    lines = Onlylogs::Grep.grep("Line", @fixture_path)
+    assert_equal 5, lines.length, "Failed with #{engine_name}"
+    
+    # Restore original configuration
+    Onlylogs.configuration.max_line_matches = original_max_matches
+  end
+
+  test_both_engine_modes "it allows unlimited matches when max_line_matches is nil" do |engine_name|
+    # Set max_line_matches to nil to test no limits
+    original_max_matches = Onlylogs.max_line_matches
+    Onlylogs.configuration.max_line_matches = nil
+    
+    # This should return all matches (100 lines in the fixture file)
+    lines = Onlylogs::Grep.grep("Line", @fixture_path)
+    assert_equal 100, lines.length, "Failed with #{engine_name}"
+    
+    # Restore original configuration
+    Onlylogs.configuration.max_line_matches = original_max_matches
+  end
 end

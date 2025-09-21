@@ -3,7 +3,8 @@
 module Onlylogs
   class Configuration
     attr_accessor :allowed_files, :default_log_file_path, :basic_auth_user, :basic_auth_password,
-                  :parent_controller, :disable_basic_authentication, :ripgrep_enabled, :editor
+                  :parent_controller, :disable_basic_authentication, :ripgrep_enabled, :editor,
+                  :max_line_matches
 
     def initialize
       @allowed_files = default_allowed_files
@@ -14,6 +15,7 @@ module Onlylogs
       @disable_basic_authentication = false
       @ripgrep_enabled = default_ripgrep_enabled
       @editor = default_editor
+      @max_line_matches = 100000
     end
 
     def configure
@@ -119,5 +121,9 @@ module Onlylogs
     configuration.editor = editor_symbol
     # Clear the cached editor instance when editor changes
     Onlylogs::FilePathParser.clear_editor_cache
+  end
+
+  def self.max_line_matches
+    configuration.max_line_matches
   end
 end

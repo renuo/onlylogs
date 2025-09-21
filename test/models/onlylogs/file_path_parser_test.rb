@@ -4,17 +4,11 @@ class Onlylogs::FilePathParserTest < ActiveSupport::TestCase
   def setup
     @original_editor = ENV["EDITOR"]
     @original_onlylogs_editor = ENV["ONLYLOGS_EDITOR"]
-    @original_onlylogs_editor_url = ENV["ONLYLOGS_EDITOR_URL"]
-    @original_virtual_path = ENV["ONLYLOGS_VIRTUAL_PATH"]
-    @original_host_path = ENV["ONLYLOGS_HOST_PATH"]
   end
 
   def teardown
     ENV["EDITOR"] = @original_editor
     ENV["ONLYLOGS_EDITOR"] = @original_onlylogs_editor
-    ENV["ONLYLOGS_EDITOR_URL"] = @original_onlylogs_editor_url
-    ENV["ONLYLOGS_VIRTUAL_PATH"] = @original_virtual_path
-    ENV["ONLYLOGS_HOST_PATH"] = @original_host_path
   end
 
   test "converts file path with line number to clickable link" do
