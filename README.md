@@ -33,6 +33,10 @@ Here you can grep your logs with regular expressions.
 If ripgrep is not installed, onlylogs falls back to standard grep. 
 A warning icon (⚠️) will be displayed in the toolbar when using standard grep to indicate slower search performance.
 
+## Customization
+
+Onlylogs provides two ways to customize the appearance of the log viewer: CSS Variables and a complete style override.
+Check the file [_log_container_styles.html.erb](app/views/onlylogs/shared/_log_container_styles.html.erb) for the complete list of CSS variables.
 
 ## Installation
 

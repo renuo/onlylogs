@@ -1,0 +1,172 @@
+<style>
+    .onlylogs-log-container {
+        background-color: var(--onlylogs-bg-color, white);
+        width: var(--onlylogs-width, 100%);
+        height: var(--onlylogs-height, 100%); /* Take full height of parent container */
+        min-height: var(--onlylogs-min-height, 400px);
+        display: flex;
+        flex-direction: column;
+
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+        font-size: var(--onlylogs-font-size, 0.8rem);
+        margin: 0;
+        border: none;
+        border-radius: 0;
+        box-sizing: border-box;
+
+        .onlylogs-log-lines {
+            flex: 1 1 auto;
+            overflow-y: auto;
+            overflow-x: auto;
+            min-height: 0;
+            height: 0; /* This is crucial for flex items with overflow */
+            max-height: 100%;
+        }
+
+        .clusterize-content {
+            outline: 0;
+        }
+
+        .line-number {
+            color: #aaa;
+            user-select: none;
+            margin-right: 0.5em;
+        }
+        
+        .color-success {
+            color: green;
+        }
+
+        .color-error {
+            color: red;
+        }
+
+        .fw-bold {
+            font-weight: 600;
+        }
+
+        .log-black {
+            color: lch(18% 0 0);
+        }
+
+        .log-red {
+            color: lch(55% 60 29);
+        }
+
+        .log-green {
+            color: lch(70% 45 135);
+        }
+
+        .log-yellow {
+            color: lch(85% 30 100);
+        }
+
+        .log-blue {
+            color: lch(65% 45 260);
+        }
+
+        .log-magenta {
+            color: lch(65% 40 320);
+        }
+
+        .log-cyan {
+            color: lch(75% 30 200);
+        }
+
+        .log-white {
+            color: lch(95% 2 0);
+        }
+
+        pre {
+            margin: 0 !important;
+            padding: 0.2rem;
+            word-break: break-word;  /* allow breaking long tokens like UUIDs/SQL */
+        }
+
+        a {
+            color: inherit;
+            text-decoration: underline;
+        }
+
+        .onlylogs-context-menu {
+            position: absolute;
+            z-index: 1000;
+            background: #e3f2fd;
+            border: 1px solid #90caf9;
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            padding: 6px 12px;
+            font-size: 0.9em;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            color: #1976d2;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+
+            &:active {
+              background-color: #90caf9;
+            }
+
+            &:hover {
+              background-color: #bbdefb;
+            }        
+        }
+
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+
+        .onlylogs-log-toolbar {
+          flex-shrink: 0;
+          position: sticky;
+          bottom: 0;
+          z-index: 10;
+          padding: 1rem 0.5rem;
+          display: flex; 
+          align-items: center; 
+          gap: 2rem;
+
+          .live-mode-sticky {
+            opacity: 0.7;
+            cursor: not-allowed;
+
+            input[type="checkbox"] {
+              cursor: not-allowed;
+            }
+          }
+
+          .clear-filter-button {
+            position: absolute;
+            right: 0.25rem;
+            background: none;
+            border: none;
+            color: #666;
+            cursor: pointer;
+            font-size: 0.8rem;
+            padding: 0;
+            width: 1rem;
+            height: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.25rem;
+          }
+
+          .onlylogs-spin-animation {
+            display: inline-block;
+            animation: spin 1s linear infinite;
+            margin-right: 0.5em;
+          }
+
+          .grep-warning {
+            color: #f59e0b;
+            font-size: 1.2em;
+            cursor: help;
+            margin-left: auto;
+          }
+        }
+    }
+</style>
