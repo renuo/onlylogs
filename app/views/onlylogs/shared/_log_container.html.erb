@@ -82,5 +82,6 @@
         <% unless Onlylogs.ripgrep_enabled? %>
           <span class="grep-warning" title="Search is slow. Install ripgrep for better performance">⚠️</span>
         <% end %>
+        <div data-log-streamer-target="websocketStatus" class="websocket-status websocket-status--disconnected" title="WebSocket Disconnected">🔴</div>
     </div>
 </div>

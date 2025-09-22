@@ -14,7 +14,7 @@ export default class LogStreamerController extends Controller {
     regexpMode: { type: Boolean, default: false }
   };
 
-  static targets = ["logLines", "filterInput", "lineRange", "liveMode", "message", "regexpMode"];
+  static targets = ["logLines", "filterInput", "lineRange", "liveMode", "message", "regexpMode", "websocketStatus"];
   
   connect() {
     this.consumer = createConsumer();
@@ -28,6 +28,8 @@ export default class LogStreamerController extends Controller {
     // Initialize clusterize
     this.clusterize = null;
     this.#initializeClusterize();
+
+    this.#updateWebsocketStatus('disconnected');
 
     this.start();
     this.updateLiveModeState();
@@ -228,22 +230,19 @@ export default class LogStreamerController extends Controller {
     
     this.element.classList.add("log-streamer--connected");
     this.element.classList.remove("log-streamer--disconnected", "log-streamer--rejected");
+    this.#updateWebsocketStatus('connected');
   }
   
-  /**
-   * Handle disconnection
-   */
   #handleDisconnected() {
     this.element.classList.add("log-streamer--disconnected");
     this.element.classList.remove("log-streamer--connected");
+    this.#updateWebsocketStatus('disconnected');
   }
   
-  /**
-   * Handle connection rejection
-   */
   #handleRejected() {
     this.element.classList.add("log-streamer--rejected");
     this.element.classList.remove("log-streamer--connected", "log-streamer--disconnected");
+    this.#updateWebsocketStatus('rejected');
   }
   
   #handleLogLines(lines) {
@@ -283,9 +282,6 @@ export default class LogStreamerController extends Controller {
     this.messageTarget.innerHTML = '';
   }
   
-  /**
-   * Update the line range display in the toolbar
-   */
   #updateLineRangeDisplay() {
     if (!this.hasLineRangeTarget) {
       return;
@@ -303,16 +299,37 @@ export default class LogStreamerController extends Controller {
     }
   }
 
-  /**
-   * Format number with Ruby-style thousands separator (single quote)
-   */
   #formatNumber(number) {
     return number.toString().replace(/\B(?=(\d{3})+(?!\d))/g, "'");
   }
   
-  /**
-   * Get current streaming status
-   */
+  #updateWebsocketStatus(status) {
+    if (!this.hasWebsocketStatusTarget) {
+      return;
+    }
+    
+    const statusElement = this.websocketStatusTarget;
+    statusElement.className = `websocket-status websocket-status--${status}`;
+    
+    switch (status) {
+      case 'connected':
+        statusElement.innerHTML = '🟢';
+        statusElement.title = 'WebSocket Connected';
+        break;
+      case 'disconnected':
+        statusElement.innerHTML = '🔴';
+        statusElement.title = 'WebSocket Disconnected';
+        break;
+      case 'rejected':
+        statusElement.innerHTML = '🟡';
+        statusElement.title = 'WebSocket Connection Rejected';
+        break;
+      default:
+        statusElement.innerHTML = '⚪';
+        statusElement.title = 'WebSocket Status Unknown';
+    }
+  }
+  
   getStatus() {
     return {
       isRunning: this.isRunning,
