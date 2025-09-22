@@ -76,7 +76,7 @@ export default class TextSelectionController extends Controller {
 
   searchSelectedText() {
     if (this.selectedText) {
-      if (thisthis.regexpModeTarget.checked) {
+      if (this.regexpModeTarget.checked) {
         this.regexpModeTarget.checked = false
         this.regexpModeTarget.dispatchEvent(new Event('change', { bubbles: true }))
       }
