@@ -283,20 +283,18 @@ export default class LogStreamerController extends Controller {
   }
   
   #updateLineRangeDisplay() {
-    if (!this.hasLineRangeTarget) {
-      return;
-    }
+    const resultsCount = this.clusterize.getRowsAmount();
+    let lineRangeText;
     
     if (this.minLineNumber === null || this.maxLineNumber === 0) {
-      this.lineRangeTarget.textContent = "No lines";
-      return;
+      lineRangeText = `No lines`;
+    } else if (this.minLineNumber === this.maxLineNumber) {
+      lineRangeText = `Line ${this.#formatNumber(this.minLineNumber)}`;
+    } else {
+      lineRangeText = `Lines ${this.#formatNumber(this.minLineNumber)} - ${this.#formatNumber(this.maxLineNumber)}`;
     }
     
-    if (this.minLineNumber === this.maxLineNumber) {
-      this.lineRangeTarget.textContent = `Line ${this.#formatNumber(this.minLineNumber)}`;
-    } else {
-      this.lineRangeTarget.textContent = `Lines ${this.#formatNumber(this.minLineNumber)} - ${this.#formatNumber(this.maxLineNumber)}`;
-    }
+    this.lineRangeTarget.textContent = `${lineRangeText} | Results: ${this.#formatNumber(resultsCount)}`;
   }
 
   #formatNumber(number) {
