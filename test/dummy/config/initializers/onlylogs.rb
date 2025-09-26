@@ -6,5 +6,11 @@ Onlylogs.configure do |config|
 
   # config.parent_controller = "ApplicationController"
   config.disable_basic_authentication = true
+  config.max_line_matches = 1_000_000
   # config.ripgrep_enabled = false
+  #
+  config.allowed_files = [
+    Onlylogs::Engine.root.join("test", "fixtures", "files", "*.log"),
+    Rails.root.join("log", "*.log")
+  ]
 end
