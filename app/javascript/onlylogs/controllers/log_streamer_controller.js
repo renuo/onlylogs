@@ -16,6 +16,8 @@ export default class LogStreamerController extends Controller {
 
   static targets = ["logLines", "filterInput", "lineRange", "liveMode", "message", "regexpMode", "websocketStatus"];
   
+  static targets = ["logLines", "filterInput", "lineRange", "liveMode", "message", "regexpMode", "websocketStatus", "stopButton", "clearButton"];
+
   connect() {
     this.consumer = createConsumer();
 
@@ -84,9 +86,9 @@ export default class LogStreamerController extends Controller {
   clear() {
     this.minLineNumber = null;
     this.maxLineNumber = 0;
-    
+
     this.clusterize.clear();
-    
+
     this.#updateLineRangeDisplay();
   }
 
@@ -107,7 +109,7 @@ export default class LogStreamerController extends Controller {
     // this condition looks revered, but the value here has been changed already. so the live mode has been enabled.
     if (this.isLiveMode()) {
       this.clearFilter();
-      this.modeValue = 'live';      
+      this.modeValue = 'live';
       this.reconnectWithNewMode();
       return;
     }
@@ -174,6 +176,11 @@ export default class LogStreamerController extends Controller {
     
     // Reconnect with cleared filter and live mode
     this.reconnectWithNewMode();
+  }
+
+  clearLogs() {
+    this.clear();
+    this.#hideMessage();
   }
 
   updateLiveModeState() {

@@ -76,6 +76,16 @@
           </label>
         </div>
         <div>
+          <button type="button" 
+                  data-log-streamer-target="stopButton"
+                  data-action="click->log-streamer#stopSearch"
+                  class="stop-search-button"
+                  title="Stop current search"
+                  style="display: none;">
+            ⏹️ Stop
+          </button>
+        </div>
+        <div>
           <span data-log-streamer-target="lineRange" style="color: #666;">No lines</span>
         </div>
         <div data-log-streamer-target="message"></div>
@@ -84,6 +94,15 @@
         <% end %>
         <div class="file-size" title="File size: <%= number_to_human_size(File.size(log_file_path)) %>">
           <%= number_to_human_size(File.size(log_file_path)) %>
+        </div>
+        <div>
+          <button type="button" 
+                  data-log-streamer-target="clearButton"
+                  data-action="click->log-streamer#clearLogs"
+                  class="clear-logs-button"
+                  title="Clear all log lines">
+            🗑️ Clear
+          </button>
         </div>
         <div data-log-streamer-target="websocketStatus" class="websocket-status websocket-status--disconnected" title="WebSocket Disconnected">🔴</div>
     </div>
