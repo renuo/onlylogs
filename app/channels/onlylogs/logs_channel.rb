@@ -3,11 +3,14 @@
 module Onlylogs
   class LogsChannel < ActionCable::Channel::Base
     def subscribed
+      # Rails.logger.info "Client subscribed to Onlylogs::LogsChannel"
       # Wait for the client to send the cursor position
       # start_log_watcher will be called from the initialize_watcher method
     end
 
     def initialize_watcher(data)
+      cleanup_existing_operations
+
       # Decrypt and verify the file path
       begin
         encrypted_file_path = data["file_path"]
@@ -45,11 +48,25 @@ module Onlylogs
       end
     end
 
+    def stop_watcher
+      cleanup_existing_operations
+      transmit({ action: "finish", content: "Search stopped." })
+    end
+
     def unsubscribed
-      stop_log_watcher
+      cleanup_existing_operations
     end
 
     private
+
+    def cleanup_existing_operations
+      if @batch_sender
+        @batch_sender.stop
+        @batch_sender = nil
+      end
+
+      stop_log_watcher
+    end
 
     def start_log_watcher(file_path, cursor_position, filter = nil, fast = false, regexp_mode = false)
       return if @log_watcher_running
@@ -63,10 +80,10 @@ module Onlylogs
       klass = fast ? Onlylogs::FastFile : Onlylogs::File
       @log_file = klass.new(file_path, last_position: cursor_position)
 
-      @log_watcher_thread = Thread.new do
-        Rails.logger.info "Starting log file watcher for connection #{connection.connection_identifier} from cursor position #{cursor_position} for file: #{file_path}."
-        Rails.logger.silence(Logger::ERROR) do
+      transmit({ action: "message", content: "" })
 
+      @log_watcher_thread = Thread.new do
+        Rails.logger.silence(Logger::ERROR) do
           @log_file.watch do |new_lines|
             break unless @log_watcher_running
 
@@ -74,9 +91,10 @@ module Onlylogs
             lines_to_send = []
 
             new_lines.each do |log_line|
-              if @filter.present? && !Onlylogs::Grep.match_line?(log_line.text, @filter, regexp_mode: @regexp_mode)
-                next
-              end
+              # Filters in live mode are not yet implemented
+              # if @filter.present? && !Onlylogs::Grep.match_line?(log_line.text, @filter, regexp_mode: @regexp_mode)
+              #   next
+              # end
 
               lines_to_send << {
                 line_number: log_line.number,
@@ -91,7 +109,6 @@ module Onlylogs
                        })
             end
           end
-
         end
       rescue StandardError => e
         Rails.logger.error "Log watcher error: #{e.message}"
@@ -104,7 +121,6 @@ module Onlylogs
     def stop_log_watcher
       return unless @log_watcher_running
 
-      Rails.logger.info "Stopping log file watcher for connection #{connection.connection_identifier}"
       @log_watcher_running = false
 
       return unless @log_watcher_thread&.alive?
@@ -114,29 +130,43 @@ module Onlylogs
     end
 
     def read_entire_file_with_filter(file_path, filter = nil, fast = false, regexp_mode = false)
+      @log_watcher_running = true
       klass = fast ? Onlylogs::FastFile : Onlylogs::File
       @log_file = klass.new(file_path, last_position: 0)
       start_time = Time.now
 
-      # Initialize batching for search mode
+      transmit({ action: "message", content: "Searching..." })
+
       @batch_sender = BatchSender.new(self)
       @batch_sender.start
 
+      line_count = 0
+
       Rails.logger.silence(Logger::ERROR) do
         @log_file.grep(filter, regexp_mode: regexp_mode) do |log_line|
+          return if @batch_sender.nil?
+
           # Add to batch buffer (sender thread will handle sending)
           @batch_sender.add_line({
                                    line_number: log_line.number,
                                    html: render_log_line(log_line)
                                  })
+
+          line_count += 1
         end
       end
 
       # Stop batch sender and flush any remaining lines
       @batch_sender.stop
 
-      duration = Time.now - start_time
-      puts "Completed grep of file #{file_path} in #{duration.round(2)} seconds"
+      # Send completion message
+      if line_count >= Onlylogs.max_line_matches
+        transmit({ action: "finish", content: "Search finished. Search results limit reached." })
+      else
+        transmit({ action: "finish", content: "Search finished." })
+      end
+
+      @log_watcher_running = false
     end
 
     def render_log_line(log_line)

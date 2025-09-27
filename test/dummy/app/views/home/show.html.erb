@@ -1,0 +1,23 @@
+<h1>Onlylogs Test Files</h1>
+
+<p>Click on any of the log files below to view them in the Onlylogs viewer:</p>
+
+<hr>
+
+<% fixture_files = Dir.glob(Onlylogs::Engine.root.join("test", "fixtures", "files", "*")).sort %>
+
+<% if fixture_files.any? %>
+  <% fixture_files.each do |file_path| %>
+    <% 
+      file_name = File.basename(file_path)
+      file_size = File.size(file_path)
+      encrypted_path = Onlylogs::SecureFilePath.encrypt(file_path)
+    %>
+    <h3><%= link_to file_name, log_viewer_path(encrypted_path) %></h3>
+    <p>Size: <%= number_to_human_size(file_size) %></p>
+    <p>Path: <%= file_path %></p>
+    <hr>
+  <% end %>
+<% else %>
+  <p>No log files found in the fixtures directory.</p>
+<% end %>

@@ -52,7 +52,6 @@ module Onlylogs
       
       return if lines_to_send.empty?
 
-      puts "sending batch of #{lines_to_send.size} lines"
       @channel.send(:transmit, {
         action: "append_logs",
         lines: lines_to_send
