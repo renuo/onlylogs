@@ -65,6 +65,7 @@ Rails.application.configure do
   # Uncomment if you wish to allow Action Cable access from any origin.
   # config.action_cable.disable_request_forgery_protection = true
   config.log_tags = [ :request_id ]
+  # config.log_level = :error
 
   config.logger = Onlylogs::Logger.new(Rails.root.join("log", "#{Rails.env}.log"), 10, 1.gigabyte)
 
