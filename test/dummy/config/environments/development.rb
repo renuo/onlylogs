@@ -1,4 +1,5 @@
 require "active_support/core_ext/integer/time"
+require "active_support/core_ext/numeric/bytes"
 
 Rails.application.configure do
   # Settings specified here will take precedence over those in config/application.rb.
@@ -63,10 +64,10 @@ Rails.application.configure do
 
   # Uncomment if you wish to allow Action Cable access from any origin.
   # config.action_cable.disable_request_forgery_protection = true
-  config.log_tags = [
-    :request_id,
-    ->(req) { Time.now.utc.iso8601 }
-  ]
+  config.log_tags = [ :request_id ]
+
+  config.logger = Onlylogs::Logger.new(Rails.root.join("log", "#{Rails.env}.log"), 10, 1.gigabyte)
+
 
   # Raise error when a before_action's only/except options reference missing actions.
   config.action_controller.raise_on_missing_callback_actions = true

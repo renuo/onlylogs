@@ -1,6 +1,8 @@
 require "onlylogs/version"
 require "onlylogs/engine"
 require "onlylogs/configuration"
+require "onlylogs/formatter"
+require "onlylogs/logger"
 
 # require "zeitwerk"
 #
