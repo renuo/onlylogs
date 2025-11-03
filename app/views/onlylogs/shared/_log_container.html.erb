@@ -1,10 +1,8 @@
-<%# locals: (log_file_path:, tail: 100, filter: "", autoscroll: true, fast: false) %>
+<%# locals: (log_file_path:, tail: 100, filter: "", autoscroll: true) %>
 <script src="https://cdn.jsdelivr.net/npm/clusterize.js@0.18.1/clusterize.min.js"></script>
 <%= render "onlylogs/shared/log_container_styles" %>
 
 <%
-    klass = params[:fast].present? ? Onlylogs::FastFile : Onlylogs::File
-
     mode = filter.blank? ? "live" : "search"
     cursor_position = mode == "search" ? 0 : [File.size(log_file_path) - (tail * 100), 0].max
      

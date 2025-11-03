@@ -1,35 +1,78 @@
 #!/usr/bin/env bash
 
-# Default to no limit
-max_matches=""
-
 # Parse arguments
-if [ "$1" = "--max-matches" ]; then
-  max_matches="$2"
-  shift 2
+max_matches=""
+start_position=""
+end_position=""
+block_size="${BLOCK_SIZE:-8M}"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --max-matches)
+      max_matches="$2"
+      shift 2
+      ;;
+    --start-position)
+      start_position="$2"
+      shift 2
+      ;;
+    --end-position)
+      end_position="$2"
+      shift 2
+      ;;
+    --regexp)
+      regexp_mode=true
+      shift
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+
+query="$1"
+file="$2"
+
+# Validate file
+[ -f "$file" ] || exit 1
+
+# Prepare query regex based on mode
+color_regex="\\\e\\\[(1|30|31|32|33|34|35|36|37|39|0)m"
+if [ "$regexp_mode" = true ]; then
+  query_regex=$(echo "$query" | sed -E "s/ +/([[:space:]]|$color_regex)+/g")
+else
+  escaped_query=$(echo "$query" | sed -E 's/([][{}()*+?.\\^$|])/\\\1/g')
+  query_regex=$(echo "$escaped_query" | sed -E "s/ +/([[:space:]]|$color_regex)+/g")
 fi
 
-if [ "$1" = "--regexp" ]; then
-  # Regexp mode: use the pattern as-is
-  query="$2"
-  file="$3"
-  color_regex="\\\e\\\[(1|30|31|32|33|34|35|36|37|39|0)m"
-  query_regex=$(echo "$query" | sed -E "s/ +/([[:space:]]|$color_regex)+/g")
-  if [ -n "$max_matches" ]; then
-    grep --color=never -n -E --max-count="$max_matches" "$query_regex" "$file"
-  else
-    grep --color=never -n -E "$query_regex" "$file"
+# Build grep command
+grep_cmd="grep --color=never -n -E --no-filename"
+[ -n "$max_matches" ] && grep_cmd="$grep_cmd --max-count=$max_matches"
+
+# Handle byte range if specified
+if [ -n "$start_position" ] || [ -n "$end_position" ]; then
+  file_size=$(wc -c < "$file")
+  range_start=${start_position:-0}
+  range_end=${end_position:-$file_size}
+  range_size=$((range_end - range_start))
+  
+  # Validate range
+  if [ $range_start -lt 0 ] || [ $range_size -le 0 ] || [ $range_start -ge $file_size ]; then
+    exit 0
   fi
+  
+  # Adjust if exceeds file size
+  [ $range_end -gt $file_size ] && range_end=$file_size && range_size=$((range_end - range_start))
+  
+  # Extract byte range using dd
+  start_mb=$((range_start / 1048576))
+  start_offset=$((range_start % 1048576))
+  count_mb=$(((range_size + 1048576 - 1) / 1048576))
+  
+  dd if="$file" bs="$block_size" skip=$start_mb count=$count_mb 2>/dev/null | \
+    dd bs=1 skip=$start_offset count=$range_size 2>/dev/null | \
+    $grep_cmd "$query_regex"
 else
-  # Literal mode: escape special characters
-  query="$1"
-  file="$2"
-  escaped_query=$(echo "$query" | sed -E 's/([][{}()*+?.\\^$|])/\\\1/g')
-  color_regex="\\\e\\\[(1|30|31|32|33|34|35|36|37|39|0)m"
-  query_regex=$(echo "$escaped_query" | sed -E "s/ +/([[:space:]]|$color_regex)+/g")
-  if [ -n "$max_matches" ]; then
-    grep --color=never -n -E --max-count="$max_matches" "$query_regex" "$file"
-  else
-    grep --color=never -n -E "$query_regex" "$file"
-  fi
+  # Search entire file
+  $grep_cmd "$query_regex" "$file"
 fi

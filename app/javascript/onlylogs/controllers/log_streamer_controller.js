@@ -10,7 +10,6 @@ export default class LogStreamerController extends Controller {
     autoStart: { type: Boolean, default: true },
     filter: { type: String, default: '' },
     mode: { type: String, default: 'live' },
-    fast: { type: Boolean, default: false },
     regexpMode: { type: Boolean, default: false }
   };
 

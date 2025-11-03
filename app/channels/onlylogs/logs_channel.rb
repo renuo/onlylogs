@@ -36,15 +36,16 @@ module Onlylogs
       cursor_position = data["cursor_position"] || 0
       filter = data["filter"].presence
       mode = data["mode"] || "live"
-      fast = data["fast"] == true || data["fast"] == "true"
       regexp_mode = data["regexp_mode"] == true || data["regexp_mode"] == "true"
+      start_position = data["start_position"]&.to_i || 0
+      end_position = data["end_position"]&.to_i
 
       if mode == "search"
         # For search mode, read the entire file with filter and send all matching lines
-        read_entire_file_with_filter(file_path, filter, fast, regexp_mode)
+        read_entire_file_with_filter(file_path, filter, regexp_mode, start_position, end_position)
       else
         # For live mode, start the watcher
-        start_log_watcher(file_path, cursor_position, filter, fast, regexp_mode)
+        start_log_watcher(file_path, cursor_position, filter, regexp_mode)
       end
     end
 
@@ -68,7 +69,7 @@ module Onlylogs
       stop_log_watcher
     end
 
-    def start_log_watcher(file_path, cursor_position, filter = nil, fast = false, regexp_mode = false)
+    def start_log_watcher(file_path, cursor_position, filter = nil, regexp_mode = false)
       return if @log_watcher_running
 
       @log_watcher_running = true
@@ -77,8 +78,7 @@ module Onlylogs
 
       transmit({ action: "message", content: "Reading file. Please wait..." })
 
-      klass = fast ? Onlylogs::FastFile : Onlylogs::File
-      @log_file = klass.new(file_path, last_position: cursor_position)
+      @log_file = Onlylogs::File.new(file_path, last_position: cursor_position)
 
       transmit({ action: "message", content: "" })
 
@@ -129,11 +129,9 @@ module Onlylogs
       @log_watcher_thread.join(1)
     end
 
-    def read_entire_file_with_filter(file_path, filter = nil, fast = false, regexp_mode = false)
+    def read_entire_file_with_filter(file_path, filter = nil, regexp_mode = false, start_position = 0, end_position = nil)
       @log_watcher_running = true
-      klass = fast ? Onlylogs::FastFile : Onlylogs::File
-      @log_file = klass.new(file_path, last_position: 0)
-      start_time = Time.now
+      @log_file = Onlylogs::File.new(file_path, last_position: 0)
 
       transmit({ action: "message", content: "Searching..." })
 
@@ -143,7 +141,7 @@ module Onlylogs
       line_count = 0
 
       Rails.logger.silence(Logger::ERROR) do
-        @log_file.grep(filter, regexp_mode: regexp_mode) do |log_line|
+        @log_file.grep(filter, regexp_mode: regexp_mode, start_position: start_position, end_position: end_position) do |log_line|
           return if @batch_sender.nil?
 
           # Add to batch buffer (sender thread will handle sending)

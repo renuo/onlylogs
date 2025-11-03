@@ -1,14 +1,21 @@
 module Onlylogs
   class Grep
-    def self.grep(pattern, file_path, start_position: 0, end_position: 100, regexp_mode: false, &block)
+    def self.grep(pattern, file_path, start_position: 0, end_position: nil, regexp_mode: false, &block)
       # Use the appropriate script based on configuration
       script_name = Onlylogs.ripgrep_enabled? ? "super_ripgrep" : "super_grep"
       super_grep_path = ::File.expand_path("../../../bin/#{script_name}", __dir__)
 
-      command_args = [super_grep_path]
-      command_args += ["--max-matches", Onlylogs.max_line_matches.to_s] if Onlylogs.max_line_matches.present?
+      command_args = [ super_grep_path ]
+      command_args += [ "--max-matches", Onlylogs.max_line_matches.to_s ] if Onlylogs.max_line_matches.present?
       command_args << "--regexp" if regexp_mode
-      command_args += [pattern, file_path]
+
+      # Add byte range parameters if specified
+      if start_position > 0 || end_position
+        command_args << "--start-position" << start_position.to_s
+        command_args << "--end-position" << end_position.to_s if end_position
+      end
+
+      command_args += [ pattern, file_path ]
 
       results = []
 
@@ -36,7 +43,7 @@ module Onlylogs
       stripped_line = line.gsub(/\e\[[0-9;]*m/, "")
       # Normalize multiple spaces to single spaces
       normalized_line = stripped_line.gsub(/\s+/, " ")
-      
+
       if regexp_mode
         normalized_line.match?(string)
       else

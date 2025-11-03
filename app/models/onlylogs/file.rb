@@ -7,15 +7,15 @@ module Onlylogs
     def initialize(path, last_position: 0)
       self.path = path
       self.last_position = last_position
+      self.last_line_number = 0
       validate!
-      calculate_line_number!
     end
 
     def go_to_position(position)
       return if position < 0
 
       self.last_position = position
-      calculate_line_number!
+      self.last_line_number = 0
     end
 
     def watch(&block)
@@ -39,23 +39,15 @@ module Onlylogs
       ::File.exist?(path)
     end
 
-    def grep(filter, regexp_mode: false, &block)
-      Grep.grep(filter, path, regexp_mode: regexp_mode) do |line_number, content|
+    def grep(filter, regexp_mode: false, start_position: 0, end_position: nil, &block)
+      Grep.grep(filter, path, regexp_mode: regexp_mode, start_position: start_position, end_position: end_position) do |line_number, content|
         yield Onlylogs::LogLine.new(line_number, content)
       end
     end
 
     private
 
-    attr_writer :path, :last_position
-
-    def calculate_line_number!
-      if Onlylogs.ripgrep_enabled?
-        @last_line_number = `head -c "#{last_position}" #{path} | rg --count ''`.strip.to_i
-      else
-        @last_line_number = `head -c "#{last_position}" #{path} | wc -l`.strip.to_i
-      end
-    end
+    attr_writer :path, :last_position, :last_line_number
 
     def read_new_lines
       return [] unless exist?
@@ -129,14 +121,9 @@ module Onlylogs
         self.last_position = current_size
       end
 
-      # Calculate line numbers for the new lines
-      # @last_line_number represents the last complete line we've read
-      # So the next line to read is @last_line_number + 1
-      starting_line_number = @last_line_number + 1
-      @last_line_number += lines.length
-
-      # Return lines with correct line numbers
-      lines.map.with_index { |line, index| Onlylogs::LogLine.new(starting_line_number + index, line) }
+      lines = lines.map.with_index { |line, index| Onlylogs::LogLine.new(self.last_line_number + index, line) }
+      self.last_line_number += lines.length
+      lines
     end
 
     def validate!
