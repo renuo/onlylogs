@@ -4,7 +4,9 @@
 
 <hr>
 
-<% fixture_files = Dir.glob(Onlylogs::Engine.root.join("test", "fixtures", "files", "*")).sort %>
+<% fixture_files = Dir.glob(Onlylogs::Engine.root.join("test", "fixtures", "files", "*"))
+                    .reject { |file_path| File.basename(file_path).match?(/\d+$/) }
+                    .sort %>
 
 <% if fixture_files.any? %>
   <% fixture_files.each do |file_path| %>
