@@ -10,10 +10,11 @@ export default class LogStreamerController extends Controller {
     autoStart: { type: Boolean, default: true },
     filter: { type: String, default: '' },
     mode: { type: String, default: 'live' },
-    regexpMode: { type: Boolean, default: false }
+    regexpMode: { type: Boolean, default: false },
+    fileSize: { type: Number, default: 0 }
   };
 
-  static targets = ["logLines", "filterInput", "lineRange", "liveMode", "message", "regexpMode", "websocketStatus", "stopButton", "clearButton"];
+  static targets = ["logLines", "filterInput", "lineRange", "liveMode", "message", "regexpMode", "websocketStatus", "stopButton", "clearButton", "rangeSliderContainer", "startSlider", "endSlider", "startPositionInput", "endPositionInput"];
 
   connect() {
     this.consumer = createConsumer();
@@ -25,6 +26,11 @@ export default class LogStreamerController extends Controller {
     this.maxLineNumber = 0;
     this.isSearchFinished = true;
 
+    // Range slider state
+    this.startPosition = 0;
+    this.endPosition = this.fileSizeValue;
+    this.rangeDebounceTimeout = null;
+
     // Initialize clusterize
     this.clusterize = null;
     this.#initializeClusterize();
@@ -33,6 +39,7 @@ export default class LogStreamerController extends Controller {
 
     this.start();
     this.updateLiveModeState();
+    this.updateRangeSliderVisibility();
     this.scroll();
   }
 
@@ -132,6 +139,7 @@ export default class LogStreamerController extends Controller {
     // Update visual state
     this.updateLiveModeState();
     this.updateStopButtonVisibility();
+    this.updateRangeSliderVisibility();
 
     // Use the global debounced reconnection (300ms delay)
     this.reconnectWithNewMode();
@@ -174,6 +182,7 @@ export default class LogStreamerController extends Controller {
     // Update visual state
     this.updateLiveModeState();
     this.updateStopButtonVisibility();
+    this.updateRangeSliderVisibility();
 
     // Reconnect with cleared filter and live mode
     this.reconnectWithNewMode();
@@ -203,6 +212,111 @@ export default class LogStreamerController extends Controller {
   updateStopButtonVisibility() {
     const shouldShow = !this.isLiveMode() && this.subscription && this.isRunning && !this.isSearchFinished;
     this.stopButtonTarget.style.display = shouldShow ? 'inline-block' : 'none';
+  }
+
+  updateRangeSliderVisibility() {
+    // Show range slider only when filter is applied (search mode)
+    const shouldShow = !this.isLiveMode() && this.filterInputTarget.value && this.filterInputTarget.value.trim() !== '';
+    this.rangeSliderContainerTarget.style.display = shouldShow ? 'block' : 'none';
+  }
+
+  updateRangeFromSliders() {
+    // Get slider values
+    let startValue = parseInt(this.startSliderTarget.value);
+    let endValue = parseInt(this.endSliderTarget.value);
+
+    // Ensure start is not greater than end
+    if (startValue > endValue) {
+      const temp = startValue;
+      startValue = endValue;
+      endValue = temp;
+      this.startSliderTarget.value = startValue;
+      this.endSliderTarget.value = endValue;
+    }
+
+    // Update input fields
+    this.startPositionInputTarget.value = startValue;
+    this.endPositionInputTarget.value = endValue;
+
+    // Store values
+    this.startPosition = startValue;
+    this.endPosition = endValue;
+
+    // Disable live mode
+    this.liveModeTarget.checked = false;
+    this.modeValue = 'search';
+    this.updateLiveModeState();
+
+    // Debounce reconnection to avoid too many rapid searches
+    this.#debouncedReconnect();
+  }
+
+  updateRangeFromInputs() {
+    // Get input values
+    let startValue = parseInt(this.startPositionInputTarget.value) || 0;
+    let endValue = parseInt(this.endPositionInputTarget.value) || this.fileSizeValue;
+
+    // Ensure values are within bounds
+    startValue = Math.max(0, Math.min(startValue, this.fileSizeValue));
+    endValue = Math.max(0, Math.min(endValue, this.fileSizeValue));
+
+    // Ensure start is not greater than end
+    if (startValue > endValue) {
+      const temp = startValue;
+      startValue = endValue;
+      endValue = temp;
+    }
+
+    // Update sliders
+    this.startSliderTarget.value = startValue;
+    this.endSliderTarget.value = endValue;
+
+    // Update input fields (in case they were corrected)
+    this.startPositionInputTarget.value = startValue;
+    this.endPositionInputTarget.value = endValue;
+
+    // Store values
+    this.startPosition = startValue;
+    this.endPosition = endValue;
+
+    // Disable live mode
+    this.liveModeTarget.checked = false;
+    this.modeValue = 'search';
+    this.updateLiveModeState();
+
+    // Debounce reconnection to avoid too many rapid searches
+    this.#debouncedReconnect();
+  }
+
+  resetRange() {
+    // Reset to full file range
+    this.startPosition = 0;
+    this.endPosition = this.fileSizeValue;
+
+    // Update UI
+    this.startSliderTarget.value = 0;
+    this.endSliderTarget.value = this.fileSizeValue;
+    this.startPositionInputTarget.value = 0;
+    this.endPositionInputTarget.value = this.fileSizeValue;
+
+    // Reconnect with full range
+    this.reconnectWithNewMode();
+  }
+
+  #debouncedReconnect() {
+    // Clear any existing timeout
+    if (this.rangeDebounceTimeout) {
+      clearTimeout(this.rangeDebounceTimeout);
+    }
+
+    // Debounce reconnection (800ms delay for sliders)
+    this.rangeDebounceTimeout = setTimeout(() => {
+      this.stop();
+      this.clear();
+      this.#reinitializeClusterize();
+      this.start();
+      this.rangeDebounceTimeout = null;
+    }, 800);
   }
 
 
@@ -240,15 +354,22 @@ export default class LogStreamerController extends Controller {
    * Handle successful connection
    */
   #handleConnected() {
-    this.subscription.perform('initialize_watcher', {
+    const params = {
       cursor_position: this.cursorPositionValue,
       last_line_number: this.lastLineNumberValue,
       file_path: this.filePathValue,
       filter: this.filterInputTarget.value,
       mode: this.modeValue,
-      fast: this.fastValue,
       regexp_mode: this.regexpModeValue
-    });
+    };
+
+    // Add range parameters if we're in search mode and have custom range
+    if (this.modeValue === 'search' && (this.startPosition > 0 || this.endPosition < this.fileSizeValue)) {
+      params.start_position = this.startPosition;
+      params.end_position = this.endPosition;
+    }
+
+    this.subscription.perform('initialize_watcher', params);
 
     this.element.classList.add("log-streamer--connected");
     this.element.classList.remove("log-streamer--disconnected", "log-streamer--rejected");
