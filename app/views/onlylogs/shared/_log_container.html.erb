@@ -5,6 +5,7 @@
 
 <%
     mode = local_assigns[:mode] || (filter.blank? ? "live" : "static")
+    file_size = File.size(log_file_path)
 
     raise SecurityError, "File path not allowed" unless Onlylogs.file_path_permitted?(log_file_path)
 
@@ -17,6 +18,7 @@
      data-log-streamer-auto-scroll-value="<%= autoscroll %>"
      data-log-streamer-regexp-mode-value="<%= regexp_mode %>"
      data-log-streamer-mode-value="<%= mode %>"
+     data-log-streamer-file-size-value="<%= file_size %>"
      data-action="text-selection:start->log-streamer#pauseForSelection"
      class="onlylogs-log-container" >
     <div data-log-streamer-target="logLines" data-text-selection-target="logLines" id="scrollArea" class="onlylogs-log-lines clusterize-scroll">
@@ -26,44 +28,42 @@
 
     <button type="button"
             data-text-selection-target="button"
-            class="onlylogs-context-menu"
+            class="onlylogs-context-menu hidden-button"
             data-action="click->text-selection#searchSelectedText"
-            title="Search selected text"
-            style="display: none;">
+            title="Search selected text">
       🔍 Search
     </button>
 
     <div class="onlylogs-log-toolbar">
         <div>
-          <label style="margin-bottom: 0;">
+          <label class="toolbar-label">
             <input id="liveMode" type="checkbox" <%= mode == "live" ? "checked" : "" %> name="liveMode" data-log-streamer-target="liveMode" data-keyboard-shortcuts-target="liveMode" data-action="change->log-streamer#toggleLiveMode">
             <u>L</u>ive Mode
           </label>
         </div>
         <div>
-          <label style="margin-bottom: 0;">
+          <label class="toolbar-label">
             <input id="autoscroll" type="checkbox" <%= autoscroll ? "checked" : "" %> name="autoscroll" data-log-streamer-target="autoscroll" data-keyboard-shortcuts-target="autoscroll" data-action="change->log-streamer#toggleAutoScroll">
             <u>A</u>utoscroll
           </label>
         </div>
         <div>
-          <label style="margin-bottom: 0;">
+          <label class="toolbar-label">
             <input id="regexpMode" type="checkbox" <%= regexp_mode ? "checked" : "" %> name="regexpMode" data-log-streamer-target="regexpMode" data-text-selection-target="regexpMode" data-action="change->log-streamer#toggleRegexpMode">
             <u>R</u>egexp Mode
           </label>
         </div>
         <div>
-          <label style="margin-bottom: 0;">
+          <label class="toolbar-label">
             Filter:
-            <div style="display: inline-flex; align-items: center; position: relative;">
+            <div class="filter-input-wrapper">
               <input type="text"
                      name="filter"
                      value="<%= filter %>"
                      placeholder="Enter filter text..."
                      data-log-streamer-target="filterInput"
                      data-text-selection-target="filterInput"
-                     data-action="input->log-streamer#applyFilter"
-                     style="padding-right: 1.5rem;">
+                     data-action="input->log-streamer#applyFilter">
               <button type="button"
                       data-action="click->log-streamer#clearFilter"
                       class="clear-filter-button"
@@ -73,18 +73,34 @@
             </div>
           </label>
         </div>
+        <div class="range-slider-wrapper">
+          <%= render "onlylogs/shared/range_slider",
+                     start_name: "start_position",
+                     end_name: "end_position",
+                     start_value: 0,
+                     end_value: file_size,
+                     min: 0,
+                     max: file_size,
+                     step: 1000,
+                     label: "Range" %>
+          <button type="button"
+                  data-action="click->log-streamer#resetRange"
+                  class="reset-range-button"
+                  title="Reset to full file">
+            ↻
+          </button>
+        </div>
         <div>
           <button type="button"
                   data-log-streamer-target="stopButton"
+                  class="stop-search-button hidden-button"
                   data-action="click->log-streamer#stopSearch"
-                  class="stop-search-button"
-                  title="Stop current search"
-                  style="display: none;">
+                  title="Stop current search">
             ⏹️ Stop
           </button>
         </div>
         <div>
-          <span data-log-streamer-target="results" style="color: #666;">Results: 0</span>
+          <span data-log-streamer-target="results" class="results-text">Results: 0</span>
         </div>
         <div data-log-streamer-target="message"></div>
         <% unless Onlylogs.ripgrep_enabled? %>
@@ -93,11 +109,11 @@
         <div class="file-size" title="File size: <%= number_to_human_size(File.size(log_file_path)) %>">
           <%= number_to_human_size(File.size(log_file_path)) %>
         </div>
-        <div style="width:67px">
+        <div class="clear-button-wrapper">
           <button type="button"
                   data-log-streamer-target="clearButton"
-                  data-action="click->log-streamer#clearLogs"
                   class="clear-logs-button"
+                  data-action="click->log-streamer#clearLogs"
                   title="Clear all log lines">
             🗑️ Clear
           </button>

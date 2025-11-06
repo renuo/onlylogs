@@ -48,7 +48,7 @@ module Onlylogs
     # on some platforms, so never let it break a search.
     def self.drop_page_cache(file_path)
       ::File.open(file_path) { |file| file.advise(:dontneed) }
-    rescue StandardError
+    rescue
       nil
     end
 

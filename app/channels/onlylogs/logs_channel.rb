@@ -9,6 +9,13 @@ module Onlylogs
     end
 
     def initialize_watcher(data)
+      # Prevent duplicate calls with identical parameters
+      if @last_initialize_params == data
+        Rails.logger.info "Onlylogs: Ignoring duplicate initialize_watcher call"
+        return
+      end
+
+      @last_initialize_params = data.dup
       cleanup_existing_operations
 
       # Decrypt and verify the file path
@@ -42,10 +49,12 @@ module Onlylogs
       filter = data["filter"].presence
       mode = data["mode"] || "live"
       regexp_mode = data["regexp_mode"] == true || data["regexp_mode"] == "true"
+      start_position = data["start_position"]&.to_i || 0
+      end_position = data["end_position"]&.to_i
 
       if mode == "static"
         # Read the entire file with filter and send all matching lines
-        read_static(file_path, filter, regexp_mode)
+        read_static(file_path, filter, regexp_mode, start_position, end_position)
       else
         # Follow the tail of the file indefinitely
         start_log_watcher(file_path, filter, regexp_mode)
@@ -146,30 +155,51 @@ module Onlylogs
       @log_file = nil
     end
 
-    def read_static(file_path, filter = nil, regexp_mode = false)
+    def read_static(file_path, filter = nil, regexp_mode = false, start_position = 0, end_position = nil)
       @log_watcher_running = true
       @log_file = Onlylogs::File.new(file_path, last_position: 0)
 
-      transmit({action: "message", content: "Searching..."})
+      transmit({action: "message", content: filter.present? ? "Searching..." : "Loading..."})
 
       @batch_sender = BatchSender.new(self)
       @batch_sender.start
 
-      line_count = 0
-
       begin
+        last_line = nil
+        line_count = 0
+
         Rails.logger.silence(Logger::ERROR) do
-          @log_file.grep(filter, regexp_mode: regexp_mode) do |log_line|
-            break if @batch_sender.nil?
+          skip_first = start_position > 0
+          reader = ->(log_line) do
+            break if @batch_sender.nil? || @log_watcher_running == false
 
-            # Add to batch buffer (sender thread will handle sending)
-            @batch_sender.add_line(render_log_line(log_line))
+            # Skip first line if start_position > 0 (line is cut off at byte boundary)
+            if skip_first
+              skip_first = false
+              next
+            end
 
-            line_count += 1
+            # Buffer previous line and skip it to avoid cut-off lines at boundaries
+            if last_line
+              @batch_sender.add_line(render_log_line(last_line))
+              line_count += 1
+            end
+            last_line = log_line
+          end
+
+          if filter.present?
+            @log_file.grep(filter, regexp_mode: regexp_mode, start_position: start_position, end_position: end_position, &reader)
+          else
+            read_byte_range(file_path, start_position, end_position, &reader)
           end
         end
 
-        # Stop batch sender and flush any remaining lines
+        # Send last line only if no end_position (avoid cut-off line at byte boundary)
+        if last_line && !end_position
+          @batch_sender.add_line(render_log_line(last_line))
+          line_count += 1
+        end
+
         @batch_sender.stop
 
         # Send completion message
@@ -185,6 +215,19 @@ module Onlylogs
         @log_file = nil
         @log_watcher_running = false
       end
+    end
+
+    def read_byte_range(file_path, start_position, end_position)
+      file_size = ::File.size(file_path)
+      range_size = (end_position || file_size) - start_position
+
+      return if start_position < 0 || range_size <= 0 || start_position >= file_size
+
+      ::File.read(file_path, range_size, start_position).each_line do |line|
+        yield line.chomp
+      end
+    rescue => e
+      Rails.logger.error "Error reading byte range: #{e.message}"
     end
 
     def render_log_line(log_line)
