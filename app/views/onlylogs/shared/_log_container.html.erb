@@ -5,6 +5,7 @@
 
 <%
     mode = local_assigns[:mode] || (filter.blank? ? "live" : "static")
+    file_size = File.size(log_file_path)
 
     raise SecurityError, "File path not allowed" unless Onlylogs.file_path_permitted?(log_file_path)
 
@@ -17,6 +18,7 @@
      data-log-streamer-auto-scroll-value="<%= autoscroll %>"
      data-log-streamer-regexp-mode-value="<%= regexp_mode %>"
      data-log-streamer-mode-value="<%= mode %>"
+     data-log-streamer-file-size-value="<%= file_size %>"
      data-action="text-selection:start->log-streamer#pauseForSelection"
      class="onlylogs-log-container" >
     <div data-log-streamer-target="logLines" data-text-selection-target="logLines" id="scrollArea" class="onlylogs-log-lines clusterize-scroll">
@@ -70,6 +72,54 @@
                       title="Clear filter">
                 ×
               </button>
+            </div>
+          </label>
+        </div>
+        <div data-log-streamer-target="rangeSliderContainer" class="range-slider-container" style="display: none;">
+          <label style="margin-bottom: 0; display: flex; flex-direction: column; gap: 4px;">
+            <span>Search Range (bytes):</span>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <input type="number" 
+                     min="0" 
+                     max="<%= file_size %>"
+                     value="0"
+                     data-log-streamer-target="startPositionInput"
+                     data-action="change->log-streamer#updateRangeFromInputs"
+                     class="range-input"
+                     placeholder="Start">
+              <span>-</span>
+              <input type="number" 
+                     min="0" 
+                     max="<%= file_size %>"
+                     value="<%= file_size %>"
+                     data-log-streamer-target="endPositionInput"
+                     data-action="change->log-streamer#updateRangeFromInputs"
+                     class="range-input"
+                     placeholder="End">
+              <button type="button"
+                      data-action="click->log-streamer#resetRange"
+                      class="reset-range-button"
+                      title="Reset to full file">
+                ↻
+              </button>
+            </div>
+            <div style="display: flex; gap: 4px;">
+              <input type="range" 
+                     min="0" 
+                     max="<%= file_size %>"
+                     value="0"
+                     data-log-streamer-target="startSlider"
+                     data-action="input->log-streamer#updateRangeFromSliders"
+                     class="range-slider range-slider-start"
+                     style="flex: 1;">
+              <input type="range" 
+                     min="0" 
+                     max="<%= file_size %>"
+                     value="<%= file_size %>"
+                     data-log-streamer-target="endSlider"
+                     data-action="input->log-streamer#updateRangeFromSliders"
+                     class="range-slider range-slider-end"
+                     style="flex: 1;">
             </div>
           </label>
         </div>
