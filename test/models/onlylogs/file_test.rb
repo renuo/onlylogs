@@ -11,26 +11,17 @@ class Onlylogs::FileTest < ActiveSupport::TestCase
   end
 
   test "initializes with custom last_position" do
-    @log_file = Onlylogs::FastFile.new(@fixture_path, last_position: 100)
+    @log_file = Onlylogs::File.new(@fixture_path, last_position: 100)
     assert_equal 100, @log_file.last_position
   end
 
-  test "calculates the initial line number correctly" do
+  test "initializes with last_line_number set to 0" do
     assert_equal 0, @log_file.last_line_number
   end
 
-  test "calculates the line number at position correctly" do
+  test "go_to_position resets last_line_number to 0" do
     @log_file.go_to_position(300)
-    assert_equal 5, @log_file.last_line_number
-  end
-
-  test "calculates the line number efficiently on a big file" do
-    big_file = Onlylogs::File.new(File.expand_path("../../fixtures/files/big.log", __dir__))
-    start_time = Time.now
-    big_file.go_to_position(835_436_842)
-    end_time = Time.now
-    assert_equal 1434016, big_file.last_line_number
-    assert_in_delta 3.0, end_time - start_time, 3.0
+    assert_equal 0, @log_file.last_line_number
   end
 
 
@@ -50,15 +41,16 @@ class Onlylogs::FileTest < ActiveSupport::TestCase
       position_after_line_3 = "Line 0\nLine 1\nLine 2\nLine 3\n".bytesize
       test_file.go_to_position(position_after_line_3)
       assert_equal position_after_line_3, test_file.last_position
+      assert_equal 0, test_file.last_line_number
       result = test_file.send(:read_new_lines).map(&:to_a)
       expected = [
-        [ 4, "Line 4" ],
-        [ 5, "Line 5" ],
-        [ 6, "Line 6" ],
-        [ 7, "Line 7" ],
-        [ 8, "Line 8" ],
-        [ 9, "Line 9" ],
-        [ 10, "Line 10" ]
+        [ 0, "Line 4" ],
+        [ 1, "Line 5" ],
+        [ 2, "Line 6" ],
+        [ 3, "Line 7" ],
+        [ 4, "Line 8" ],
+        [ 5, "Line 9" ],
+        [ 6, "Line 10" ]
       ]
       assert_equal expected, result
     ensure
@@ -75,12 +67,13 @@ class Onlylogs::FileTest < ActiveSupport::TestCase
       result = test_file.send(:read_new_lines).map(&:to_a)
 
       expected = [
-        [ 1, "Line 0" ],
-        [ 2, "Line 1" ],
-        [ 3, "Line 2" ]
+        [ 0, "Line 0" ],
+        [ 1, "Line 1" ],
+        [ 2, "Line 2" ]
       ]
       assert_equal expected, result
       assert_equal 21, test_file.last_position # "Line 0\nLine 1\nLine 2\n".bytesize
+      assert_equal 3, test_file.last_line_number
 
       File.open(test_file_path, "a") do |f|
         f.puts "Line 3"
@@ -91,12 +84,13 @@ class Onlylogs::FileTest < ActiveSupport::TestCase
 
       result = test_file.send(:read_new_lines).map(&:to_a)
       expected = [
-        [ 4, "Line 3" ],
-        [ 5, "Line 4" ],
-        [ 6, "Line 5" ],
-        [ 7, "Line 6" ]
+        [ 3, "Line 3" ],
+        [ 4, "Line 4" ],
+        [ 5, "Line 5" ],
+        [ 6, "Line 6" ]
       ]
       assert_equal expected, result
+      assert_equal 7, test_file.last_line_number
 
       File.open(test_file_path, "a") do |f|
         f.puts "Line 7"
@@ -106,10 +100,11 @@ class Onlylogs::FileTest < ActiveSupport::TestCase
 
       result = test_file.send(:read_new_lines).map(&:to_a)
       expected = [
-        [ 8, "Line 7" ],
-        [ 9, "Line 8" ]
+        [ 7, "Line 7" ],
+        [ 8, "Line 8" ]
       ]
       assert_equal expected, result
+      assert_equal 9, test_file.last_line_number
 
       File.open(test_file_path, "a") do |f|
         f.write " Line 9\n"
@@ -120,11 +115,12 @@ class Onlylogs::FileTest < ActiveSupport::TestCase
       # Should return the completed line plus the 2 new lines
       result = test_file.send(:read_new_lines).map(&:to_a)
       expected = [
-        [ 10, "Incomplete Line 9" ],
-        [ 11, "Line 10" ],
-        [ 12, "Line 11" ]
+        [ 9, "Incomplete Line 9" ],
+        [ 10, "Line 10" ],
+        [ 11, "Line 11" ]
       ]
       assert_equal expected, result
+      assert_equal 12, test_file.last_line_number
     ensure
       File.delete(test_file_path) if File.exist?(test_file_path)
     end
