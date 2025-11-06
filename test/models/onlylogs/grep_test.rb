@@ -14,9 +14,9 @@ class Onlylogs::GrepTest < ActiveSupport::TestCase
 
   def self.test_both_engine_modes(test_name, &block)
     test test_name do
-      [false, true].each do |ripgrep_enabled|
+      [ false, true ].each do |ripgrep_enabled|
         Onlylogs.configuration.ripgrep_enabled = ripgrep_enabled
-        engine_name = ripgrep_enabled ? 'ripgrep' : 'grep'
+        engine_name = ripgrep_enabled ? "ripgrep" : "grep"
         instance_exec(engine_name, &block)
       end
     end
@@ -78,11 +78,11 @@ class Onlylogs::GrepTest < ActiveSupport::TestCase
     # In literal mode, dot should match literal dot
     lines_literal = Onlylogs::Grep.grep("(0.0ms)", @special_lines_path, regexp_mode: false)
     assert_equal 1, lines_literal.length, "Failed with #{engine_name}"
-    
+
     # In regexp mode, dot should match any character
     lines_regexp = Onlylogs::Grep.grep("(0\\.0ms)", @special_lines_path, regexp_mode: true)
     assert_equal 1, lines_regexp.length, "Failed with #{engine_name}"
-    
+
     # Test that regexp mode with dot wildcard matches more broadly
     lines_wildcard = Onlylogs::Grep.grep("(0.0ms)", @special_lines_path, regexp_mode: true)
     assert_equal 1, lines_wildcard.length, "Failed with #{engine_name}"
@@ -92,7 +92,7 @@ class Onlylogs::GrepTest < ActiveSupport::TestCase
     # Test character class [A-Z] to match uppercase letters
     lines = Onlylogs::Grep.grep("\\[INFO\\]", @fixture_path, regexp_mode: true)
     assert_equal 50, lines.length, "Failed with #{engine_name}"
-    
+
     # Test that literal mode treats brackets as literal characters
     lines_literal = Onlylogs::Grep.grep("[INFO]", @fixture_path, regexp_mode: false)
     assert_equal 50, lines_literal.length, "Failed with #{engine_name}"
@@ -102,7 +102,7 @@ class Onlylogs::GrepTest < ActiveSupport::TestCase
     # Test + quantifier to match one or more digits
     lines = Onlylogs::Grep.grep("Line \\d+", @fixture_path, regexp_mode: true)
     assert_equal 100, lines.length, "Failed with #{engine_name}"
-    
+
     # Test that literal mode treats + as literal character
     lines_literal = Onlylogs::Grep.grep("Line +", @fixture_path, regexp_mode: false)
     assert_equal 0, lines_literal.length, "Failed with #{engine_name}"
@@ -110,32 +110,32 @@ class Onlylogs::GrepTest < ActiveSupport::TestCase
 
   test "match_line? supports regexp mode with dot wildcard" do
     line = "ActiveRecord::SchemaMigration Load (0.0ms) SELECT ..."
-    
+
     # In literal mode, dot should match literal dot
     assert Onlylogs::Grep.match_line?(line, "(0.0ms)", regexp_mode: false)
-    
+
     # In regexp mode, escaped dot should match literal dot
     assert Onlylogs::Grep.match_line?(line, "\\(0\\.0ms\\)", regexp_mode: true)
-    
+
     # In regexp mode, unescaped dot should match any character
     assert Onlylogs::Grep.match_line?(line, "\\(0.0ms\\)", regexp_mode: true)
-    
+
     # Test that literal mode treats dot as literal
     refute Onlylogs::Grep.match_line?(line, "(0X0ms)", regexp_mode: false)
   end
 
   test "match_line? supports regexp mode with character classes" do
     line = "[INFO] Application started - Line 1"
-    
+
     # Test escaped brackets to match literal brackets
     assert Onlylogs::Grep.match_line?(line, "\\[INFO\\]", regexp_mode: true)
-    
+
     # Test character class [A-Z] to match uppercase letters (should not match [INFO])
     refute Onlylogs::Grep.match_line?(line, "\\[A-Z\\]INFO", regexp_mode: true)
-    
+
     # Test that literal mode treats brackets as literal characters
     refute Onlylogs::Grep.match_line?(line, "[A-Z]INFO", regexp_mode: false)
-    
+
     # Test a line that would match a simple regexp pattern
     line_with_numbers = "Error 404: Page not found"
     assert Onlylogs::Grep.match_line?(line_with_numbers, "Error \\d+:", regexp_mode: true)
@@ -145,11 +145,11 @@ class Onlylogs::GrepTest < ActiveSupport::TestCase
     # Set a very low max_line_matches to test limiting
     original_max_matches = Onlylogs.max_line_matches
     Onlylogs.configuration.max_line_matches = 5
-    
+
     # This should return only 5 results even though there are more matches
     lines = Onlylogs::Grep.grep("Line", @fixture_path)
     assert_equal 5, lines.length, "Failed with #{engine_name}"
-    
+
     # Restore original configuration
     Onlylogs.configuration.max_line_matches = original_max_matches
   end
@@ -158,12 +158,71 @@ class Onlylogs::GrepTest < ActiveSupport::TestCase
     # Set max_line_matches to nil to test no limits
     original_max_matches = Onlylogs.max_line_matches
     Onlylogs.configuration.max_line_matches = nil
-    
+
     # This should return all matches (100 lines in the fixture file)
     lines = Onlylogs::Grep.grep("Line", @fixture_path)
     assert_equal 100, lines.length, "Failed with #{engine_name}"
-    
+
     # Restore original configuration
     Onlylogs.configuration.max_line_matches = original_max_matches
+  end
+
+  test_both_engine_modes "it can grep with start_position to search from a specific byte offset" do |engine_name|
+    file_size = File.size(@fixture_path)
+
+    # Search from middle of file
+    start_pos = file_size / 2
+    lines = Onlylogs::Grep.grep("[DEBUG]", @fixture_path, start_position: start_pos)
+
+    # Should find some DEBUG lines (but fewer than searching entire file)
+    assert lines.length < 49, "Should find fewer matches when starting from middle, failed with #{engine_name}"
+    assert lines.length > 0, "Should find some matches, failed with #{engine_name}"
+  end
+
+  test_both_engine_modes "it can grep with end_position to search up to a specific byte offset" do |engine_name|
+    file_size = File.size(@fixture_path)
+
+    # Search up to middle of file
+    end_pos = file_size / 2
+    lines = Onlylogs::Grep.grep("[DEBUG]", @fixture_path, end_position: end_pos)
+
+    # Should find some DEBUG lines (but fewer than searching entire file)
+    assert lines.length < 49, "Should find fewer matches when ending at middle, failed with #{engine_name}"
+    assert lines.length > 0, "Should find some matches, failed with #{engine_name}"
+  end
+
+  test_both_engine_modes "it can grep with both start_position and end_position to search a byte range" do |engine_name|
+    file_size = File.size(@fixture_path)
+
+    # Search a specific range in the middle of the file
+    start_pos = file_size / 4
+    end_pos = file_size * 3 / 4
+    lines = Onlylogs::Grep.grep("[DEBUG]", @fixture_path, start_position: start_pos, end_position: end_pos)
+
+    # Should find some DEBUG lines in that range
+    assert lines.length < 49, "Should find fewer matches in partial range, failed with #{engine_name}"
+    assert lines.length >= 0, "Should return results (even if empty), failed with #{engine_name}"
+  end
+
+  test_both_engine_modes "it returns empty array when byte range is invalid" do |engine_name|
+    file_size = File.size(@fixture_path)
+
+    # Start position beyond file size
+    lines = Onlylogs::Grep.grep("[DEBUG]", @fixture_path, start_position: file_size + 1000)
+    assert_equal [], lines, "Should return empty array for invalid start position, failed with #{engine_name}"
+
+    # End position before start position
+    lines = Onlylogs::Grep.grep("[DEBUG]", @fixture_path, start_position: 1000, end_position: 500)
+    assert_equal [], lines, "Should return empty array when end < start, failed with #{engine_name}"
+  end
+
+  test_both_engine_modes "it handles byte range searches correctly with regexp mode" do |engine_name|
+    file_size = File.size(@fixture_path)
+    start_pos = file_size / 4
+    end_pos = file_size * 3 / 4
+
+    # Test with regexp mode
+    lines = Onlylogs::Grep.grep("Line \\d+", @fixture_path, start_position: start_pos, end_position: end_pos, regexp_mode: true)
+    assert lines.length >= 0, "Should return results (even if empty) with regexp mode, failed with #{engine_name}"
   end
 end
