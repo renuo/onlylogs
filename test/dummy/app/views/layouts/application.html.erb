@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html style="height: 100%">
+<html>
   <head>
     <title><%= content_for(:title) || "Dummy" %></title>
     <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -18,7 +18,7 @@
     <%= javascript_importmap_tags %>
   </head>
 
-  <body style="height: 100%">
+  <body>
     <%= yield %>
   </body>
 </html>

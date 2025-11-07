@@ -1,8 +1,16 @@
-<b>📄 <%= File.basename(@log_file_path) %></b>
+<div class="p-3">
+  <b>📄 <%= File.basename(@log_file_path) %></b>
+</div>
 
-<%= render partial: "onlylogs/shared/log_container", locals: { 
-  log_file_path: @log_file_path, 
-  tail: @max_lines, 
-  filter: @filter, 
+<style>
+    :root {
+        --onlylogs-height: 100%;
+    }
+</style>
+
+<%= render partial: "onlylogs/shared/log_container", locals: {
+  log_file_path: @log_file_path,
+  tail: @max_lines,
+  filter: @filter,
   autoscroll: @autoscroll
 } %>

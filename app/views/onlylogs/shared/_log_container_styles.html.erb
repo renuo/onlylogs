@@ -4,8 +4,8 @@
         width: var(--onlylogs-width, 100%);
         height: var(--onlylogs-height, 100%); /* Take full height of parent container */
         min-height: var(--onlylogs-min-height, 400px);
-        display: flex;
-        flex-direction: column;
+        display: grid;
+        grid-template-rows: auto var(--onlylogs-toolbar-height, 42px);
 
         font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
         font-size: var(--onlylogs-font-size, 0.8rem);
@@ -15,12 +15,8 @@
         box-sizing: border-box;
 
         .onlylogs-log-lines {
-            flex: 1 1 auto;
             overflow-y: auto;
             overflow-x: auto;
-            min-height: 0;
-            height: 0; /* This is crucial for flex items with overflow */
-            max-height: 100%;
 
             pre {
                 overflow: visible;
@@ -125,9 +121,6 @@
 
         .onlylogs-log-toolbar {
           flex-shrink: 0;
-          position: sticky;
-          bottom: 0;
-          z-index: 10;
           padding: 1rem 0.5rem;
           display: flex; 
           align-items: center; 
