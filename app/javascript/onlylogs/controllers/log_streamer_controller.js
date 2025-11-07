@@ -246,7 +246,6 @@ export default class LogStreamerController extends Controller {
       file_path: this.filePathValue,
       filter: this.filterInputTarget.value,
       mode: this.modeValue,
-      fast: this.fastValue,
       regexp_mode: this.regexpModeValue
     });
 
