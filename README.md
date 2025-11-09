@@ -1,5 +1,7 @@
 # Onlylogs
 
+<img alt="w:100px" src="app/assets/images/onlylogs/onlylogs.png" width="400px"/>
+
 We believe logs are enough. Even more: we believe logs in human-readable format are enough.
 
 Stop streaming your logs to very expensive external services: just store your logs on disk as you would do during

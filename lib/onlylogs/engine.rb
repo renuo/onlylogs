@@ -5,7 +5,11 @@ module Onlylogs
     isolate_namespace Onlylogs
 
     initializer "onlylogs.assets" do |app|
-      # app.config.assets.paths << root.join("app/assets/stylesheets")
+      %w[images stylesheets builds fonts].each do |subdir|
+        path = root.join("app/assets", subdir)
+        app.config.assets.paths << path if path.exist?
+      end
+
       app.config.assets.paths << root.join("app/javascript")
       app.config.assets.precompile += %w[ onlylogs_manifest ]
     end
