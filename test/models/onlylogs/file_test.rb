@@ -125,4 +125,52 @@ class Onlylogs::FileTest < ActiveSupport::TestCase
       File.delete(test_file_path) if File.exist?(test_file_path)
     end
   end
+
+  test "text_file? returns true for text files" do
+    assert @log_file.text_file?
+  end
+
+  test "text_file? returns false for non-existent files" do
+    refute Onlylogs::File.text_file?("/path/to/nonexistent/file.log")
+  end
+
+  test "text_file? returns false for empty files" do
+    test_file_path = File.expand_path("../../fixtures/files/test_empty.txt", __dir__)
+    File.write(test_file_path, "")
+
+    begin
+      refute Onlylogs::File.text_file?(test_file_path)
+    ensure
+      File.delete(test_file_path) if File.exist?(test_file_path)
+    end
+  end
+
+  test "text_file? returns false for files with null bytes" do
+    test_file_path = File.expand_path("../../fixtures/files/test_binary.bin", __dir__)
+    File.write(test_file_path, "Some text\x00binary content")
+
+    begin
+      refute Onlylogs::File.text_file?(test_file_path)
+    ensure
+      File.delete(test_file_path) if File.exist?(test_file_path)
+    end
+  end
+
+  test "text_file? returns false for gzipped files" do
+    require "zlib"
+
+    test_file_path = File.expand_path("../../fixtures/files/test.log.gz", __dir__)
+
+    # Create an actual gzipped file
+    Zlib::GzipWriter.open(test_file_path) do |gz|
+      gz.write "This is a log line\n"
+      gz.write "This is another log line\n"
+    end
+
+    begin
+      refute Onlylogs::File.text_file?(test_file_path), "Expected gzipped file to be detected as non-text"
+    ensure
+      File.delete(test_file_path) if File.exist?(test_file_path)
+    end
+  end
 end

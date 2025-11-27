@@ -33,6 +33,12 @@ module Onlylogs
         return
       end
 
+      # Check if the file is a text file
+      unless Onlylogs::File.text_file?(file_path)
+        transmit({ action: "error", content: "Cannot read file: File is not a text file" })
+        return
+      end
+
       cursor_position = data["cursor_position"] || 0
       filter = data["filter"].presence
       mode = data["mode"] || "live"

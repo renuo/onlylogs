@@ -231,6 +231,8 @@ export default class LogStreamerController extends Controller {
           this.#handleMessage(data.content);
         } else if (data.action === 'finish') {
           this.#handleFinish(data.content);
+        } else if (data.action === 'error') {
+          this.#handleError(data.content);
         }
       }
     });
@@ -319,6 +321,20 @@ export default class LogStreamerController extends Controller {
 
     // Update stop button visibility (should hide it)
     this.updateStopButtonVisibility();
+  }
+
+  #handleError(message) {
+    // Display error message with error styling
+    this.messageTarget.innerHTML = `<span class="error-message">❌ ${message}</span>`;
+
+    // Mark search as finished
+    this.isSearchFinished = true;
+
+    // Update stop button visibility (should hide it)
+    this.updateStopButtonVisibility();
+
+    // Stop the watcher
+    this.stop();
   }
 
   #hideMessage() {

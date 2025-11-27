@@ -39,6 +39,24 @@ module Onlylogs
       ::File.exist?(path)
     end
 
+    def text_file?
+      self.class.text_file?(path)
+    end
+
+    def self.text_file?(path)
+      return false unless ::File.exist?(path)
+      return false if ::File.zero?(path)
+
+      # Read first chunk and check for null bytes (binary indicator)
+      ::File.open(path, "rb") do |file|
+        chunk = file.read(8192) || ""
+        # If it contains null bytes, it's likely binary
+        return false if chunk.include?("\x00")
+      end
+
+      true
+    end
+
     def grep(filter, regexp_mode: false, start_position: 0, end_position: nil, &block)
       Grep.grep(filter, path, regexp_mode: regexp_mode, start_position: start_position, end_position: end_position) do |line_number, content|
         yield Onlylogs::LogLine.new(line_number, content)
