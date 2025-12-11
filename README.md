@@ -1,17 +1,15 @@
-# Onlylogs
-
-<img alt="w:100px" src="app/assets/images/onlylogs/logo.png" width="400px"/>
+<figure>
+  <img alt="w:100px" src="app/assets/images/onlylogs/logo.png" width="400px"/>
+  <figcaption>sexy logs</figcaption>
+</figure>
 
 We believe logs are enough. 
 
 We believe logs in human-readable format are enough.
 
-Stop streaming your logs to very expensive external services: just store your logs on disk as you would do during
-development and be happy.
+Stop streaming your logs to very expensive external services: just store your logs on disk.
 
-You don't need more than this to get started with!
-
-And we believe that by simply analysing your logs you can also have a fancy errors report.
+We also believe that by simply analysing your logs you can also have a fancy errors report.
 Yes, correct. You don't need Sentry either.
 
 And you know what? You can get also performance reports 🤫
@@ -22,28 +20,14 @@ All of a sudden you are 100% free from external services for three more things:
 * errors
 * performance
 
-When your application grows and self-hosting your log files, for any reason, is not good enough for you anymore, you can
+When your application grows and youn don't want to self-host your log files anymore, you can
 stream them to https://onlylogs.io and continue enjoying the same features.
 
 > [!IMPORTANT]  
-> At the current stage errors and performance monitoring are not yet available.
-> Also https://onlylogs.io is still in beta. Send us an email if you want access to the platform.
+> At the current stage errors and performance monitoring are not yet available. It's all wishful thinking.
 
-## Usage
-
-Head to `/onlylogs` and enjoy your logs streamed right into your face!
-
-Here you can grep your logs with regular expressions.
-
-> [!TIP]
-> Onlylogs automatically detects and uses [ripgrep (rg)](https://github.com/BurntSushi/ripgrep) if available, which provides significantly faster search performance. 
-> If ripgrep is not installed, onlylogs falls back to standard grep. 
-> A warning icon (⚠️) will be displayed in the toolbar when using standard grep to indicate slower search performance.
-
-## Customization
-
-Onlylogs provides two ways to customize the appearance of the log viewer: CSS Variables and a complete style override.
-Check the file [_log_container_styles.html.erb](app/views/onlylogs/shared/_log_container_styles.html.erb) for the complete list of CSS variables.
+> [!IMPORTANT]
+> https://onlylogs.io is still in beta. Send us an email if you want access to the platform.
 
 ## Installation
 
@@ -59,46 +43,60 @@ And then execute:
 $ bundle
 ```
 
-### Installing ripgrep for Better Performance
+mount the engine in your `routes.rb`
 
-For optimal search performance, we recommend installing [ripgrep](https://github.com/BurntSushi/ripgrep). Onlylogs will automatically detect and use ripgrep if available.
+```ruby
+Rails.application.routes.draw do
+  # ...
+  mount Onlylogs::Engine, at: "/onlylogs"
+```
 
-## Secure the Engine
+Finally, you **must secure the engine**. Read the section dedicated to the [Authentication](#authentication).
+
+> [!TIP]
+> **Install ripgrep for Better Performance**.
+> For optimal search performance, we recommend installing [ripgrep](https://github.com/BurntSushi/ripgrep).
+> Onlylogs will automatically detect and use ripgrep if available.
+
+## Usage
+
+Head to `/onlylogs` and enjoy your logs streamed right into your face!
+
+Here you can grep your logs with regular expressions.
+
+> [!TIP]
+> Onlylogs automatically detects and uses [ripgrep (rg)](https://github.com/BurntSushi/ripgrep) if available, which provides significantly faster search experience. 
+> If ripgrep is not installed, onlylogs falls back to `grep`. 
+> A warning icon (⚠️) will be displayed in the toolbar when using `grep` to indicate slower search performance.
+
+## Authentication
+
+Yes, we should do this right away, because this engine gives access to your log files, so you want to be sure.
 
 The engine has one Controller and one ActionCable channel that **must be protected**.
 
-Please be sure to secure them properly, because they give access to your log files.
+Please be sure to secure them properly.
 
 > [!IMPORTANT]
 > By default, onlylogs endpoints are completely inaccessible until basic auth credentials are configured.
 
 ### Basic Authentication Setup
 
-Credentials can be configured using environment variables, Rails credentials, or programmatically. 
+Credentials can be configured using environment variables, Rails credentials, or programmatically.
 Environment variables take precedence over Rails credentials.
 
-#### Environment Variables (Recommended)
-
-Set the following environment variables:
-
 ```bash
+# env variables
 export ONLYLOGS_BASIC_AUTH_USER="your_username"
 export ONLYLOGS_BASIC_AUTH_PASSWORD="your_password"
 ```
 
-#### Rails Credentials
-
-Configure credentials in your Rails credentials file:
-
 ```yml
+# config/credentials.yml.enc
 onlylogs:
   basic_auth_user: your_username
   basic_auth_password: your_password
 ```
-
-#### Programmatic Configuration
-
-User and password can also be configured programmatically:
 
 ```ruby
 # config/initializers/onlylogs.rb
@@ -108,44 +106,11 @@ Onlylogs.configure do |config|
 end
 ```
 
-### Configuring Code Editor for File Path Links
-
-Onlylogs automatically detects file paths in log messages and converts them into clickable links that open in your preferred code editor.
-
-For a complete list of supported editors, see [lib/onlylogs/editor_detector.rb](lib/onlylogs/editor_detector.rb).
-
-The editor can be configured using environment variables, Rails credentials, or programmatically. 
-Environment variables take precedence over Rails credentials.
-
-##### Environment Variables
-
-```bash
-export EDITOR="vscode"
-export RAILS_EDITOR="vscode"
-export ONLYLOGS_EDITOR="vscode" # highest precedence
-```
-
-##### Rails Credentials
-
-```yml
-# config/credentials.yml.enc
-onlylogs:
-  editor: vscode
-```
-
-##### Programmatic Configuration
-
-```ruby
-# config/initializers/onlylogs.rb
-Onlylogs.configure do |config|
-  config.editor = :vscode
-end
-```
 
 ### Custom Authentication
 
-~~If~~When you need custom authentication logic beyond basic auth, 
-you ~~can~~should override the default authentication by configuring a parent controller that defines the `authenticate_onlylogs_user!` method.
+When you need custom authentication logic beyond basic auth, 
+you can override the default authentication by configuring a parent controller that defines the `authenticate_onlylogs_user!` method.
 
 Configure a custom parent controller in your initializer:
 
@@ -175,7 +140,7 @@ end
 For development you can disable basic authentication entirely:
 
 ```ruby
-# config/initializers/onlylogs.rb
+# config/environments/development.rb
 Onlylogs.configure do |config|
   config.disable_basic_authentication = true
 end
@@ -186,7 +151,15 @@ end
 Logs are streamed through a WebSocket connection, the Websocket is not protected, but in order to stream a file,
 the file path must be white-listed (see section below) and the file path encrypted using `Onlylogs::SecureFilePath.encrypt`
 
+
+## Customization
+
+Onlylogs provides two ways to customize the appearance of the log viewer: CSS Variables and a complete style override.
+Check the file [_log_container_styles.html.erb](app/views/onlylogs/shared/_log_container_styles.html.erb) for the complete list of CSS variables.
+
 ## Configuration
+
+Check `configuration.rb` to see a list of all possible configuration.
 
 ### File Access Security
 
@@ -256,14 +229,31 @@ end
 - Patterns are directory-specific - `log/*.log` only matches files in the `log/` directory
 - Multiple patterns can be combined in the same configuration
 
-#### Configuring Search Engine
 
-You can manually configure whether to use ripgrep or standard grep, although you should not need to do this.
+### Configuring Code Editor for File Path Links
+
+Onlylogs automatically detects file paths in log messages and converts them into clickable links that open in your preferred code editor.
+
+For a complete list of supported editors, see [lib/onlylogs/editor_detector.rb](lib/onlylogs/editor_detector.rb).
+
+
+```bash
+# env variables
+export EDITOR="vscode"
+export RAILS_EDITOR="vscode"
+export ONLYLOGS_EDITOR="vscode" # highest precedence
+```
+
+```yml
+# config/credentials.yml.enc
+onlylogs:
+  editor: vscode
+```
 
 ```ruby
 # config/initializers/onlylogs.rb
 Onlylogs.configure do |config|
-  config.ripgrep_enabled = false
+  config.editor = :vscode
 end
 ```
 
@@ -319,7 +309,6 @@ For testing how onlylogs behaves under production-like network conditions, you c
 # Disable and clean up
 ./bin/simulate_latency disable
 ```
-
 
 ## License
 
