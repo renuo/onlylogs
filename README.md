@@ -1,7 +1,4 @@
-<figure>
-  <img alt="w:100px" src="app/assets/images/onlylogs/logo.png" width="400px"/>
-  <figcaption>sexy logs</figcaption>
-</figure>
+<img alt="w:100px" src="app/assets/images/onlylogs/logo.png" width="400px"/>
 
 We believe logs are enough. 
 
