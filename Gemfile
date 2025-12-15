@@ -14,7 +14,7 @@ gem "stimulus-rails"
 gem "faker"
 gem "better_errors"
 
-gem "openssl", "~> 3.3.1"
+gem "openssl", "~> 4.0.0"
 
 
 # Omakase Ruby styling [https://github.com/rails/rubocop-rails-omakase/]
