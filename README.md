@@ -6,25 +6,11 @@ We believe logs in human-readable format are enough.
 
 Stop streaming your logs to very expensive external services: just store your logs on disk.
 
-We also believe that by simply analysing your logs you can also have a fancy errors report.
-Yes, correct. You don't need Sentry either.
-
-And you know what? You can get also performance reports 🤫
-
-All of a sudden you are 100% free from external services for three more things:
-
-* logs
-* errors
-* performance
-
-When your application grows and youn don't want to self-host your log files anymore, you can
+When your application grows and you don't want to self-host your log files anymore, you can
 stream them to https://onlylogs.io and continue enjoying the same features.
 
-> [!IMPORTANT]  
-> At the current stage errors and performance monitoring are not yet available. It's all wishful thinking.
-
 > [!IMPORTANT]
-> https://onlylogs.io is still in beta. Send us an email if you want access to the platform.
+> https://onlylogs.io is still in beta. Send us an email to a@renuo.ch if you want access to the platform.
 
 ## Installation
 
@@ -305,6 +291,20 @@ For testing how onlylogs behaves under production-like network conditions, you c
 # Disable and clean up
 ./bin/simulate_latency disable
 ```
+
+### Plans for the future
+
+We believe that by simply analysing your logs you can also have a fancy errors report.
+Yes, correct. You don't need Sentry either.
+
+And you know what? You can get also performance reports.
+
+All of a sudden you are 100% free from external services for three more things:
+
+* logs
+* errors
+* performance
+
 
 ## License
 
