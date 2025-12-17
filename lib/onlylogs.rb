@@ -1,5 +1,4 @@
 require "onlylogs/version"
-require "onlylogs/log_silencer_middleware"
 require "onlylogs/configuration"
 require "onlylogs/engine"
 require "onlylogs/formatter"
