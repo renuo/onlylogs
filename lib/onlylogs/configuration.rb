@@ -85,6 +85,30 @@ module Onlylogs
     end
   end
 
+  # Returns all existing files on disk that match the configured allowed_files patterns.
+  # Supports direct file paths and glob patterns (e.g., *.log, **/*.log).
+  # Returns Pathname objects so callers can access both the basename and the absolute path.
+  def self.existing_allowed_files
+    patterns = Array(configuration.allowed_files)
+
+    paths = patterns.flat_map do |pattern|
+      # Normalize to absolute path string
+      pattern_str = pattern.to_s
+      absolute_pattern = ::File.expand_path(pattern_str)
+
+      # Detect presence of glob meta characters. This includes **, *, ?, [], {} forms.
+      if pattern_str.match?(/[\*\?\[\]\{\}]/)
+        Dir.glob(absolute_pattern, ::File::FNM_DOTMATCH | ::File::FNM_PATHNAME).select { |p|
+          ::File.file?(p)
+        }
+      else
+        ::File.file?(absolute_pattern) ? [absolute_pattern] : []
+      end
+    end
+
+    paths.uniq.sort.map { |p| Pathname.new(p) }
+  end
+
   def self.default_log_file_path
     configuration.default_log_file_path
   end
