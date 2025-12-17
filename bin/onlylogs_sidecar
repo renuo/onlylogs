@@ -1,0 +1,112 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# this is a simple sidecar process that takes log lines sent into the socket and sends them to the drain url in batches.
+# You can also attach it to puma using `plugin :onlylogs_sidecar` in your config/puma.rb file so you don't need to run it manually.
+# The following parameters are availble:
+# - ONLYLOGS_DRAIN_URL: the url to the drain. this is mandatory and must be set.
+# - ONLYLOGS_SIDECAR_SOCKET: the path to the socket file. this is optional and will default to tmp/sockets/onlylogs-sidecar.sock in the current directory.
+# - ONLYLOGS_BATCH_SIZE: the number of lines to batch before sending. this is optional and will default to 100.
+# - ONLYLOGS_FLUSH_INTERVAL: the interval in seconds to flush the batch. this is optional and will default to 0.5 seconds.
+
+require "socket"
+require "net/http"
+require "uri"
+require "thread"
+require "fileutils"
+
+drain_url = ENV["ONLYLOGS_DRAIN_URL"]
+socket_path = ENV.fetch("ONLYLOGS_SIDECAR_SOCKET", File.expand_path("tmp/sockets/onlylogs-sidecar.sock", Dir.pwd))
+batch_size = ENV.fetch("ONLYLOGS_BATCH_SIZE", "100").to_i
+flush_interval = ENV.fetch("ONLYLOGS_FLUSH_INTERVAL", "0.5").to_f
+
+if drain_url.to_s.strip.empty?
+  error "[OnlylogsSidecar] ERROR: ONLYLOGS_DRAIN_URL is not set. Exiting."
+  exit 1
+end
+
+uri = URI.parse(drain_url)
+FileUtils.mkdir_p(File.dirname(socket_path))
+FileUtils.rm_f(socket_path)
+
+running = true
+queue = Queue.new
+
+trap("INT") { running = false }
+trap("TERM") { running = false }
+
+server = UNIXServer.new(socket_path)
+
+accept_thread = Thread.new do
+  while running
+    begin
+      client = server.accept_nonblock
+    rescue IO::WaitReadable
+      IO.select([server])
+      retry
+    rescue IOError, Errno::EBADF
+      break
+    end
+
+    Thread.new(client) do |conn|
+      begin
+        conn.each_line do |line|
+          cleaned = line.to_s.strip
+          queue << cleaned unless cleaned.empty?
+        end
+      rescue => e
+        warn "[OnlylogsSidecar] client error: #{e.class}: #{e.message}"
+      ensure
+        conn.close rescue nil
+      end
+    end
+  end
+end
+
+def send_batch(uri, lines)
+  return if lines.empty?
+
+  http = Net::HTTP.new(uri.host, uri.port)
+  http.use_ssl = (uri.scheme == "https")
+  request = Net::HTTP::Post.new(uri.path)
+  request.body = lines.join("\n")
+  puts "[OnlylogsSidecar] Sending #{request.body}"
+  request.content_type = "text/plain"
+  http.read_timeout = 5
+  http.open_timeout = 2
+  http.start
+  http.request(request)
+rescue => e
+  warn "[OnlylogsSidecar] HTTP error: #{e.class}: #{e.message}"
+ensure
+  http&.finish rescue nil
+end
+
+batch = []
+last_flush = Time.now
+
+while running || !queue.empty?
+  begin
+    line = queue.pop(true)
+    batch << line if line
+  rescue ThreadError
+    # queue empty
+    sleep 0.01
+  end
+
+  next if batch.empty?
+
+  if batch.size >= batch_size || (Time.now - last_flush) >= flush_interval
+    send_batch(uri, batch)
+    batch.clear
+    last_flush = Time.now
+  end
+end
+
+# Final flush
+send_batch(uri, batch) unless batch.empty?
+
+running = false
+accept_thread.kill
+server.close rescue nil
+FileUtils.rm_f(socket_path)

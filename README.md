@@ -233,7 +233,6 @@ Onlylogs automatically detects file paths in log messages and converts them into
 
 For a complete list of supported editors, see [lib/onlylogs/editor_detector.rb](lib/onlylogs/editor_detector.rb).
 
-
 ```bash
 # env variables
 export EDITOR="vscode"
