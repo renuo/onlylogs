@@ -1,1 +1,19 @@
-<%= render partial: "onlylogs/shared/log_container", locals: { log_file_path: @log_file_path, tail: @max_lines, filter: @filter, autoscroll: @autoscroll } %>
+<style>
+    .grid {
+        display: grid;
+        grid-template-rows: 40px 1fr;
+        height: 100vh;
+    }
+</style>
+<div class="grid">
+  <div>
+    <%= link_to onlylogs.root_path, class: "btn sidebar-menu__button" do %>
+      <%= image_tag "onlylogs/logo.png", style: "height: 30px" %>
+    <% end %>
+
+    <% Onlylogs.existing_allowed_files.each do |file| %>
+      <%= link_to file.basename, root_path(log_file_path: Onlylogs::SecureFilePath.encrypt(file.to_s)), class: "btn sidebar-menu__button" %>
+    <% end %>
+  </div>
+  <%= render partial: "onlylogs/shared/log_container", locals: { log_file_path: @log_file_path, tail: @max_lines, filter: @filter, autoscroll: @autoscroll } %>
+</div>
