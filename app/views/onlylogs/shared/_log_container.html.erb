@@ -1,32 +1,33 @@
 <%# locals: (log_file_path:, tail: 100, filter: "", autoscroll: true) %>
-<script src="https://cdn.jsdelivr.net/npm/clusterize.js@0.18.1/clusterize.min.js"></script>
+<script nonce="<%= request.content_security_policy_nonce %>"
+        src="https://cdn.jsdelivr.net/npm/clusterize.js@0.18.1/clusterize.min.js"></script>
 <%= render "onlylogs/shared/log_container_styles" %>
 
 <%
     mode = filter.blank? ? "live" : "search"
     cursor_position = mode == "search" ? 0 : [File.size(log_file_path) - (tail * 100), 0].max
-     
+
     raise SecurityError, "File path not allowed" unless Onlylogs.allowed_file_path?(log_file_path)
-        
+
     encrypted_log_file_path = Onlylogs::SecureFilePath.encrypt(log_file_path)
 %>
 
 <div data-controller="log-streamer text-selection keyboard-shortcuts"
-     data-log-streamer-file-path-value="<%= encrypted_log_file_path %>"     
+     data-log-streamer-file-path-value="<%= encrypted_log_file_path %>"
      data-log-streamer-cursor-position-value="<%= cursor_position %>"
      data-log-streamer-filter-value="<%= filter %>"
-     data-log-streamer-auto-scroll-value="<%= autoscroll %>"     
+     data-log-streamer-auto-scroll-value="<%= autoscroll %>"
      data-log-streamer-mode-value="<%= mode %>"
      class="onlylogs-log-container" >
     <div data-log-streamer-target="logLines" data-text-selection-target="logLines" id="scrollArea" class="onlylogs-log-lines clusterize-scroll">
       <div id="contentArea" class="clusterize-content">
       </div>
     </div>
-    
-    <button type="button" 
-            data-text-selection-target="button" 
-            class="onlylogs-context-menu" 
-            data-action="click->text-selection#searchSelectedText" 
+
+    <button type="button"
+            data-text-selection-target="button"
+            class="onlylogs-context-menu"
+            data-action="click->text-selection#searchSelectedText"
             title="Search selected text"
             style="display: none;">
       🔍 Search
@@ -55,15 +56,15 @@
           <label style="margin-bottom: 0;">
             Filter:
             <div style="display: inline-flex; align-items: center; position: relative;">
-              <input type="text" 
-                     name="filter" 
+              <input type="text"
+                     name="filter"
                      value="<%= filter %>"
                      placeholder="Enter filter text..."
                      data-log-streamer-target="filterInput"
                      data-text-selection-target="filterInput"
                      data-action="input->log-streamer#applyFilter"
                      style="padding-right: 1.5rem;">
-              <button type="button"                       
+              <button type="button"
                       data-action="click->log-streamer#clearFilter"
                       class="clear-filter-button"
                       title="Clear filter">
@@ -73,7 +74,7 @@
           </label>
         </div>
         <div>
-          <button type="button" 
+          <button type="button"
                   data-log-streamer-target="stopButton"
                   data-action="click->log-streamer#stopSearch"
                   class="stop-search-button"
@@ -93,7 +94,7 @@
           <%= number_to_human_size(File.size(log_file_path)) %>
         </div>
         <div style="width:67px">
-          <button type="button" 
+          <button type="button"
                   data-log-streamer-target="clearButton"
                   data-action="click->log-streamer#clearLogs"
                   class="clear-logs-button"
