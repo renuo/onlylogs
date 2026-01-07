@@ -46,7 +46,7 @@ else
 fi
 
 # Build grep command
-grep_cmd="grep --color=never -n -E --no-filename"
+grep_cmd="grep --color=never -E --no-filename"
 [ -n "$max_matches" ] && grep_cmd="$grep_cmd --max-count=$max_matches"
 
 # Handle byte range if specified

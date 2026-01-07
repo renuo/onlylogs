@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(bin/rails test:*)"
+      "Bash(bin/rails test:*)",
+      "Bash(cat:*)",
+      "Bash(bin/rails runner:*)"
     ]
   }
 }

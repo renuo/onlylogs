@@ -57,8 +57,8 @@ module Onlylogs
     end
 
     def grep(filter, regexp_mode: false, start_position: 0, end_position: nil, &block)
-      Grep.grep(filter, path, regexp_mode: regexp_mode, start_position: start_position, end_position: end_position) do |_line_number, content|
-        yield Onlylogs::LogLine.new(content)
+      Grep.grep(filter, path, regexp_mode: regexp_mode, start_position: start_position, end_position: end_position) do |content|
+        yield content
       end
     end
 

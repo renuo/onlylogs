@@ -21,16 +21,14 @@ module Onlylogs
 
       IO.popen(command_args, err: "/dev/null") do |io|
         io.each_line do |line|
-          # Parse each line as it comes in - super_grep returns grep output with line numbers (format: line_number:content)
-          if match = line.strip.match(/^(\d+):(.*)/)
-            line_number = match[1].to_i
-            content = match[2]
+          # Line numbers are no longer outputted by super_grep/super_ripgrep
+          # Use String.new to create a copy and prevent memory retention from IO buffers
+          content = String.new(line.chomp)
 
-            if block_given?
-              yield line_number, content
-            else
-              results << [ line_number, content ]
-            end
+          if block_given?
+            yield content
+          else
+            results << content
           end
         end
       end

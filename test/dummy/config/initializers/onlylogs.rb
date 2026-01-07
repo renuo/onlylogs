@@ -6,7 +6,7 @@ Onlylogs.configure do |config|
 
   # config.parent_controller = "ApplicationController"
   config.disable_basic_authentication = true
-  config.max_line_matches = 400_000
+  config.max_line_matches = 1_000_000_000 # one gazillion of millions
   # config.ripgrep_enabled = false
   #
   config.allowed_files = [

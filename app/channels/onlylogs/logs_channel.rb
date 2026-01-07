@@ -126,10 +126,21 @@ module Onlylogs
 
       @log_watcher_running = false
 
-      return unless @log_watcher_thread&.alive?
+      # Wait for graceful shutdown
+      if @log_watcher_thread&.alive?
+        @log_watcher_thread.join(3)
 
-      @log_watcher_thread.kill
-      @log_watcher_thread.join(1)
+        # If still alive after 3 seconds, force kill (but log it)
+        if @log_watcher_thread.alive?
+          Rails.logger.warn "Onlylogs: Force killing watcher thread after timeout"
+          @log_watcher_thread.kill
+          @log_watcher_thread.join(1)
+        end
+      end
+
+      # Clear references to allow GC
+      @log_watcher_thread = nil
+      @log_file = nil
     end
 
     def read_entire_file_with_filter(file_path, filter = nil, regexp_mode = false, start_position = 0, end_position = nil)
@@ -143,32 +154,38 @@ module Onlylogs
 
       line_count = 0
 
-      Rails.logger.silence(Logger::ERROR) do
-        @log_file.grep(filter, regexp_mode: regexp_mode, start_position: start_position, end_position: end_position) do |log_line|
-          return if @batch_sender.nil?
+      begin
+        Rails.logger.silence(Logger::ERROR) do
+          @log_file.grep(filter, regexp_mode: regexp_mode, start_position: start_position, end_position: end_position) do |log_line|
+            return if @batch_sender.nil?
 
-          # Add to batch buffer (sender thread will handle sending)
-          @batch_sender.add_line(render_log_line(log_line))
+            # Add to batch buffer (sender thread will handle sending)
+            @batch_sender.add_line(render_log_line(log_line))
 
-          line_count += 1
+            line_count += 1
+          end
         end
+
+        # Stop batch sender and flush any remaining lines
+        @batch_sender.stop
+
+        # Send completion message
+        if line_count >= Onlylogs.max_line_matches
+          transmit({ action: "finish", content: "Search finished. Search results limit reached." })
+        else
+          transmit({ action: "finish", content: "Search finished." })
+        end
+      ensure
+        # Always cleanup even if interrupted or error occurs
+        @batch_sender&.stop
+        @batch_sender = nil
+        @log_file = nil
+        @log_watcher_running = false
       end
-
-      # Stop batch sender and flush any remaining lines
-      @batch_sender.stop
-
-      # Send completion message
-      if line_count >= Onlylogs.max_line_matches
-        transmit({ action: "finish", content: "Search finished. Search results limit reached." })
-      else
-        transmit({ action: "finish", content: "Search finished." })
-      end
-
-      @log_watcher_running = false
     end
 
     def render_log_line(log_line)
-      "<pre>#{log_line.parsed_text}</pre>"
+      "<pre>#{FilePathParser.parse(AnsiColorParser.parse(ERB::Util.html_escape(log_line)))}</pre>"
     end
   end
 end
