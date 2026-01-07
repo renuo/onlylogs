@@ -26,14 +26,23 @@
 
         .clusterize-content {
             outline: 0;
+            counter-reset: line-number;
         }
 
-        .line-number {
-            color: #aaa;
-            user-select: none;
-            margin-right: 0.5em;
+        pre {
+            counter-increment: line-number;
+
+            &::before {
+                content: counter(line-number);
+                color: #aaa;
+                user-select: none;
+                margin-right: 0.5em;
+                display: inline-block;
+                text-align: right;
+                min-width: 3.5em;
+            }
         }
-        
+
         .color-success {
             color: green;
         }

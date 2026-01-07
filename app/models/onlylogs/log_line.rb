@@ -2,23 +2,14 @@
 
 module Onlylogs
   class LogLine
-    attr_reader :number, :text
+    attr_reader :text
 
-    def initialize(number, text)
-      @number = number
+    def initialize(text)
       @text = text
-    end
-
-    def parsed_number
-      number.to_s.reverse.gsub(/(\d{3})(?=\d)/, "\\1'").reverse.rjust(7)
     end
 
     def parsed_text
       FilePathParser.parse(AnsiColorParser.parse(ERB::Util.html_escape(text)))
-    end
-
-    def to_a
-      [number, text]
     end
   end
 end

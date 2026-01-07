@@ -102,10 +102,7 @@ module Onlylogs
               #   next
               # end
 
-              lines_to_send << {
-                line_number: log_line.number,
-                html: render_log_line(log_line)
-              }
+              lines_to_send << render_log_line(log_line)
             end
 
             if lines_to_send.any?
@@ -151,10 +148,7 @@ module Onlylogs
           return if @batch_sender.nil?
 
           # Add to batch buffer (sender thread will handle sending)
-          @batch_sender.add_line({
-                                   line_number: log_line.number,
-                                   html: render_log_line(log_line)
-                                 })
+          @batch_sender.add_line(render_log_line(log_line))
 
           line_count += 1
         end
@@ -174,8 +168,7 @@ module Onlylogs
     end
 
     def render_log_line(log_line)
-      "<pre data-line-number=\"#{log_line.number}\">" \
-        "<span class=\"line-number\">#{log_line.parsed_number}</span>#{log_line.parsed_text}</pre>"
+      "<pre>#{log_line.parsed_text}</pre>"
     end
   end
 end

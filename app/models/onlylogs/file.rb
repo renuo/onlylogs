@@ -2,12 +2,11 @@ module Onlylogs
   class Error < StandardError; end
 
   class File
-    attr_reader :path, :last_position, :last_line_number
+    attr_reader :path, :last_position
 
     def initialize(path, last_position: 0)
       self.path = path
       self.last_position = last_position
-      self.last_line_number = 0
       validate!
     end
 
@@ -15,7 +14,6 @@ module Onlylogs
       return if position < 0
 
       self.last_position = position
-      self.last_line_number = 0
     end
 
     def watch(&block)
@@ -28,7 +26,7 @@ module Onlylogs
         next if new_lines.empty?
 
         # Convert to LogLine objects only when yielding
-        yield new_lines.map { |number, text| Onlylogs::LogLine.new(number, text) }
+        yield new_lines.map { |text| Onlylogs::LogLine.new(text) }
       end
     end
 
@@ -59,14 +57,14 @@ module Onlylogs
     end
 
     def grep(filter, regexp_mode: false, start_position: 0, end_position: nil, &block)
-      Grep.grep(filter, path, regexp_mode: regexp_mode, start_position: start_position, end_position: end_position) do |line_number, content|
-        yield Onlylogs::LogLine.new(line_number, content)
+      Grep.grep(filter, path, regexp_mode: regexp_mode, start_position: start_position, end_position: end_position) do |_line_number, content|
+        yield Onlylogs::LogLine.new(content)
       end
     end
 
     private
 
-    attr_writer :path, :last_position, :last_line_number
+    attr_writer :path, :last_position
 
     def read_new_lines
       return [] unless exist?
@@ -75,7 +73,6 @@ module Onlylogs
       return [] if current_size <= last_position
 
       lines = []
-      line_counter = last_line_number
 
       ::File.open(path, "rb") do |file|
         file.seek(last_position)
@@ -91,9 +88,8 @@ module Onlylogs
         # Read complete lines using gets (memory efficient, no buffer needed)
         while (line = file.gets)
           if line.end_with?("\n")
-            # Complete line - store as simple array to reduce object allocations
-            lines << [line_counter, line.chomp]
-            line_counter += 1
+            # Complete line - store as simple string
+            lines << line.chomp
             self.last_position = file.pos
           else
             # Incomplete line at EOF - skip it
@@ -102,7 +98,6 @@ module Onlylogs
         end
       end
 
-      self.last_line_number = line_counter
       lines
     end
 

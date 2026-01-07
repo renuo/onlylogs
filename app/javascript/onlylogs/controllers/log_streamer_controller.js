@@ -5,7 +5,6 @@ export default class LogStreamerController extends Controller {
   static values = {
     filePath: { type: String },
     cursorPosition: { type: Number, default: 0 },
-    lastLineNumber: { type: Number, default: 0 },
     autoScroll: { type: Boolean, default: true },
     autoStart: { type: Boolean, default: true },
     filter: { type: String, default: '' },
@@ -13,7 +12,7 @@ export default class LogStreamerController extends Controller {
     regexpMode: { type: Boolean, default: false }
   };
 
-  static targets = ["logLines", "filterInput", "lineRange", "liveMode", "message", "regexpMode", "websocketStatus", "stopButton", "clearButton"];
+  static targets = ["logLines", "filterInput", "results", "liveMode", "message", "regexpMode", "websocketStatus", "stopButton", "clearButton"];
 
   connect() {
     this.consumer = createConsumer();
@@ -21,8 +20,6 @@ export default class LogStreamerController extends Controller {
     this.subscription = null;
     this.isRunning = false;
     this.reconnectTimeout = null;
-    this.minLineNumber = null;
-    this.maxLineNumber = 0;
     this.isSearchFinished = true;
 
     // Initialize clusterize
@@ -83,12 +80,8 @@ export default class LogStreamerController extends Controller {
   }
 
   clear() {
-    this.minLineNumber = null;
-    this.maxLineNumber = 0;
-
     this.clusterize.clear();
-
-    this.#updateLineRangeDisplay();
+    this.#updateResultsDisplay();
   }
 
   toggleAutoScroll() {
@@ -244,7 +237,6 @@ export default class LogStreamerController extends Controller {
   #handleConnected() {
     this.subscription.perform('initialize_watcher', {
       cursor_position: this.cursorPositionValue,
-      last_line_number: this.lastLineNumberValue,
       file_path: this.filePathValue,
       filter: this.filterInputTarget.value,
       mode: this.modeValue,
@@ -273,24 +265,10 @@ export default class LogStreamerController extends Controller {
 
   #handleLogLines(lines) {
     try {
-      const newLines = [];
-
-      lines.forEach(line => {
-        const { line_number, html } = line;
-
-        if (this.minLineNumber === null || line_number < this.minLineNumber) {
-          this.minLineNumber = line_number;
-        }
-        this.maxLineNumber = Math.max(this.maxLineNumber, line_number);
-
-        // Add to new lines array for clusterize
-        newLines.push(html);
-      });
-
       // Append new lines to clusterize
-      if (newLines.length > 0) {
-        this.clusterize.append(newLines);
-        this.#updateLineRangeDisplay();
+      if (lines.length > 0) {
+        this.clusterize.append(lines);
+        this.#updateResultsDisplay();
         this.scroll();
       }
 
@@ -341,19 +319,9 @@ export default class LogStreamerController extends Controller {
     this.messageTarget.innerHTML = '';
   }
 
-  #updateLineRangeDisplay() {
+  #updateResultsDisplay() {
     const resultsCount = this.clusterize.getRowsAmount();
-    let lineRangeText;
-
-    if (this.minLineNumber === null || this.maxLineNumber === 0) {
-      lineRangeText = `No lines`;
-    } else if (this.minLineNumber === this.maxLineNumber) {
-      lineRangeText = `Line ${this.#formatNumber(this.minLineNumber)}`;
-    } else {
-      lineRangeText = `Lines ${this.#formatNumber(this.minLineNumber)} - ${this.#formatNumber(this.maxLineNumber)}`;
-    }
-
-    this.lineRangeTarget.textContent = `${lineRangeText} | Results: ${this.#formatNumber(resultsCount)}`;
+    this.resultsTarget.textContent = `Results: ${this.#formatNumber(resultsCount)}`;
   }
 
   #formatNumber(number) {
@@ -393,7 +361,6 @@ export default class LogStreamerController extends Controller {
       filePath: this.filePathValue,
       cursorPosition: this.cursorPositionValue,
       lineCount: this.clusterize.getRowsAmount(),
-      maxLineNumber: this.maxLineNumber,
       connected: this.subscription && this.subscription.identifier
     };
   }
