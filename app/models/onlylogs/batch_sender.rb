@@ -23,7 +23,7 @@ module Onlylogs
       end
     end
 
-    def stop
+    def stop(send_remaining_lines: true)
       return unless @running
 
       @running = false
@@ -35,6 +35,11 @@ module Onlylogs
 
       # Send any remaining lines
       send_batch
+      if send_remaining_lines
+        send_batch
+      else
+        @mutex.synchronize { @buffer.clear }
+      end
 
       # Clear thread reference to allow GC
       @sender_thread = nil

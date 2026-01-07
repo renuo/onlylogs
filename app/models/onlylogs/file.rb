@@ -25,8 +25,7 @@ module Onlylogs
         new_lines = read_new_lines
         next if new_lines.empty?
 
-        # Convert to LogLine objects only when yielding
-        yield new_lines.map { |text| Onlylogs::LogLine.new(text) }
+        yield new_lines
       end
     end
 

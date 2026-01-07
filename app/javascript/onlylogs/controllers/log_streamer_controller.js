@@ -173,9 +173,8 @@ export default class LogStreamerController extends Controller {
   }
 
   stopSearch() {
-    if (this.subscription && this.isRunning) {
-      this.subscription.perform('stop_watcher');
-    }
+    console.log("stop search");
+    this.subscription.perform('stop_watcher');
   }
 
   clearLogs() {
@@ -291,13 +290,8 @@ export default class LogStreamerController extends Controller {
   }
 
   #handleFinish(message) {
-    // Display the finish message without loading icon
     this.messageTarget.innerHTML = message;
-
-    // Mark search as finished
     this.isSearchFinished = true;
-
-    // Update stop button visibility (should hide it)
     this.updateStopButtonVisibility();
   }
 

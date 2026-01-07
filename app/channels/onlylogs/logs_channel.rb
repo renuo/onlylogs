@@ -68,7 +68,7 @@ module Onlylogs
 
     def cleanup_existing_operations
       if @batch_sender
-        @batch_sender.stop
+        @batch_sender.stop(send_remaining_lines: false)
         @batch_sender = nil
       end
 
