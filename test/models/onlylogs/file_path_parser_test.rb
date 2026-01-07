@@ -113,13 +113,13 @@ class Onlylogs::FilePathParserTest < ActiveSupport::TestCase
     assert_includes result, 'href="custom://open?file=%2Fpath%2Fto%2Ffile.rb&line=42"'
   end
 
-  test "defaults to TextMate when no editor is set" do
+  test "defaults to vscode when no editor is set" do
     ENV["EDITOR"] = nil
     ENV["ONLYLOGS_EDITOR"] = nil
     ENV["ONLYLOGS_EDITOR_URL"] = nil
     input = "Error in /path/to/file.rb:42"
     result = Onlylogs::FilePathParser.parse(input)
-    assert_includes result, 'href="txmt://open?url=file://%2Fpath%2Fto%2Ffile.rb&line=42"'
+    assert_includes result, 'href="vscode://open?url=file://%2Fpath%2Fto%2Ffile.rb&line=42"'
   end
 
   test "handles virtual path mapping" do

@@ -46,7 +46,7 @@ else
 fi
 
 # Build ripgrep command
-rg_cmd="rg --color=never -n --no-filename"
+rg_cmd="rg --color=never --no-filename"
 [ -n "$max_matches" ] && rg_cmd="$rg_cmd --max-count=$max_matches"
 
 # Handle byte range if specified
