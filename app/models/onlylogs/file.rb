@@ -27,7 +27,8 @@ module Onlylogs
         new_lines = read_new_lines
         next if new_lines.empty?
 
-        yield new_lines
+        # Convert to LogLine objects only when yielding
+        yield new_lines.map { |number, text| Onlylogs::LogLine.new(number, text) }
       end
     end
 
@@ -73,74 +74,35 @@ module Onlylogs
       current_size = ::File.size(path)
       return [] if current_size <= last_position
 
-      # Read new content from last_position to end of file
-      new_content = ""
+      lines = []
+      line_counter = last_line_number
+
       ::File.open(path, "rb") do |file|
         file.seek(last_position)
-        new_content = file.read
-      end
 
-      return [] if new_content.empty?
-
-      # Split into lines, handling incomplete lines
-      lines = new_content.lines(chomp: true)
-
-      # If we're not at the beginning of the file, check if we're at a line boundary
-      first_line_removed = false
-      if last_position > 0
-        # Read one character before to see if it was a newline
-        ::File.open(path, "rb") do |file|
+        # Skip first line if we're mid-line (not at start or after newline)
+        if last_position > 0
           file.seek(last_position - 1)
-          char_before = file.read(1)
-          # If the character before wasn't a newline, we're in the middle of a line
-          if char_before != "\n" && lines.any?
-            # Remove the first line as it's incomplete
-            lines.shift
-            first_line_removed = true
-          end
-        end
-      end
-
-      # Check if the last line is complete (ends with newline)
-      last_line_incomplete = lines.any? && !new_content.end_with?("\n")
-      if last_line_incomplete
-        # Remove the last line as it's incomplete
-        lines.pop
-      end
-
-      # Update position to end of last complete line
-      if lines.any?
-        # Find the position after the last complete line
-        ::File.open(path, "rb") do |file|
+          skip_first = (file.read(1) != "\n")
           file.seek(last_position)
-          # Read and count newlines to find where complete lines end
-          newline_count = 0
-          # If we removed the first line, we need to count one extra newline
-          # to account for the incomplete first line
-          target_newlines = lines.length + (first_line_removed ? 1 : 0)
-          while newline_count < target_newlines
-            char = file.read(1)
-            break unless char
-
-            newline_count += 1 if char == "\n"
-          end
-          self.last_position = file.tell
+          file.gets if skip_first # Consume incomplete line
         end
-      elsif last_line_incomplete
-        # If we had lines but removed the last incomplete one,
-        # position should be at the start of the incomplete line
-        self.last_position = current_size - new_content.lines.last.length
-      elsif first_line_removed
-        # If we removed the first line but have no complete lines,
-        # position should be at the end of the file since we consumed all content
-        self.last_position = current_size
-      else
-        # No lines at all, position at end of file
-        self.last_position = current_size
+
+        # Read complete lines using gets (memory efficient, no buffer needed)
+        while (line = file.gets)
+          if line.end_with?("\n")
+            # Complete line - store as simple array to reduce object allocations
+            lines << [line_counter, line.chomp]
+            line_counter += 1
+            self.last_position = file.pos
+          else
+            # Incomplete line at EOF - skip it
+            break
+          end
+        end
       end
 
-      lines = lines.map.with_index { |line, index| Onlylogs::LogLine.new(self.last_line_number + index, line) }
-      self.last_line_number += lines.length
+      self.last_line_number = line_counter
       lines
     end
 
