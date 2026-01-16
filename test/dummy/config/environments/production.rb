@@ -3,6 +3,9 @@ require "active_support/core_ext/integer/time"
 Rails.application.configure do
   # Settings specified here will take precedence over those in config/application.rb.
 
+  # Hardcoded secret key for dummy app testing
+  config.secret_key_base = "33b65dfd5f4a386fe614b0bc0709780a3552a29def2866795b2cc426d57f958a11390e7047ead46217ed1f28f6d42bcca7c99e14da2e0b851b7a060a8949d4a9"
+
   # Code is not reloaded between requests.
   config.enable_reloading = false
 
