@@ -14,7 +14,7 @@ module Onlylogs
       @parent_controller = nil
       @disable_basic_authentication = false
       @ripgrep_enabled = default_ripgrep_enabled
-      @editor = default_editor
+      @editor = nil
       @max_line_matches = 100000
     end
 
@@ -23,9 +23,9 @@ module Onlylogs
     end
 
     def default_editor
-        if (credentials_editor = Rails.application.credentials.dig(:onlylogs, :editor))
+      if (credentials_editor = Rails.application.credentials.dig(:onlylogs, :editor))
         return credentials_editor
-        end
+      end
 
       # 2. Check environment variables (ONLYLOGS_EDITOR > RAILS_EDITOR > EDITOR)
       if ENV["ONLYLOGS_EDITOR"]
@@ -114,7 +114,7 @@ module Onlylogs
   end
 
   def self.editor
-    configuration.default_editor
+    configuration.editor || configuration.default_editor
   end
 
   def self.editor=(editor_symbol)
