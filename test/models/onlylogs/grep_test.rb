@@ -6,10 +6,14 @@ class Onlylogs::GrepTest < ActiveSupport::TestCase
     @fixture_path = ::File.expand_path("../../fixtures/files/log_file_100_lines.txt", __dir__)
     @special_lines_path = File.expand_path("../../fixtures/files/log_special_lines.txt", __dir__)
     @original_ripgrep_enabled = Onlylogs.ripgrep_enabled?
+    @original_max_line_matches = Onlylogs.max_line_matches
+
+    Onlylogs.configuration.max_line_matches = nil
   end
 
   def teardown
     Onlylogs.configuration.ripgrep_enabled = @original_ripgrep_enabled
+    Onlylogs.configuration.max_line_matches = @original_max_line_matches
   end
 
   def self.test_both_engine_modes(test_name, &block)
