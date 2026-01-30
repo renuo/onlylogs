@@ -43,13 +43,6 @@ jobs:
           ruby-version: 3.4.1
           bundler-cache: true
 
-      - name: Debug grep tools
-        run: |
-          which grep
-          grep --version || true
-          which rg || true
-          rg --version || true
-
       - name: Run tests
         env:
           RAILS_ENV: test
