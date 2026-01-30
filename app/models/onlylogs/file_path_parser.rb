@@ -70,9 +70,7 @@ module Onlylogs
       KNOWN_EDITORS.each do |preset|
         return for_formatting_string(preset[:url]) if preset[:symbols].include?(symbol)
       end
-      # Default to vscode if symbol not found
-      vscode_preset = KNOWN_EDITORS.find { |p| p[:symbols].include?(:vscode) }
-      for_formatting_string(vscode_preset[:url])
+      editor_from_symbol(:vscode)
     end
 
     def initialize(url_proc)
