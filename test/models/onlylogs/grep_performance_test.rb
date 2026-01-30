@@ -1,14 +1,19 @@
+# This test is a performance test and can be run locally with the use of the downloaded big file but will not be run on the CI
 require "test_helper"
 
 
 class Onlylogs::GrepPerformanceTest < ActiveSupport::TestCase
   def setup
     @fixture_path = ::File.expand_path("../../fixtures/files/log_file_100_lines.txt", __dir__)
+    @large_fixture_path = ::File.expand_path("../../fixtures/files/big.log", __dir__)
+
+    skip "Performance test: not run on CI" if ENV["CI"]
+    skip "Performance test: big.log not found at #{@large_fixture_path}" unless ::File.exist?(@large_fixture_path)
   end
 
   test "it does not allocate memory for results when using a block" do
     # Use the same large test file for fair comparison
-    large_fixture_path = ::File.expand_path("../../fixtures/files/big.log", __dir__)
+    large_fixture_path = @large_fixture_path
 
     # Force garbage collection to get a clean baseline
     GC.start
@@ -61,7 +66,7 @@ class Onlylogs::GrepPerformanceTest < ActiveSupport::TestCase
 
   test "it allocates memory for results when not using a block" do
     # Use a larger test file to make memory differences more visible
-    large_fixture_path = ::File.expand_path("../../fixtures/files/big.log", __dir__)
+    large_fixture_path = @large_fixture_path
 
     # Force garbage collection to get a clean baseline
     GC.start
