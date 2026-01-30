@@ -4,11 +4,26 @@ class Onlylogs::FilePathParserTest < ActiveSupport::TestCase
   def setup
     @original_editor = ENV["EDITOR"]
     @original_onlylogs_editor = ENV["ONLYLOGS_EDITOR"]
+    @original_onlylogs_url = ENV["ONLYLOGS_EDITOR_URL"]
+    @original_virtual_path = ENV["ONLYLOGS_VIRTUAL_PATH"]
+    @original_host_path = ENV["ONLYLOGS_HOST_PATH"]
+
+    ENV["ONLYLOGS_EDITOR_URL"] = nil
+    ENV["ONLYLOGS_VIRTUAL_PATH"] = nil
+    ENV["ONLYLOGS_HOST_PATH"] = nil
+    Onlylogs.configuration.editor = nil
+    Onlylogs::FilePathParser.clear_editor_cache
   end
 
   def teardown
     ENV["EDITOR"] = @original_editor
     ENV["ONLYLOGS_EDITOR"] = @original_onlylogs_editor
+    ENV["ONLYLOGS_EDITOR_URL"] = @original_onlylogs_url
+    ENV["ONLYLOGS_VIRTUAL_PATH"] = @original_virtual_path
+    ENV["ONLYLOGS_HOST_PATH"] = @original_host_path
+
+    Onlylogs.configuration.editor = nil
+    Onlylogs::FilePathParser.clear_editor_cache
   end
 
   test "converts file path with line number to clickable link" do
@@ -119,7 +134,7 @@ class Onlylogs::FilePathParserTest < ActiveSupport::TestCase
     ENV["ONLYLOGS_EDITOR_URL"] = nil
     input = "Error in /path/to/file.rb:42"
     result = Onlylogs::FilePathParser.parse(input)
-    assert_includes result, 'href="vscode://open?url=file://%2Fpath%2Fto%2Ffile.rb&line=42"'
+    assert_includes result, 'href="vscode://file/%2Fpath%2Fto%2Ffile.rb:42"'
   end
 
   test "handles virtual path mapping" do
