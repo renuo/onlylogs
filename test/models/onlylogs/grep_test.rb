@@ -51,8 +51,6 @@ class Onlylogs::GrepTest < ActiveSupport::TestCase
   end
 
   test_both_engine_modes "it can grep a string when the line contains ansi colors" do |engine_name|
-    assert File.exist?(@fixture_path), "Fixture missing: #{@fixture_path}"
-    assert File.size(@fixture_path) > 0, "Fixture empty: #{@fixture_path}"
     expected_line = "\e[1m\e[36mActiveRecord::SchemaMigration Load (0.0ms)\e[0m  \e[1m\e[34mSELECT ...\e[0m"
     lines = Onlylogs::Grep.grep("(0.0ms) SELECT", @special_lines_path)
     assert_equal [ expected_line ], lines, "Failed with #{engine_name}"
