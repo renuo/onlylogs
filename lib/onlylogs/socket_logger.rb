@@ -18,7 +18,6 @@ module Onlylogs
     end
 
     def add(severity, message = nil, progname = nil, &block)
-
       if message.nil?
         if block_given?
           message = block.call
@@ -44,7 +43,7 @@ module Onlylogs
       puts "Onlylogs::SocketLogger error: #{e.message}"
       reconnect_socket
     rescue => e
-      puts"Onlylogs::SocketLogger unexpected error: #{e.class}: #{e.message}"
+      puts "Onlylogs::SocketLogger unexpected error: #{e.class}: #{e.message}"
       reconnect_socket
     end
 

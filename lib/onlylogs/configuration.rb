@@ -14,7 +14,7 @@ module Onlylogs
       @parent_controller = nil
       @disable_basic_authentication = false
       @ripgrep_enabled = default_ripgrep_enabled
-      @editor = default_editor
+      @editor = nil
       @max_line_matches = 100000
     end
 
@@ -26,20 +26,20 @@ module Onlylogs
       if (credentials_editor = Rails.application.credentials.dig(:onlylogs, :editor))
         return credentials_editor
       end
-      
+
       # 2. Check environment variables (ONLYLOGS_EDITOR > RAILS_EDITOR > EDITOR)
       if ENV["ONLYLOGS_EDITOR"]
         return ENV["ONLYLOGS_EDITOR"].to_sym
       end
-      
+
       if ENV["RAILS_EDITOR"]
         return ENV["RAILS_EDITOR"].to_sym
       end
-      
+
       if ENV["EDITOR"]
         return ENV["EDITOR"].to_sym
       end
-      
+
       # 3. Default fallback
       :vscode
     end
@@ -114,7 +114,7 @@ module Onlylogs
   end
 
   def self.editor
-    configuration.default_editor
+    configuration.editor || configuration.default_editor
   end
 
   def self.editor=(editor_symbol)

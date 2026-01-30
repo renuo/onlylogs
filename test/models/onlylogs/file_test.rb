@@ -34,7 +34,7 @@ class Onlylogs::FileTest < ActiveSupport::TestCase
       test_file.go_to_position(position_after_line_3)
       assert_equal position_after_line_3, test_file.last_position
       result = test_file.send(:read_new_lines)
-      expected = ["Line 4", "Line 5", "Line 6", "Line 7", "Line 8", "Line 9", "Line 10"]
+      expected = [ "Line 4", "Line 5", "Line 6", "Line 7", "Line 8", "Line 9", "Line 10" ]
       assert_equal expected, result
     ensure
       File.delete(test_file_path) if File.exist?(test_file_path)
@@ -49,7 +49,7 @@ class Onlylogs::FileTest < ActiveSupport::TestCase
       test_file = Onlylogs::File.new(test_file_path, last_position: 0)
       result = test_file.send(:read_new_lines)
 
-      expected = ["Line 0", "Line 1", "Line 2"]
+      expected = [ "Line 0", "Line 1", "Line 2" ]
       assert_equal expected, result
       assert_equal 21, test_file.last_position # "Line 0\nLine 1\nLine 2\n".bytesize
 
@@ -61,7 +61,7 @@ class Onlylogs::FileTest < ActiveSupport::TestCase
       end
 
       result = test_file.send(:read_new_lines)
-      expected = ["Line 3", "Line 4", "Line 5", "Line 6"]
+      expected = [ "Line 3", "Line 4", "Line 5", "Line 6" ]
       assert_equal expected, result
 
       File.open(test_file_path, "a") do |f|
@@ -71,7 +71,7 @@ class Onlylogs::FileTest < ActiveSupport::TestCase
       end
 
       result = test_file.send(:read_new_lines)
-      expected = ["Line 7", "Line 8"]
+      expected = [ "Line 7", "Line 8" ]
       assert_equal expected, result
 
       File.open(test_file_path, "a") do |f|
@@ -82,7 +82,7 @@ class Onlylogs::FileTest < ActiveSupport::TestCase
 
       # Should return the completed line plus the 2 new lines
       result = test_file.send(:read_new_lines)
-      expected = ["Incomplete Line 9", "Line 10", "Line 11"]
+      expected = [ "Incomplete Line 9", "Line 10", "Line 11" ]
       assert_equal expected, result
     ensure
       File.delete(test_file_path) if File.exist?(test_file_path)
