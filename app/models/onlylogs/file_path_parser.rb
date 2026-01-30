@@ -9,10 +9,10 @@ module Onlylogs
       { symbols: [ :atom ], sniff: /atom/i, url: "atom://core/open/file?filename=%{file}&line=%{line}" },
       { symbols: [ :emacs, :emacsclient ], sniff: /emacs/i, url: "emacs://open?url=file://%{file}&line=%{line}" },
       { symbols: [ :idea ], sniff: /idea/i, url: "idea://open?file=%{file}&line=%{line}" },
-      { symbols: [ :macvim, :mvim ], sniff: /vim/i, url: "mvim://open?url=file://%{file_unencoded}&line=%{line}" },
-      { symbols: [ :rubymine ], sniff: /mine/i, url: "x-mine://open?file=%{file}&line=%{line}" },
+      { symbols: [ :macvim, :mvim, :vim ], sniff: /vim/i, url: "mvim://open?url=file://%{file_unencoded}&line=%{line}" },
+      { symbols: [ :rubymine, :mine ], sniff: /mine/i, url: "x-mine://open?file=%{file}&line=%{line}" },
       { symbols: [ :sublime, :subl, :st ], sniff: /subl/i, url: "subl://open?url=file://%{file}&line=%{line}" },
-      { symbols: [ :textmate, :txmt, :tm ], sniff: /mate/i, url: "txmt://open?url=file://%{file}&line=%{line}" },
+      { symbols: [ :textmate, :txmt, :tm, :mate ], sniff: /mate/i, url: "txmt://open?url=file://%{file}&line=%{line}" },
       { symbols: [ :vscode, :code ], sniff: /code/i, url: "vscode://file/%{file}:%{line}" },
       { symbols: [ :vscodium, :codium ], sniff: /codium/i, url: "vscodium://file/%{file}:%{line}" }
     ].freeze
@@ -61,8 +61,16 @@ module Onlylogs
     # Cache for the editor instance
     @cached_editor_instance = nil
 
+    def self.clear_editor_cache
+      @cached_editor_instance = nil
+    end
+
     def self.cached_editor_instance
-      @cached_editor_instance ||= editor_from_symbol(Onlylogs.editor)
+      @cached_editor_instance ||= if ENV["ONLYLOGS_EDITOR_URL"]
+        for_formatting_string(ENV["ONLYLOGS_EDITOR_URL"])
+      else
+        editor_from_symbol(Onlylogs.editor)
+      end
     end
 
 
