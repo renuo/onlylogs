@@ -46,7 +46,11 @@ module Onlylogs
 
     def self.for_formatting_string(formatting_string)
       new proc { |file, line|
-        formatting_string % { file: URI.encode_www_form_component(file), file_unencoded: file, line: line }
+        formatting_string % {
+          file: URI.encode_www_form_component(file),
+          file_unencoded: file,
+          line: line
+        }
       }
     end
 
@@ -58,16 +62,17 @@ module Onlylogs
     @cached_editor_instance = nil
 
     def self.cached_editor_instance
-      return @cached_editor_instance if @cached_editor_instance      
-      @cached_editor_instance = editor_from_symbol(Onlylogs.editor)      
+      @cached_editor_instance ||= editor_from_symbol(Onlylogs.editor)
     end
-    
+
 
     def self.editor_from_symbol(symbol)
       KNOWN_EDITORS.each do |preset|
         return for_formatting_string(preset[:url]) if preset[:symbols].include?(symbol)
       end
-      editor_from_symbol(:vscode)
+      # Default to vscode if symbol not found
+      vscode_preset = KNOWN_EDITORS.find { |p| p[:symbols].include?(:vscode) }
+      for_formatting_string(vscode_preset[:url])
     end
 
     def initialize(url_proc)

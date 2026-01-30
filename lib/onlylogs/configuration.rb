@@ -23,23 +23,23 @@ module Onlylogs
     end
 
     def default_editor
-      if (credentials_editor = Rails.application.credentials.dig(:onlylogs, :editor))
+        if (credentials_editor = Rails.application.credentials.dig(:onlylogs, :editor))
         return credentials_editor
-      end
-      
+        end
+
       # 2. Check environment variables (ONLYLOGS_EDITOR > RAILS_EDITOR > EDITOR)
       if ENV["ONLYLOGS_EDITOR"]
         return ENV["ONLYLOGS_EDITOR"].to_sym
       end
-      
+
       if ENV["RAILS_EDITOR"]
         return ENV["RAILS_EDITOR"].to_sym
       end
-      
+
       if ENV["EDITOR"]
         return ENV["EDITOR"].to_sym
       end
-      
+
       # 3. Default fallback
       :vscode
     end

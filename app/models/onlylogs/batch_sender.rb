@@ -55,13 +55,13 @@ module Onlylogs
 
     def send_batch
       lines_to_send = nil
-      
+
       @mutex.synchronize do
         return if @buffer.empty?
         lines_to_send = @buffer.dup
         @buffer.clear
       end
-      
+
       return if lines_to_send.empty?
 
       @channel.send(:transmit, {
