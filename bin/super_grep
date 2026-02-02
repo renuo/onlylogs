@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+export LC_ALL=C
 
 # Parse arguments
 max_matches=""
@@ -37,17 +38,23 @@ file="$2"
 [ -f "$file" ] || exit 1
 
 # Prepare query regex based on mode
-esc=$'\033'
-color_regex="${esc}\[[0-9;]*m"
-
 if [ "$regexp_mode" = true ]; then
-  # Translate common PCRE shorthands to POSIX ERE for grep -E
-  query_posix=$(echo "$query" | sed -E 's/\\d/[[:digit:]]/g')
-  query_regex=$(echo "$query_posix" | sed -E "s/ +/([[:space:]]|$color_regex)+/g")
+  # Translate \d to [0-9] for grep -E compatibility
+  query_regex=$(printf "%s" "$query" | sed 's/\\d/[0-9]/g')
 else
-  escaped_query=$(echo "$query" | sed -E 's/([][{}()*+?.\\^$|])/\\\1/g')
-  query_regex=$(echo "$escaped_query" | sed -E "s/ +/([[:space:]]|$color_regex)+/g")
+  # Escape special characters
+  query_regex=$(printf "%s" "$query" | sed -E 's/([][{}()*+?.\\^$|])/\\\1/g')
 fi
+
+# Replace spaces with placeholder to avoid sed escaping hell for color regex
+placeholder="__COLOR_REGEX__"
+query_regex=$(printf "%s" "$query_regex" | sed -E "s/ +/([[:space:]]|$placeholder)+/g")
+
+# Use bash variable substitution to insert the actual color regex
+ESC=$(printf '\033')
+actual_color_regex="${ESC}\\[[0-9;]*m"
+query_regex="${query_regex//$placeholder/$actual_color_regex}"
+
 
 # Build grep command
 grep_cmd=(grep -E -h)             # -h = no filename (portable)
