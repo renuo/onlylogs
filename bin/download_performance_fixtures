@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+
+# Set output directory relative to this script
+FIXTURES_DIR="$(dirname "$0")/../test/fixtures/files"
+mkdir -p "$FIXTURES_DIR"
+
+FILES=(
+  "https://onlylogs-files.s3.eu-central-1.amazonaws.com/big.log"
+  "https://onlylogs-files.s3.eu-central-1.amazonaws.com/ultra_big.log"
+  "https://onlylogs-files.s3.eu-central-1.amazonaws.com/very_big.log"
+)
+
+echo "Downloading performance test fixtures to $FIXTURES_DIR..."
+
+for url in "${FILES[@]}"; do
+  filename=$(basename "$url")
+  target="$FIXTURES_DIR/$filename"
+  
+  if [ -f "$target" ]; then
+    echo "Check: $filename already exists. Skipping..."
+  else
+    echo "Downloading $filename..."
+    curl -L "$url" -o "$target"
+  fi
+done
+
+echo "Done! Performance fixtures are ready."
