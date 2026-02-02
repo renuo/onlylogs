@@ -19,7 +19,7 @@ module Onlylogs
 
       results = []
 
-      IO.popen(command_args, err: :err) do |io|
+      IO.popen(command_args, err: "/dev/null") do |io|
         io.each_line do |line|
           # Line numbers are no longer outputted by super_grep/super_ripgrep
           # Use String.new to create a copy and prevent memory retention from IO buffers
