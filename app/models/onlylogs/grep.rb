@@ -1,5 +1,3 @@
-require "open3"
-
 module Onlylogs
   class Grep
     def self.grep(pattern, file_path, start_position: 0, end_position: nil, regexp_mode: false, &block)
@@ -19,31 +17,23 @@ module Onlylogs
 
       command_args += [ pattern, file_path ]
 
-      stdout, stderr, status = Open3.capture3(*command_args)
+      results = []
 
-      unless status.success?
-        raise <<~ERROR
-          super_grep failed!
+      IO.popen(command_args, err: :err) do |io|
+        io.each_line do |line|
+          # Line numbers are no longer outputted by super_grep/super_ripgrep
+          # Use String.new to create a copy and prevent memory retention from IO buffers
+          content = String.new(line.chomp)
 
-          Command:
-            #{command_args.join(" ")}
-
-          Exit status:
-            #{status.exitstatus}
-
-          STDERR:
-            #{stderr}
-        ERROR
+          if block_given?
+            yield content
+          else
+            results << content
+          end
+        end
       end
 
-      lines = stdout.lines.map { |line| String.new(line.chomp) }
-
-      if block_given?
-        lines.each { |line| yield line }
-        nil
-      else
-        lines
-      end
+      block_given? ? nil : results
     end
 
     def self.match_line?(line, string, regexp_mode: false)
