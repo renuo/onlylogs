@@ -50,8 +50,10 @@ else
 fi
 
 # Build grep command
-grep_cmd="grep --color=never -E --no-filename"
-[ -n "$max_matches" ] && grep_cmd="$grep_cmd --max-count=$max_matches"
+grep_cmd=(grep -E -h)             # -h = no filename (portable)
+if [ -n "$max_matches" ]; then
+  grep_cmd+=(-m "$max_matches")   # -m = max count (portable)
+fi
 
 # Handle byte range if specified
 if [ -n "$start_position" ] || [ -n "$end_position" ]; then
@@ -75,8 +77,8 @@ if [ -n "$start_position" ] || [ -n "$end_position" ]; then
   
   dd if="$file" bs="$block_size" skip=$start_mb count=$count_mb 2>/dev/null | \
     dd bs=1 skip=$start_offset count=$range_size 2>/dev/null | \
-    $grep_cmd "$query_regex"
+    "${grep_cmd[@]}" "$query_regex"
 else
   # Search entire file
-  $grep_cmd "$query_regex" "$file"
+  "${grep_cmd[@]}" "$query_regex" "$file"
 fi
