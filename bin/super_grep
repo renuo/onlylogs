@@ -37,9 +37,13 @@ file="$2"
 [ -f "$file" ] || exit 1
 
 # Prepare query regex based on mode
-color_regex="\\\e\\\[(1|30|31|32|33|34|35|36|37|39|0)m"
+esc=$'\033'
+color_regex="${esc}\[[0-9;]*m"
+
 if [ "$regexp_mode" = true ]; then
-  query_regex=$(echo "$query" | sed -E "s/ +/([[:space:]]|$color_regex)+/g")
+  # Translate common PCRE shorthands to POSIX ERE for grep -E
+  query_posix=$(echo "$query" | sed -E 's/\\d/[[:digit:]]/g')
+  query_regex=$(echo "$query_posix" | sed -E "s/ +/([[:space:]]|$color_regex)+/g")
 else
   escaped_query=$(echo "$query" | sed -E 's/([][{}()*+?.\\^$|])/\\\1/g')
   query_regex=$(echo "$escaped_query" | sed -E "s/ +/([[:space:]]|$color_regex)+/g")
