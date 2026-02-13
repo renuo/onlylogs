@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+export LC_ALL=C
 
 # Parse arguments
 max_matches=""
@@ -37,13 +38,22 @@ file="$2"
 [ -f "$file" ] || exit 1
 
 # Prepare query regex based on mode
-color_regex="\\x1b\\\[(1|30|31|32|33|34|35|36|37|39|0)m"
 if [ "$regexp_mode" = true ]; then
-  query_regex=$(echo "$query" | sed -E "s/ +/([[:space:]]|$color_regex)+/g")
+  # Translate \d to [0-9] for consistency
+  query_regex=$(printf "%s" "$query" | sed 's/\\d/[0-9]/g')
 else
-  escaped_query=$(echo "$query" | sed -E 's/([][{}()*+?.\\^$|])/\\\1/g')
-  query_regex=$(echo "$escaped_query" | sed -E "s/ +/([[:space:]]|$color_regex)+/g")
+  # Escape special characters
+  query_regex=$(printf "%s" "$query" | sed -E 's/([][{}()*+?.\\^$|])/\\\1/g')
 fi
+
+# Replace spaces with placeholder to avoid sed escaping hell for color regex
+placeholder="__COLOR_REGEX__"
+query_regex=$(printf "%s" "$query_regex" | sed -E "s/ +/([[:space:]]|$placeholder)+/g")
+
+# Use bash variable substitution to insert the actual color regex
+# Ripgrep supports \x1b directly
+actual_color_regex='\x1b\[[0-9;]*m'
+query_regex="${query_regex//$placeholder/$actual_color_regex}"
 
 # Build ripgrep command
 rg_cmd="rg --color=never --no-filename"

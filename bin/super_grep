@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+export LC_ALL=C
 
 # Parse arguments
 max_matches=""
@@ -37,17 +38,29 @@ file="$2"
 [ -f "$file" ] || exit 1
 
 # Prepare query regex based on mode
-color_regex="\\\e\\\[(1|30|31|32|33|34|35|36|37|39|0)m"
 if [ "$regexp_mode" = true ]; then
-  query_regex=$(echo "$query" | sed -E "s/ +/([[:space:]]|$color_regex)+/g")
+  # Translate \d to [0-9] for grep -E compatibility
+  query_regex=$(printf "%s" "$query" | sed 's/\\d/[0-9]/g')
 else
-  escaped_query=$(echo "$query" | sed -E 's/([][{}()*+?.\\^$|])/\\\1/g')
-  query_regex=$(echo "$escaped_query" | sed -E "s/ +/([[:space:]]|$color_regex)+/g")
+  # Escape special characters
+  query_regex=$(printf "%s" "$query" | sed -E 's/([][{}()*+?.\\^$|])/\\\1/g')
 fi
 
+# Replace spaces with placeholder to avoid sed escaping hell for color regex
+placeholder="__COLOR_REGEX__"
+query_regex=$(printf "%s" "$query_regex" | sed -E "s/ +/([[:space:]]|$placeholder)+/g")
+
+# Use bash variable substitution to insert the actual color regex
+ESC=$(printf '\033')
+actual_color_regex="${ESC}\\[[0-9;]*m"
+query_regex="${query_regex//$placeholder/$actual_color_regex}"
+
+
 # Build grep command
-grep_cmd="grep --color=never -E --no-filename"
-[ -n "$max_matches" ] && grep_cmd="$grep_cmd --max-count=$max_matches"
+grep_cmd=(grep -E -h)             # -h = no filename (portable)
+if [ -n "$max_matches" ]; then
+  grep_cmd+=(-m "$max_matches")   # -m = max count (portable)
+fi
 
 # Handle byte range if specified
 if [ -n "$start_position" ] || [ -n "$end_position" ]; then
@@ -71,8 +84,8 @@ if [ -n "$start_position" ] || [ -n "$end_position" ]; then
   
   dd if="$file" bs="$block_size" skip=$start_mb count=$count_mb 2>/dev/null | \
     dd bs=1 skip=$start_offset count=$range_size 2>/dev/null | \
-    $grep_cmd "$query_regex"
+    "${grep_cmd[@]}" "$query_regex"
 else
   # Search entire file
-  $grep_cmd "$query_regex" "$file"
+  "${grep_cmd[@]}" "$query_regex" "$file"
 fi
