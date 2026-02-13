@@ -1,27 +1,46 @@
-#!/usr/bin/env bash
+#!/usr/bin/env ruby
+# frozen_string_literal: true
 
-# Set output directory relative to this script
-FIXTURES_DIR="$(dirname "$0")/../test/fixtures/files"
-mkdir -p "$FIXTURES_DIR"
+require "fileutils"
+require "open-uri"
 
-FILES=(
-  "https://onlylogs-files.s3.eu-central-1.amazonaws.com/big.log"
-  "https://onlylogs-files.s3.eu-central-1.amazonaws.com/ultra_big.log"
-  "https://onlylogs-files.s3.eu-central-1.amazonaws.com/very_big.log"
-)
+fixtures_dir = File.expand_path("../test/fixtures/files", __dir__)
+FileUtils.mkdir_p(fixtures_dir)
 
-echo "Downloading performance test fixtures to $FIXTURES_DIR..."
+files = %w[
+  https://onlylogs-files.s3.eu-central-1.amazonaws.com/big.log
+  https://onlylogs-files.s3.eu-central-1.amazonaws.com/ultra_big.log
+  https://onlylogs-files.s3.eu-central-1.amazonaws.com/very_big.log
+]
 
-for url in "${FILES[@]}"; do
-  filename=$(basename "$url")
-  target="$FIXTURES_DIR/$filename"
-  
-  if [ -f "$target" ]; then
-    echo "Check: $filename already exists. Skipping..."
-  else
-    echo "Downloading $filename..."
-    curl -L "$url" -o "$target"
-  fi
-done
+puts "Downloading performance test fixtures to #{fixtures_dir}..."
 
-echo "Done! Performance fixtures are ready."
+files.each do |url|
+  filename = File.basename(url)
+  target = File.join(fixtures_dir, filename)
+
+  if File.exist?(target)
+    puts "Check: #{filename} already exists. Skipping..."
+    next
+  end
+
+  puts "Downloading #{filename}..."
+
+  begin
+    URI.open(
+      url,
+      "rb",
+      read_timeout: 60,
+      open_timeout: 15,
+      "User-Agent" => "ruby-fixtures-downloader"
+    ) do |remote|
+      File.open(target, "wb") do |file|
+        IO.copy_stream(remote, file)
+      end
+    end
+  rescue => e
+    warn "Failed to download #{filename}: #{e.class} - #{e.message}"
+  end
+end
+
+puts "Done! Performance fixtures are ready."
