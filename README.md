@@ -300,8 +300,6 @@ Performance tests require large log files that are not included in the repositor
 bin/download_performance_fixtures
 ```
 
-This will download `big.log`, `ultra_big.log`, and `very_big.log` to `test/fixtures/files/`.
-
 Once the fixtures are downloaded, you can run the performance tests locally:
 
 ```bash
