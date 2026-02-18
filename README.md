@@ -292,6 +292,23 @@ For testing how onlylogs behaves under production-like network conditions, you c
 ./bin/simulate_latency disable
 ```
 
+### Performance Testing
+
+Performance tests require large log files that are not included in the repository. You can download them using the provided script:
+
+```bash
+bin/download_performance_fixtures
+```
+
+Once the fixtures are downloaded, you can run the performance tests locally:
+
+```bash
+bin/rails test test/models/onlylogs/grep_performance_test.rb
+```
+
+> [!NOTE]
+> Performance tests are automatically skipped in CI environments or if the large fixture files are missing.
+
 ### Plans for the future
 
 We believe that by simply analysing your logs you can also have a fancy errors report.

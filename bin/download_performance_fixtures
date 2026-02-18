@@ -1,0 +1,46 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "fileutils"
+require "open-uri"
+
+fixtures_dir = File.expand_path("../test/fixtures/files", __dir__)
+FileUtils.mkdir_p(fixtures_dir)
+
+files = %w[
+  https://onlylogs-files.s3.eu-central-1.amazonaws.com/big.log
+  https://onlylogs-files.s3.eu-central-1.amazonaws.com/ultra_big.log
+  https://onlylogs-files.s3.eu-central-1.amazonaws.com/very_big.log
+]
+
+puts "Downloading performance test fixtures to #{fixtures_dir}..."
+
+files.each do |url|
+  filename = File.basename(url)
+  target = File.join(fixtures_dir, filename)
+
+  if File.exist?(target)
+    puts "Check: #{filename} already exists. Skipping..."
+    next
+  end
+
+  puts "Downloading #{filename}..."
+
+  begin
+    URI.open(
+      url,
+      "rb",
+      read_timeout: 60,
+      open_timeout: 15,
+      "User-Agent" => "ruby-fixtures-downloader"
+    ) do |remote|
+      File.open(target, "wb") do |file|
+        IO.copy_stream(remote, file)
+      end
+    end
+  rescue => e
+    warn "Failed to download #{filename}: #{e.class} - #{e.message}"
+  end
+end
+
+puts "Done! Performance fixtures are ready."
