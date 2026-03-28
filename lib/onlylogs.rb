@@ -13,5 +13,7 @@ require "onlylogs/socket_logger"
 # loader.setup
 
 module Onlylogs
-  mattr_accessor :importmap, default: Importmap::Map.new
+  if defined?(Importmap)
+    mattr_accessor :importmap, default: Importmap::Map.new
+  end
 end
