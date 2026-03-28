@@ -12,7 +12,13 @@ stream them to https://onlylogs.io and continue enjoying the same features.
 > [!IMPORTANT]
 > https://onlylogs.io is still in beta. Send us an email to a@renuo.ch if you want access to the platform.
 
-## Installation
+## Installation as self-hosted
+
+If you already have a disk, you can just keep there also your log files (as well as you probably already do).
+
+This section explains how to setup onlylogs to self host your logs and access them directly from your Rails app.
+
+If instead you want to stream your logs to https://onlylogs.io, head to the onlylogs.io instructions page.
 
 Add this line to your application's Gemfile:
 
@@ -62,6 +68,18 @@ Please be sure to secure them properly.
 
 > [!IMPORTANT]
 > By default, onlylogs endpoints are completely inaccessible until basic auth credentials are configured.
+
+### Notes about Docker
+
+If your app is running in a Docker container, for example with Kamal, remember to mount your logs folder:
+
+```yaml
+# config/deploy.yml
+volumes:
+- "storage:/rails/storage"
+- "cache:/rails/tmp/cache"
+- "logs:/rails/log"
+```
 
 ### Basic Authentication Setup
 
