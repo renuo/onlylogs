@@ -272,6 +272,18 @@ Onlylogs.configure do |config|
 end
 ```
 
+### Filtering Log Lines with a Denylist
+
+The `Onlylogs::Formatter` supports a denylist: an array of regular expressions that prevents matching lines from being logged. This is useful for filtering out noisy or irrelevant entries like health checks or asset requests.
+
+```ruby
+# config/environments/production.rb
+config.logger = Onlylogs::Logger.new(Rails.root.join("log", "production.log"))
+config.logger.formatter.denylist = [/health_check/, /ping/, /\.css\z/]
+```
+
+Any log message matching at least one pattern in the denylist will be silently dropped.
+
 ## Development & Contributing
 
 You are more than welcome to help and contribute to this package.  
