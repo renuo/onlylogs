@@ -40,10 +40,10 @@ module Onlylogs
       socket = ensure_socket
       socket&.puts(payload)
     rescue Errno::EPIPE, Errno::ECONNREFUSED, Errno::ENOENT => e
-      puts "Onlylogs::SocketLogger error: #{e.message}"
+      $stderr.puts "Onlylogs::SocketLogger error: #{e.message}"
       reconnect_socket
     rescue => e
-      puts "Onlylogs::SocketLogger unexpected error: #{e.class}: #{e.message}"
+      $stderr.puts "Onlylogs::SocketLogger unexpected error: #{e.class}: #{e.message}"
       reconnect_socket
     end
 
@@ -53,7 +53,7 @@ module Onlylogs
       @socket_mutex.synchronize do
         @socket ||= UNIXSocket.new(@socket_path)
       rescue => e
-        warn "Unable to connect to Onlylogs sidecar (#{@socket_path}): #{e.message}"
+        $stderr.puts "Unable to connect to Onlylogs sidecar (#{@socket_path}): #{e.message}"
         @socket = nil
       end
 
