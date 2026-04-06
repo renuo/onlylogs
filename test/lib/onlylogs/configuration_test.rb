@@ -106,7 +106,7 @@ module Onlylogs
       refute Onlylogs.allowed_file_path?(@disallowed_file.to_s)
     end
 
-    test "allowed_file_path? supports glob patterns" do
+    test "allowed_file_path? supports glob patterns including rotated log files" do
       # Create various log files
       log_files = [
         @test_dir.join("app.log"),
@@ -116,15 +116,18 @@ module Onlylogs
       ]
 
       # Create non-log files
+      rotated_log_files = [
+        @test_dir.join("app.log.1")
+      ]
+
       non_log_files = [
-        @test_dir.join("app.log.1"),
         @test_dir.join("config.txt"),
         @test_dir.join("data.json"),
         @test_dir.join("script.rb")
       ]
 
       # Create all files
-      (log_files + non_log_files).each do |file|
+      (log_files + rotated_log_files + non_log_files).each do |file|
         ::File.write(file, "content")
       end
 
@@ -137,10 +140,98 @@ module Onlylogs
         assert Onlylogs.allowed_file_path?(file.to_s), "#{file} should be allowed by *.log pattern"
       end
 
+      rotated_log_files.each do |file|
+        assert Onlylogs.allowed_file_path?(file.to_s), "#{file} should be allowed by *.log pattern"
+      end
+
       # Non-log files should not be allowed
       non_log_files.each do |file|
         refute Onlylogs.allowed_file_path?(file.to_s), "#{file} should not be allowed by *.log pattern"
       end
+    end
+
+    test "allowed_file_path? allows rotated files for .log glob patterns" do
+      base_log_file = @test_dir.join("development.log")
+      rotated_log_file = @test_dir.join("development.log.1")
+      compressed_rotated_log_file = @test_dir.join("development.log.2.gz")
+      non_log_file = @test_dir.join("development.txt")
+
+      ::File.write(base_log_file, "base content")
+      ::File.write(rotated_log_file, "rotated content")
+      ::File.write(compressed_rotated_log_file, "compressed rotated content")
+      ::File.write(non_log_file, "non log content")
+
+      Onlylogs.configure do |config|
+        config.allowed_files = [ @test_dir.join("*.log").to_s ]
+      end
+
+      assert Onlylogs.allowed_file_path?(base_log_file.to_s)
+      assert Onlylogs.allowed_file_path?(rotated_log_file.to_s)
+      assert Onlylogs.allowed_file_path?(compressed_rotated_log_file.to_s)
+      refute Onlylogs.allowed_file_path?(non_log_file.to_s)
+    end
+
+    test "allowed_file_path? allows rotated files for explicitly allowed log files" do
+      rotated_log_file = @test_dir.join("allowed.log.1")
+      compressed_rotated_log_file = @test_dir.join("allowed.log.2.gz")
+      unrelated_file = @test_dir.join("allowed.logfile")
+
+      ::File.write(rotated_log_file, "rotated content")
+      ::File.write(compressed_rotated_log_file, "compressed rotated content")
+      ::File.write(unrelated_file, "unrelated content")
+
+      Onlylogs.configure do |config|
+        config.allowed_files = [ @allowed_file.to_s ]
+      end
+
+      assert Onlylogs.allowed_file_path?(rotated_log_file.to_s)
+      assert Onlylogs.allowed_file_path?(compressed_rotated_log_file.to_s)
+      refute Onlylogs.allowed_file_path?(unrelated_file.to_s)
+    end
+
+    test "existing_allowed_files includes rotated files for explicitly allowed log files" do
+      rotated_log_file = @test_dir.join("allowed.log.1")
+      compressed_rotated_log_file = @test_dir.join("allowed.log.2.gz")
+      missing_rotated_log_file = @test_dir.join("allowed.log.3")
+
+      ::File.write(rotated_log_file, "rotated content")
+      ::File.write(compressed_rotated_log_file, "compressed rotated content")
+
+      Onlylogs.configure do |config|
+        config.allowed_files = [ @allowed_file.to_s ]
+      end
+
+      assert_equal [
+        @allowed_file,
+        rotated_log_file,
+        compressed_rotated_log_file
+      ].sort, Onlylogs.existing_allowed_files.sort
+      refute_includes Onlylogs.existing_allowed_files, missing_rotated_log_file
+    end
+
+    test "existing_allowed_files includes rotated files for .log glob patterns" do
+      base_log_file = @test_dir.join("development.log")
+      rotated_log_file = @test_dir.join("development.log.1")
+      compressed_rotated_log_file = @test_dir.join("development.log.2.gz")
+      non_log_file = @test_dir.join("development.txt")
+
+      ::File.write(base_log_file, "base content")
+      ::File.write(rotated_log_file, "rotated content")
+      ::File.write(compressed_rotated_log_file, "compressed rotated content")
+      ::File.write(non_log_file, "non log content")
+
+      Onlylogs.configure do |config|
+        config.allowed_files = [ @test_dir.join("*.log").to_s ]
+      end
+
+      assert_equal [
+        @allowed_file,
+        @disallowed_file,
+        base_log_file,
+        rotated_log_file,
+        compressed_rotated_log_file
+      ].sort, Onlylogs.existing_allowed_files.sort
+      refute_includes Onlylogs.existing_allowed_files, non_log_file
     end
 
     test "default authentication credentials are nil" do

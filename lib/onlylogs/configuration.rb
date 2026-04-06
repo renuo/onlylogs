@@ -6,6 +6,8 @@ module Onlylogs
                   :parent_controller, :disable_basic_authentication, :ripgrep_enabled, :editor,
                   :max_line_matches
 
+    private_class_method :allowed_file_patterns_for, :glob_pattern?
+
     def initialize
       @allowed_files = default_allowed_files
       @default_log_file_path = default_log_file_path_value
@@ -80,8 +82,9 @@ module Onlylogs
     path = ::File.expand_path(file_path.to_s)
 
     configuration.allowed_files.any? do |pattern|
-      pat = ::File.expand_path(pattern.to_s)
-      ::File.fnmatch?(pat, path, ::File::FNM_PATHNAME | ::File::FNM_DOTMATCH)
+      allowed_file_patterns_for(pattern).any? do |pat|
+        ::File.fnmatch?(pat, path, ::File::FNM_PATHNAME | ::File::FNM_DOTMATCH)
+      end
     end
   end
 
@@ -92,17 +95,12 @@ module Onlylogs
     patterns = Array(configuration.allowed_files)
 
     paths = patterns.flat_map do |pattern|
-      # Normalize to absolute path string
-      pattern_str = pattern.to_s
-      absolute_pattern = ::File.expand_path(pattern_str)
-
-      # Detect presence of glob meta characters. This includes **, *, ?, [], {} forms.
-      if pattern_str.match?(/[\*\?\[\]\{\}]/)
-        Dir.glob(absolute_pattern, ::File::FNM_DOTMATCH | ::File::FNM_PATHNAME).select { |p|
-          ::File.file?(p)
-        }
-      else
-        ::File.file?(absolute_pattern) ? [absolute_pattern] : []
+      allowed_file_patterns_for(pattern).flat_map do |expanded_pattern|
+        if glob_pattern?(expanded_pattern)
+          Dir.glob(expanded_pattern, ::File::FNM_DOTMATCH | ::File::FNM_PATHNAME).select { |p| ::File.file?(p) }
+        else
+          ::File.file?(expanded_pattern) ? [expanded_pattern] : []
+        end
       end
     end
 
@@ -149,5 +147,22 @@ module Onlylogs
 
   def self.max_line_matches
     configuration.max_line_matches
+  end
+
+  def self.allowed_file_patterns_for(pattern)
+    absolute_pattern = ::File.expand_path(pattern.to_s)
+    if glob_pattern?(absolute_pattern)
+      return [ absolute_pattern, "#{absolute_pattern}.*" ] if absolute_pattern.end_with?(".log")
+
+      return [ absolute_pattern ]
+    end
+
+    return [ absolute_pattern, "#{absolute_pattern}.*" ] if absolute_pattern.end_with?(".log")
+
+    [ absolute_pattern ]
+  end
+
+  def self.glob_pattern?(pattern)
+    pattern.match?(/[\*\?\[\]\{\}]/)
   end
 end
