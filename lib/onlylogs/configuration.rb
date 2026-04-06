@@ -6,8 +6,6 @@ module Onlylogs
                   :parent_controller, :disable_basic_authentication, :ripgrep_enabled, :editor,
                   :max_line_matches
 
-    private_class_method :allowed_file_patterns_for, :glob_pattern?
-
     def initialize
       @allowed_files = default_allowed_files
       @default_log_file_path = default_log_file_path_value
@@ -165,4 +163,6 @@ module Onlylogs
   def self.glob_pattern?(pattern)
     pattern.match?(/[\*\?\[\]\{\}]/)
   end
+
+  private_class_method :allowed_file_patterns_for, :glob_pattern?
 end
