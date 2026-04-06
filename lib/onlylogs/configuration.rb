@@ -97,7 +97,7 @@ module Onlylogs
         if glob_pattern?(expanded_pattern)
           Dir.glob(expanded_pattern, ::File::FNM_DOTMATCH | ::File::FNM_PATHNAME).select { |p| ::File.file?(p) }
         else
-          ::File.file?(expanded_pattern) ? [expanded_pattern] : []
+          ::File.file?(expanded_pattern) ? [ expanded_pattern ] : []
         end
       end
     end

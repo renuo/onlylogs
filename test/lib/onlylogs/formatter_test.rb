@@ -25,14 +25,14 @@ module Onlylogs
     end
 
     test "filters messages matching denylist patterns" do
-      @formatter.denylist = [/password/i, /secret_token/]
+      @formatter.denylist = [ /password/i, /secret_token/ ]
 
       assert_nil @formatter.call("INFO", @time, nil, "User changed Password successfully")
       assert_nil @formatter.call("DEBUG", @time, nil, "secret_token=abc123")
     end
 
     test "allows messages not matching denylist patterns" do
-      @formatter.denylist = [/password/i]
+      @formatter.denylist = [ /password/i ]
 
       result = @formatter.call("INFO", @time, nil, "User logged in")
       assert_not_nil result
@@ -40,7 +40,7 @@ module Onlylogs
     end
 
     test "supports multiple denylist patterns" do
-      @formatter.denylist = [/health_check/, /ping/, /\.css\z/]
+      @formatter.denylist = [ /health_check/, /ping/, /\.css\z/ ]
 
       assert_nil @formatter.call("INFO", @time, nil, "GET /health_check 200")
       assert_nil @formatter.call("INFO", @time, nil, "GET /ping 200")
