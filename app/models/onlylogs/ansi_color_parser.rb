@@ -35,7 +35,7 @@ module Onlylogs
     }.freeze
 
     # Pre-built closing span (frozen for better performance)
-    CLOSING_SPAN = '</span>'.freeze
+    CLOSING_SPAN = "</span>".freeze
 
     def self.parse(string)
       return string if string.blank?

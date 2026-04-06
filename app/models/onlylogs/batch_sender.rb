@@ -28,7 +28,7 @@ module Onlylogs
 
       @running = false
       @sender_thread&.join(0.1)
-      
+
       # Send any remaining lines
       send_batch
     end
@@ -43,13 +43,13 @@ module Onlylogs
 
     def send_batch
       lines_to_send = nil
-      
+
       @mutex.synchronize do
         return if @buffer.empty?
         lines_to_send = @buffer.dup
         @buffer.clear
       end
-      
+
       return if lines_to_send.empty?
 
       @channel.send(:transmit, {

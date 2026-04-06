@@ -58,10 +58,10 @@ module Onlylogs
     @cached_editor_instance = nil
 
     def self.cached_editor_instance
-      return @cached_editor_instance if @cached_editor_instance      
-      @cached_editor_instance = editor_from_symbol(Onlylogs.editor)      
+      return @cached_editor_instance if @cached_editor_instance
+      @cached_editor_instance = editor_from_symbol(Onlylogs.editor)
     end
-    
+
 
     def self.editor_from_symbol(symbol)
       KNOWN_EDITORS.each do |preset|

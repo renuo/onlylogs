@@ -18,7 +18,7 @@ module Onlylogs
     end
 
     def to_a
-      [number, text]
+      [ number, text ]
     end
   end
 end
