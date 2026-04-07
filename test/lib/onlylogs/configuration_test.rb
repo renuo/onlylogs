@@ -44,20 +44,19 @@ module Onlylogs
 
     test "configure block sets log file patterns" do
       Onlylogs.configure do |config|
-        config.log_file_patterns = [ @allowed_file.to_s ]
+        config.log_file_patterns = [@allowed_file.to_s]
       end
 
       assert Onlylogs.file_path_permitted?(@allowed_file.to_s)
       refute Onlylogs.file_path_permitted?(@disallowed_file.to_s)
     end
 
-
     test "file_path_permitted? handles multiple allowed files" do
       another_allowed = @test_dir.join("another.log")
       ::File.write(another_allowed, "another content")
 
       Onlylogs.configure do |config|
-        config.log_file_patterns = [ @allowed_file.to_s, another_allowed.to_s ]
+        config.log_file_patterns = [@allowed_file.to_s, another_allowed.to_s]
       end
 
       assert Onlylogs.file_path_permitted?(@allowed_file.to_s)
@@ -68,7 +67,7 @@ module Onlylogs
 
     test "file_path_permitted? normalizes file paths" do
       Onlylogs.configure do |config|
-        config.log_file_patterns = [ @allowed_file.to_s ]
+        config.log_file_patterns = [@allowed_file.to_s]
       end
 
       relative_path = Rails.root.join("tmp/configuration_test/allowed.log").to_s
@@ -84,7 +83,7 @@ module Onlylogs
       ::File.write(other_allowed, "other content")
 
       Onlylogs.configure do |config|
-        config.log_file_patterns = [ @allowed_file.to_s, other_allowed.to_s ]
+        config.log_file_patterns = [@allowed_file.to_s, other_allowed.to_s]
       end
 
       assert Onlylogs.file_path_permitted?(@allowed_file.to_s)
@@ -132,7 +131,7 @@ module Onlylogs
       end
 
       Onlylogs.configure do |config|
-        config.log_file_patterns = [ @test_dir.join("*.log").to_s ]
+        config.log_file_patterns = [@test_dir.join("*.log").to_s]
       end
 
       # All .log files should be allowed
@@ -162,7 +161,7 @@ module Onlylogs
       ::File.write(non_log_file, "non log content")
 
       Onlylogs.configure do |config|
-        config.log_file_patterns = [ @test_dir.join("*.log").to_s ]
+        config.log_file_patterns = [@test_dir.join("*.log").to_s]
       end
 
       assert Onlylogs.file_path_permitted?(base_log_file.to_s)
@@ -181,7 +180,7 @@ module Onlylogs
       ::File.write(unrelated_file, "unrelated content")
 
       Onlylogs.configure do |config|
-        config.log_file_patterns = [ @allowed_file.to_s ]
+        config.log_file_patterns = [@allowed_file.to_s]
       end
 
       assert Onlylogs.file_path_permitted?(rotated_log_file.to_s)
@@ -198,7 +197,7 @@ module Onlylogs
       ::File.write(compressed_rotated_log_file, "compressed rotated content")
 
       Onlylogs.configure do |config|
-        config.log_file_patterns = [ @allowed_file.to_s ]
+        config.log_file_patterns = [@allowed_file.to_s]
       end
 
       assert_equal [
@@ -221,7 +220,7 @@ module Onlylogs
       ::File.write(non_log_file, "non log content")
 
       Onlylogs.configure do |config|
-        config.log_file_patterns = [ @test_dir.join("*.log").to_s ]
+        config.log_file_patterns = [@test_dir.join("*.log").to_s]
       end
 
       assert_equal [

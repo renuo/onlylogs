@@ -3,8 +3,8 @@
 module Onlylogs
   class Configuration
     attr_accessor :log_file_patterns, :default_log_file_path, :basic_auth_user, :basic_auth_password,
-                  :parent_controller, :disable_basic_authentication, :ripgrep_enabled, :editor,
-                  :max_line_matches
+      :parent_controller, :disable_basic_authentication, :ripgrep_enabled, :editor,
+      :max_line_matches
 
     def initialize
       @log_file_patterns = default_log_file_patterns
@@ -97,7 +97,7 @@ module Onlylogs
         if glob_pattern?(expanded_pattern)
           Dir.glob(expanded_pattern, ::File::FNM_DOTMATCH | ::File::FNM_PATHNAME).select { |p| ::File.file?(p) }
         else
-          ::File.file?(expanded_pattern) ? [ expanded_pattern ] : []
+          ::File.file?(expanded_pattern) ? [expanded_pattern] : []
         end
       end
     end
@@ -150,18 +150,18 @@ module Onlylogs
   def self.allowed_file_patterns_for(pattern)
     absolute_pattern = ::File.expand_path(pattern.to_s)
     if glob_pattern?(absolute_pattern)
-      return [ absolute_pattern, "#{absolute_pattern}.*" ] if absolute_pattern.end_with?(".log")
+      return [absolute_pattern, "#{absolute_pattern}.*"] if absolute_pattern.end_with?(".log")
 
-      return [ absolute_pattern ]
+      return [absolute_pattern]
     end
 
-    return [ absolute_pattern, "#{absolute_pattern}.*" ] if absolute_pattern.end_with?(".log")
+    return [absolute_pattern, "#{absolute_pattern}.*"] if absolute_pattern.end_with?(".log")
 
-    [ absolute_pattern ]
+    [absolute_pattern]
   end
 
   def self.glob_pattern?(pattern)
-    pattern.match?(/[\*\?\[\]\{\}]/)
+    pattern.match?(/[*?\[\]{}]/)
   end
 
   private_class_method :allowed_file_patterns_for, :glob_pattern?

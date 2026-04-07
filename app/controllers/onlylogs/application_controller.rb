@@ -1,5 +1,5 @@
 module Onlylogs
-  class ApplicationController < (Onlylogs.parent_controller&.constantize || ActionController::Base)
+  class ApplicationController < Onlylogs.parent_controller&.constantize || ActionController::Base
     before_action :authenticate_onlylogs_user!
 
     private

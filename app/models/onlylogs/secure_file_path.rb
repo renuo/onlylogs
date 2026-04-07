@@ -22,9 +22,7 @@ module Onlylogs
       raise SecurityError, "Invalid encrypted file path"
     end
 
-    private
-
-    def self.encryption_key
+    private_class_method def self.encryption_key
       Rails.application.secret_key_base[0..31]
     end
   end
