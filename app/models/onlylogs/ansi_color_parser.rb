@@ -17,25 +17,25 @@ module Onlylogs
     }.freeze
 
     # Pre-compiled regex for better performance
-    ANSI_REGEX = /\x1b\[(\d+)m/.freeze
+    ANSI_REGEX = /\x1b\[(\d+)m/
 
     # Pre-built HTML templates to avoid string interpolation (frozen for better performance)
     HTML_TEMPLATES = {
-      "1" => '<span class="fw-bold">'.freeze,
-      "30" => '<span class="log-black">'.freeze,
-      "31" => '<span class="log-red">'.freeze,
-      "32" => '<span class="log-green">'.freeze,
-      "33" => '<span class="log-yellow">'.freeze,
-      "34" => '<span class="log-blue">'.freeze,
-      "35" => '<span class="log-magenta">'.freeze,
-      "36" => '<span class="log-cyan">'.freeze,
-      "37" => '<span class="log-white">'.freeze,
-      "39" => '<span class="">'.freeze,
-      "0" => "".freeze # Reset (no color)
+      "1" => '<span class="fw-bold">',
+      "30" => '<span class="log-black">',
+      "31" => '<span class="log-red">',
+      "32" => '<span class="log-green">',
+      "33" => '<span class="log-yellow">',
+      "34" => '<span class="log-blue">',
+      "35" => '<span class="log-magenta">',
+      "36" => '<span class="log-cyan">',
+      "37" => '<span class="log-white">',
+      "39" => '<span class="">',
+      "0" => "" # Reset (no color)
     }.freeze
 
     # Pre-built closing span (frozen for better performance)
-    CLOSING_SPAN = "</span>".freeze
+    CLOSING_SPAN = "</span>"
 
     def self.parse(string)
       return string if string.blank?

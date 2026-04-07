@@ -18,9 +18,9 @@ module Onlylogs
           file_path = Onlylogs::SecureFilePath.decrypt(encrypted_file_path)
 
           # Verify the decrypted path is still allowed
-          unless Onlylogs.allowed_file_path?(file_path)
+          unless Onlylogs.file_path_permitted?(file_path)
             Rails.logger.error "Onlylogs: Attempted to access non-allowed file: #{file_path}"
-            transmit({ action: "error", content: "Access denied" })
+            transmit({action: "error", content: "Access denied"})
             return
           end
         else
@@ -29,13 +29,13 @@ module Onlylogs
         end
       rescue Onlylogs::SecureFilePath::SecurityError => e
         Rails.logger.error "Onlylogs: Security violation - #{e.message}"
-        transmit({ action: "error", content: "Access denied" })
+        transmit({action: "error", content: "Access denied"})
         return
       end
 
       # Check if the file is a text file
       unless Onlylogs::File.text_file?(file_path)
-        transmit({ action: "error", content: "Cannot read file: File is not a text file" })
+        transmit({action: "error", content: "Cannot read file: File is not a text file"})
         return
       end
 
@@ -57,7 +57,7 @@ module Onlylogs
 
     def stop_watcher
       cleanup_existing_operations
-      transmit({ action: "finish", content: "Search stopped." })
+      transmit({action: "finish", content: "Search stopped."})
     end
 
     def unsubscribed
@@ -82,11 +82,11 @@ module Onlylogs
       @filter = filter
       @regexp_mode = regexp_mode
 
-      transmit({ action: "message", content: "Reading file. Please wait..." })
+      transmit({action: "message", content: "Reading file. Please wait..."})
 
       @log_file = Onlylogs::File.new(file_path, last_position: cursor_position)
 
-      transmit({ action: "message", content: "" })
+      transmit({action: "message", content: ""})
 
       @log_watcher_thread = Thread.new do
         Rails.logger.silence(Logger::ERROR) do
@@ -107,13 +107,13 @@ module Onlylogs
 
             if lines_to_send.any?
               transmit({
-                         action: "append_logs",
-                         lines: lines_to_send
-                       })
+                action: "append_logs",
+                lines: lines_to_send
+              })
             end
           end
         end
-      rescue StandardError => e
+      rescue => e
         Rails.logger.error "Log watcher error: #{e.message}"
         Rails.logger.error e.backtrace.join("\n")
       ensure
@@ -147,7 +147,7 @@ module Onlylogs
       @log_watcher_running = true
       @log_file = Onlylogs::File.new(file_path, last_position: 0)
 
-      transmit({ action: "message", content: "Searching..." })
+      transmit({action: "message", content: "Searching..."})
 
       @batch_sender = BatchSender.new(self)
       @batch_sender.start
@@ -157,7 +157,7 @@ module Onlylogs
       begin
         Rails.logger.silence(Logger::ERROR) do
           @log_file.grep(filter, regexp_mode: regexp_mode, start_position: start_position, end_position: end_position) do |log_line|
-            return if @batch_sender.nil?
+            break if @batch_sender.nil?
 
             # Add to batch buffer (sender thread will handle sending)
             @batch_sender.add_line(render_log_line(log_line))
@@ -171,9 +171,9 @@ module Onlylogs
 
         # Send completion message
         if line_count >= Onlylogs.max_line_matches
-          transmit({ action: "finish", content: "Search finished. Search results limit reached." })
+          transmit({action: "finish", content: "Search finished. Search results limit reached."})
         else
-          transmit({ action: "finish", content: "Search finished." })
+          transmit({action: "finish", content: "Search finished."})
         end
       ensure
         # Always cleanup even if interrupted or error occurs

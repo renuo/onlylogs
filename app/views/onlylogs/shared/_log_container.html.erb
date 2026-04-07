@@ -7,7 +7,7 @@
     mode = filter.blank? ? "live" : "search"
     cursor_position = mode == "search" ? 0 : [File.size(log_file_path) - (tail * 100), 0].max
 
-    raise SecurityError, "File path not allowed" unless Onlylogs.allowed_file_path?(log_file_path)
+    raise SecurityError, "File path not allowed" unless Onlylogs.file_path_permitted?(log_file_path)
 
     encrypted_log_file_path = Onlylogs::SecureFilePath.encrypt(log_file_path)
 %>

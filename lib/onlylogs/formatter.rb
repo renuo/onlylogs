@@ -12,7 +12,7 @@ module Onlylogs
     def call(severity, time, progname, msg)
       return nil if "Onlylogs::LogsChannel".in?(msg)
       return nil if denylist.any? { |pattern| pattern.match?(msg) }
-      tags = [ time.iso8601, severity[0].upcase ]
+      tags = [time.iso8601, severity[0].upcase]
       push_tags tags
       str = super
       pop_tags tags.size

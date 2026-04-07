@@ -26,12 +26,12 @@ Puma::Plugin.create do
     FileUtils.mkdir_p(sockets_dir)
 
     @socket_path = env_or_option("ONLYLOGS_SIDECAR_SOCKET", :onlylogs_socket,
-                                 File.join(sockets_dir, "onlylogs-sidecar.sock"))
+      File.join(sockets_dir, "onlylogs-sidecar.sock"))
     @drain_url = ENV["ONLYLOGS_DRAIN_URL"] || @options[:onlylogs_drain_url]
     @batch_size = env_or_option("ONLYLOGS_BATCH_SIZE", :onlylogs_batch_size, 100).to_i
     @flush_interval = env_or_option("ONLYLOGS_FLUSH_INTERVAL", :onlylogs_flush_interval, 0.5).to_f
     @sidecar_script = env_or_option("ONLYLOGS_SIDECAR_BIN", :onlylogs_sidecar_bin,
-                                    File.expand_path("../../../bin/onlylogs_sidecar", __dir__))
+      File.expand_path("../../../bin/onlylogs_sidecar", __dir__))
   end
 
   def register_hooks
@@ -63,8 +63,8 @@ Puma::Plugin.create do
 
     info "Starting Onlylogs sidecar (socket: #{@socket_path}, drain: #{@drain_url})"
     @sidecar_pid = Process.spawn(env, RbConfig.ruby, @sidecar_script,
-                                 chdir: @app_root,
-                                 pgroup: true)
+      chdir: @app_root,
+      pgroup: true)
   rescue Errno::ENOENT => e
     error "Unable to start sidecar: #{e.message}"
   end
@@ -85,7 +85,11 @@ Puma::Plugin.create do
     # Already stopped
   rescue Timeout::Error
     warn "Sidecar did not stop in time, killing"
-    Process.kill("KILL", -pgid) rescue nil
+    begin
+      Process.kill("KILL", -pgid)
+    rescue
+      nil
+    end
   ensure
     @sidecar_pid = nil
     remove_socket_file

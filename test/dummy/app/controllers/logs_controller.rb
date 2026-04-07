@@ -14,7 +14,6 @@ class LogsController < ApplicationController
         redirect_to root_path, alert: "File not found"
         return
       end
-
     rescue Onlylogs::SecureFilePath::SecurityError => e
       Rails.logger.error "LogsController: Security violation - #{e.message}"
       redirect_to root_path, alert: "Access denied"

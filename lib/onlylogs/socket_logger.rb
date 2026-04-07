@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require "socket"
-require "thread"
 
 # This logger sends messages to onlylogs.io via a UNIX socket connected to the onlylogs sidecar process.
 # You need to have the onlylogs sidecar running for this to work.
@@ -29,7 +28,7 @@ module Onlylogs
 
       formatted = format_message(format_severity(severity), Time.now, progname, message.to_s)
       send_to_socket(formatted)
-      super(severity, message, progname, &block)
+      super
     end
 
     private
@@ -40,10 +39,10 @@ module Onlylogs
       socket = ensure_socket
       socket&.puts(payload)
     rescue Errno::EPIPE, Errno::ECONNREFUSED, Errno::ENOENT => e
-      $stderr.puts "Onlylogs::SocketLogger error: #{e.message}"
+      warn "Onlylogs::SocketLogger error: #{e.message}"
       reconnect_socket
     rescue => e
-      $stderr.puts "Onlylogs::SocketLogger unexpected error: #{e.class}: #{e.message}"
+      warn "Onlylogs::SocketLogger unexpected error: #{e.class}: #{e.message}"
       reconnect_socket
     end
 
@@ -53,7 +52,7 @@ module Onlylogs
       @socket_mutex.synchronize do
         @socket ||= UNIXSocket.new(@socket_path)
       rescue => e
-        $stderr.puts "Unable to connect to Onlylogs sidecar (#{@socket_path}): #{e.message}"
+        warn "Unable to connect to Onlylogs sidecar (#{@socket_path}): #{e.message}"
         @socket = nil
       end
 
@@ -62,7 +61,11 @@ module Onlylogs
 
     def reconnect_socket
       @socket_mutex.synchronize do
-        @socket&.close rescue nil
+        begin
+          @socket&.close
+        rescue
+          nil
+        end
         @socket = nil
       end
     end

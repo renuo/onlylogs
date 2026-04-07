@@ -15,7 +15,7 @@ module Onlylogs
       end
 
       app.config.assets.paths << root.join("app/javascript")
-      app.config.assets.precompile += %w[ onlylogs_manifest ]
+      app.config.assets.precompile += %w[onlylogs_manifest]
     end
 
     if defined?(Importmap)

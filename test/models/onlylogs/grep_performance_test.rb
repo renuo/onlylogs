@@ -1,7 +1,6 @@
 # This test is a performance test and can be run locally with the use of the downloaded big file but will not be run on the CI
 require "test_helper"
 
-
 class Onlylogs::GrepPerformanceTest < ActiveSupport::TestCase
   def setup
     @fixture_path = ::File.expand_path("../../fixtures/files/log_file_100_lines.txt", __dir__)
@@ -33,7 +32,7 @@ class Onlylogs::GrepPerformanceTest < ActiveSupport::TestCase
         # Check memory usage every 100,000 lines to catch peak usage
         if line_count % 100_000 == 0
           current_memory = `ps -o rss= -p #{Process.pid}`.to_i
-          max_memory_during_processing = [ max_memory_during_processing, current_memory ].max
+          max_memory_during_processing = [max_memory_during_processing, current_memory].max
         end
 
         # Process the line but don't store it

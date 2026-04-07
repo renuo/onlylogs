@@ -2,12 +2,12 @@
 
 module Onlylogs
   class Configuration
-    attr_accessor :allowed_files, :default_log_file_path, :basic_auth_user, :basic_auth_password,
-                  :parent_controller, :disable_basic_authentication, :ripgrep_enabled, :editor,
-                  :max_line_matches
+    attr_accessor :log_file_patterns, :default_log_file_path, :basic_auth_user, :basic_auth_password,
+      :parent_controller, :disable_basic_authentication, :ripgrep_enabled, :editor,
+      :max_line_matches
 
     def initialize
-      @allowed_files = default_allowed_files
+      @log_file_patterns = default_log_file_patterns
       @default_log_file_path = default_log_file_path_value
       @basic_auth_user = default_basic_auth_user
       @basic_auth_password = default_basic_auth_password
@@ -44,7 +44,7 @@ module Onlylogs
       :vscode
     end
 
-    def default_allowed_files
+    def default_log_file_patterns
       # Default to environment-specific log files (without rotation suffixes)
       [
         Rails.root.join("log/#{Rails.env}.log")
@@ -76,13 +76,33 @@ module Onlylogs
     yield configuration
   end
 
-  def self.allowed_file_path?(file_path)
+  def self.file_path_permitted?(file_path)
     path = ::File.expand_path(file_path.to_s)
 
-    configuration.allowed_files.any? do |pattern|
-      pat = ::File.expand_path(pattern.to_s)
-      ::File.fnmatch?(pat, path, ::File::FNM_PATHNAME | ::File::FNM_DOTMATCH)
+    configuration.log_file_patterns.any? do |pattern|
+      allowed_file_patterns_for(pattern).any? do |pat|
+        ::File.fnmatch?(pat, path, ::File::FNM_PATHNAME | ::File::FNM_DOTMATCH)
+      end
     end
+  end
+
+  # Returns all existing files on disk that match the configured allowed_files patterns.
+  # Supports direct file paths and glob patterns (e.g., *.log, **/*.log).
+  # Returns Pathname objects so callers can access both the basename and the absolute path.
+  def self.available_log_files
+    patterns = Array(configuration.log_file_patterns)
+
+    paths = patterns.flat_map do |pattern|
+      allowed_file_patterns_for(pattern).flat_map do |expanded_pattern|
+        if glob_pattern?(expanded_pattern)
+          Dir.glob(expanded_pattern, ::File::FNM_DOTMATCH | ::File::FNM_PATHNAME).select { |p| ::File.file?(p) }
+        else
+          ::File.file?(expanded_pattern) ? [expanded_pattern] : []
+        end
+      end
+    end
+
+    paths.uniq.sort.map { |p| Pathname.new(p) }
   end
 
   def self.default_log_file_path
@@ -126,4 +146,23 @@ module Onlylogs
   def self.max_line_matches
     configuration.max_line_matches
   end
+
+  def self.allowed_file_patterns_for(pattern)
+    absolute_pattern = ::File.expand_path(pattern.to_s)
+    if glob_pattern?(absolute_pattern)
+      return [absolute_pattern, "#{absolute_pattern}.*"] if absolute_pattern.end_with?(".log")
+
+      return [absolute_pattern]
+    end
+
+    return [absolute_pattern, "#{absolute_pattern}.*"] if absolute_pattern.end_with?(".log")
+
+    [absolute_pattern]
+  end
+
+  def self.glob_pattern?(pattern)
+    pattern.match?(/[*?\[\]{}]/)
+  end
+
+  private_class_method :allowed_file_patterns_for, :glob_pattern?
 end

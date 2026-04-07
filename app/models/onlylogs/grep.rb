@@ -5,8 +5,8 @@ module Onlylogs
       script_name = Onlylogs.ripgrep_enabled? ? "super_ripgrep" : "super_grep"
       super_grep_path = ::File.expand_path("../../../bin/#{script_name}", __dir__)
 
-      command_args = [ super_grep_path ]
-      command_args += [ "--max-matches", Onlylogs.max_line_matches.to_s ] if Onlylogs.max_line_matches.present?
+      command_args = [super_grep_path]
+      command_args += ["--max-matches", Onlylogs.max_line_matches.to_s] if Onlylogs.max_line_matches.present?
       command_args << "--regexp" if regexp_mode
 
       # Add byte range parameters if specified
@@ -15,7 +15,7 @@ module Onlylogs
         command_args << "--end-position" << end_position.to_s if end_position
       end
 
-      command_args += [ pattern, file_path ]
+      command_args += [pattern, file_path]
 
       results = []
 

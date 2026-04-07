@@ -1,6 +1,5 @@
 require "test_helper"
 
-
 class Onlylogs::GrepTest < ActiveSupport::TestCase
   def setup
     @fixture_path = ::File.expand_path("../../fixtures/files/log_file_100_lines.txt", __dir__)
@@ -18,7 +17,7 @@ class Onlylogs::GrepTest < ActiveSupport::TestCase
 
   def self.test_both_engine_modes(test_name, &block)
     test test_name do
-      [ false, true ].each do |ripgrep_enabled|
+      [false, true].each do |ripgrep_enabled|
         Onlylogs.configuration.ripgrep_enabled = ripgrep_enabled
         engine_name = ripgrep_enabled ? "ripgrep" : "grep"
         instance_exec(engine_name, &block)
@@ -53,7 +52,7 @@ class Onlylogs::GrepTest < ActiveSupport::TestCase
   test_both_engine_modes "it can grep a string when the line contains ansi colors" do |engine_name|
     expected_line = "\e[1m\e[36mActiveRecord::SchemaMigration Load (0.0ms)\e[0m  \e[1m\e[34mSELECT ...\e[0m"
     lines = Onlylogs::Grep.grep("(0.0ms) SELECT", @special_lines_path)
-    assert_equal [ expected_line ], lines, "Failed with #{engine_name}"
+    assert_equal [expected_line], lines, "Failed with #{engine_name}"
   end
 
   test_both_engine_modes "it can grep a string with special regex characters" do |engine_name|
