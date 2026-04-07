@@ -1,29 +1,41 @@
 <style>
     .grid {
         display: grid;
-        grid-template-rows: 40px 1fr;
+        grid-template-rows: 32px 1fr;
         height: 100vh;
     }
 
-    .log-file-dropdown {
-        display: inline-flex;
+    .grid-header {
+        display: flex;
         align-items: center;
-        gap: 0.5rem;
-        margin-left: 0.75rem;
+        border-bottom: 1px solid lightgray;
     }
 
-    .log-file-dropdown select {
-        max-width: 28rem;
-        padding: 0.3rem 0.5rem;
+    .logo {
+        height: 20px;
+        margin: 3px;
+    }
+
+    .log-file-dropdown {
+        margin-left: 0.5rem;
     }
 </style>
 <div class="grid">
-  <div>
-    <%= link_to onlylogs.root_path do %>
-      <%= image_tag "onlylogs/logo.png", style: "height: 30px" %>
+  <div class="grid-header">
+    <%= image_tag "onlylogs/logo.png", class: "logo" %>
+    <% if @available_log_files.any? %>
+      <%= form_with url: root_path, method: :get, local: true, class: "log-file-dropdown" do %>
+        <select id="log_file_path" name="log_file_path" onchange="this.form.submit()">
+          <% @available_log_files.each do |file| %>
+            <% encrypted_path = Onlylogs::SecureFilePath.encrypt(file.to_s) %>
+            <% relative_path = Pathname.new(file).relative_path_from(Rails.root).to_s %>
+            <option value="<%= encrypted_path %>" <%= "selected" if file.to_s == @log_file_path.to_s %>>
+              <%= relative_path %>
+            </option>
+          <% end %>
+        </select>
+      <% end %>
     <% end %>
-
-    <%= render partial: "log_files_dropdown", locals: { available_log_files: @available_log_files }  %>
   </div>
   <%= render partial: "onlylogs/shared/log_container", locals: { log_file_path: @log_file_path, tail: @max_lines, filter: @filter, autoscroll: @autoscroll } %>
 </div>

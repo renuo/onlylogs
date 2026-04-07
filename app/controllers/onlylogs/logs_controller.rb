@@ -5,7 +5,6 @@ module Onlylogs
     def index
       @max_lines = (params[:max_lines] || 100).to_i
 
-      # Get the file path from params or use default
       @available_log_files = Onlylogs.available_log_files
       @log_file_path = selected_log_file_path
 
