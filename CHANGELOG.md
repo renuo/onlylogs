@@ -4,9 +4,12 @@
 
 ### Breaking Changes
 
-- Renamed `config.allowed_files` to `config.log_file_patterns` (configuration setting)
-- Renamed `Onlylogs.allowed_file_path?` to `Onlylogs.file_path_permitted?` (security check)
-- Renamed `Onlylogs.existing_allowed_files` to `Onlylogs.available_log_files` (file listing)
+- Renamed `config.allowed_files` to `config.log_file_patterns`.
+- Renamed `Onlylogs.allowed_file_path?` to `Onlylogs.file_path_permitted?`.
+
+### Features
+
+- Added the possibility to view more files from the log viewer.
 
 ## 0.3.1
 
