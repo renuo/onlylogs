@@ -2,12 +2,12 @@
 
 module Onlylogs
   class Configuration
-    attr_accessor :allowed_files, :default_log_file_path, :basic_auth_user, :basic_auth_password,
+    attr_accessor :log_file_patterns, :default_log_file_path, :basic_auth_user, :basic_auth_password,
                   :parent_controller, :disable_basic_authentication, :ripgrep_enabled, :editor,
                   :max_line_matches
 
     def initialize
-      @allowed_files = default_allowed_files
+      @log_file_patterns = default_log_file_patterns
       @default_log_file_path = default_log_file_path_value
       @basic_auth_user = default_basic_auth_user
       @basic_auth_password = default_basic_auth_password
@@ -44,7 +44,7 @@ module Onlylogs
       :vscode
     end
 
-    def default_allowed_files
+    def default_log_file_patterns
       # Default to environment-specific log files (without rotation suffixes)
       [
         Rails.root.join("log/#{Rails.env}.log")
@@ -76,10 +76,10 @@ module Onlylogs
     yield configuration
   end
 
-  def self.allowed_file_path?(file_path)
+  def self.file_path_permitted?(file_path)
     path = ::File.expand_path(file_path.to_s)
 
-    configuration.allowed_files.any? do |pattern|
+    configuration.log_file_patterns.any? do |pattern|
       allowed_file_patterns_for(pattern).any? do |pat|
         ::File.fnmatch?(pat, path, ::File::FNM_PATHNAME | ::File::FNM_DOTMATCH)
       end
@@ -89,8 +89,8 @@ module Onlylogs
   # Returns all existing files on disk that match the configured allowed_files patterns.
   # Supports direct file paths and glob patterns (e.g., *.log, **/*.log).
   # Returns Pathname objects so callers can access both the basename and the absolute path.
-  def self.existing_allowed_files
-    patterns = Array(configuration.allowed_files)
+  def self.available_log_files
+    patterns = Array(configuration.log_file_patterns)
 
     paths = patterns.flat_map do |pattern|
       allowed_file_patterns_for(pattern).flat_map do |expanded_pattern|

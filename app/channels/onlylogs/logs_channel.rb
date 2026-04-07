@@ -18,7 +18,7 @@ module Onlylogs
           file_path = Onlylogs::SecureFilePath.decrypt(encrypted_file_path)
 
           # Verify the decrypted path is still allowed
-          unless Onlylogs.allowed_file_path?(file_path)
+          unless Onlylogs.file_path_permitted?(file_path)
             Rails.logger.error "Onlylogs: Attempted to access non-allowed file: #{file_path}"
             transmit({ action: "error", content: "Access denied" })
             return

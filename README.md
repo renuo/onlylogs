@@ -174,7 +174,7 @@ You can configure which files onlylogs is allowed to access by creating a config
 ```ruby
 # config/initializers/onlylogs.rb
 Onlylogs.configure do |config|
-  config.allowed_files = [
+  config.log_file_patterns = [
     # Default Rails log files
     Rails.root.join("log/development.log"),
     Rails.root.join("log/production.log"),
@@ -206,7 +206,7 @@ Onlylogs supports glob patterns to allow multiple files at once:
 ```ruby
 # config/initializers/onlylogs.rb
 Onlylogs.configure do |config|
-  config.allowed_files = [
+  config.log_file_patterns = [
     # Allow all .log files in the log directory
     Rails.root.join("log/*.log"),
     

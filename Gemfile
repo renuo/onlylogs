@@ -12,7 +12,7 @@ gem "propshaft"
 gem "importmap-rails"
 gem "stimulus-rails"
 gem "faker"
-gem "better_errors"
+gem 'web-console', group: :development
 
 gem "openssl", "~> 3.3.1"
 

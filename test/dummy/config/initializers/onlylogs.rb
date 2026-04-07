@@ -9,7 +9,7 @@ Onlylogs.configure do |config|
   config.max_line_matches = 1_000_000_000 # one gazillion of millions
   # config.ripgrep_enabled = false
   #
-  config.allowed_files = [
+  config.log_file_patterns = [
     Onlylogs::Engine.root.join("test", "fixtures", "files", "*.log"),
     Rails.root.join("log", "*.log")
   ]
