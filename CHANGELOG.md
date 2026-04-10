@@ -1,9 +1,12 @@
 # Changelog
 
+## 0.4.2
+
+- Avoid loops in the SocketLogger and improve the documentation.
+
 ## 0.4.1
 
 - Remove the logo from the log viewer.
-
 
 ## 0.4.0
 

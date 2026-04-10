@@ -87,6 +87,22 @@ bin/onlylogs_sidecar
 > that run outside of Puma will not have access to the socket. If you need log shipping from all process types,
 > use the `HttpLogger` instead.
 
+## Keeping Local Files While Streaming
+
+If you want to stream your logs to onlylogs.io but also keep local log files with rotation, use `ActiveSupport::BroadcastLogger`:
+
+```ruby
+# config/environments/production.rb
+local = Onlylogs::Logger.new(Rails.root.join("log", "production.log"), 5, 100.megabytes)
+remote = Onlylogs::HttpLogger.new  # or Onlylogs::SocketLogger.new
+
+config.logger = ActiveSupport::BroadcastLogger.new(local, remote)
+```
+
+The local logger supports standard Ruby log rotation (keep 5 files of 100 MB each in the example above).
+Every log line is written to the local file **and** forwarded to onlylogs.io.
+If the remote connection fails, logs continue to be written locally without interruption.
+
 ## Vector
 
 The entire streaming process is compatible with [Vector](https://vector.dev/).
