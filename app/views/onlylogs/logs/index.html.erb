@@ -11,18 +11,12 @@
         border-bottom: 1px solid lightgray;
     }
 
-    .logo {
-        height: 20px;
-        margin: 3px;
-    }
-
     .log-file-dropdown {
         margin-left: 0.5rem;
     }
 </style>
 <div class="grid">
   <div class="grid-header">
-    <%= image_tag "onlylogs/logo.png", class: "logo" %>
     <% if @available_log_files.any? %>
       <%= form_with url: root_path, method: :get, local: true, class: "log-file-dropdown" do %>
         <select id="log_file_path" name="log_file_path" onchange="this.form.submit()">
