@@ -4,6 +4,7 @@ require "onlylogs/engine"
 require "onlylogs/formatter"
 require "onlylogs/logger"
 require "onlylogs/socket_logger"
+require "onlylogs/http_logger"
 
 # require "zeitwerk"
 #

@@ -27,9 +27,39 @@ Dokku also supports log drains via [Vector](https://vector.dev/):
 dokku logs:set <app-name> --vector-sink url=<ONLYLOGS_DRAIN_URL>
 ```
 
-## Rails
+## Rails (HttpLogger — recommended)
 
-Set up a `SocketLogger` in your production environment:
+The `HttpLogger` ships logs directly via HTTP from any Ruby process — Puma, GoodJob, Sidekiq, rake tasks, migrations.
+No sidecar or Puma plugin required.
+
+```ruby
+# config/environments/production.rb
+config.logger = Onlylogs::HttpLogger.new
+```
+
+Set the `ONLYLOGS_DRAIN_URL` environment variable and you're done.
+
+Optional environment variables:
+
+| Variable | Default | Description |
+|---|---|---|
+| `ONLYLOGS_DRAIN_URL` | — | The drain URL (required) |
+| `ONLYLOGS_BATCH_SIZE` | `100` | Number of lines to batch before sending |
+| `ONLYLOGS_FLUSH_INTERVAL` | `0.5` | Flush interval in seconds |
+
+Or pass them as keyword arguments:
+
+```ruby
+config.logger = Onlylogs::HttpLogger.new(
+  drain_url: "https://drain.onlylogs.io/v1/your-token",
+  batch_size: 50,
+  flush_interval: 1.0
+)
+```
+
+## Rails (SocketLogger + Puma sidecar)
+
+If you prefer the sidecar approach (lower latency, useful when Puma is the only process that needs log shipping):
 
 ```ruby
 # config/environments/production.rb
@@ -52,6 +82,10 @@ If you prefer, you can run the sidecar process separately:
 ```sh
 bin/onlylogs_sidecar
 ```
+
+> **Note:** The `SocketLogger` only works when the sidecar process is running. Background jobs and migrations
+> that run outside of Puma will not have access to the socket. If you need log shipping from all process types,
+> use the `HttpLogger` instead.
 
 ## Vector
 
