@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.4
+
+- Remove favicons.
+- Use HttpLogger in dummy app.
+- Remove line numbers.
+
 ## 0.4.3
 
 - Fix file switcher in apps with strict CSP rules.

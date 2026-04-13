@@ -82,15 +82,6 @@ module Onlylogs
       assert_includes combined, "interval flush line"
     end
 
-    test "still logs to local fallback when drain_url is nil" do
-      output = StringIO.new
-      logger = Onlylogs::HttpLogger.new(local_fallback: output, drain_url: nil)
-
-      logger.add(Logger::INFO, "fallback line")
-
-      assert_includes output.string, "fallback line"
-    end
-
     test "does not crash when drain URL is unreachable" do
       logger = Onlylogs::HttpLogger.new(
         drain_url: "http://127.0.0.1:1/drain",

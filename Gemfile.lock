@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    onlylogs (0.4.3)
+    onlylogs (0.4.4)
       rails (~> 8.0)
 
 GEM
