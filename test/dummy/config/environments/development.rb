@@ -67,7 +67,9 @@ Rails.application.configure do
   config.log_tags = [:request_id]
   # config.log_level = :error
 
-  config.logger = Onlylogs::Logger.new(Rails.root.join("log", "#{Rails.env}.log"), 10, 1.gigabyte)
+  local_logger = Onlylogs::Logger.new(Rails.root.join("log", "#{Rails.env}.log"), 10, 1.gigabyte)
+  http_logger = Onlylogs::HttpLogger.new
+  config.logger = ActiveSupport::BroadcastLogger.new(local_logger, http_logger)
 
   # Raise error when a before_action's only/except options reference missing actions.
   config.action_controller.raise_on_missing_callback_actions = true
