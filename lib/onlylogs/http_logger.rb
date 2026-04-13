@@ -25,10 +25,16 @@ module Onlylogs
       @queue = Queue.new
       @mutex = Mutex.new
 
-      start_sender if @drain_url
+      if @drain_url
+        start_sender
+      else
+        $stderr.puts "Onlylogs::HttpLogger error: ONLYLOGS_DRAIN_URL is not set; logger is disabled."
+      end
     end
 
     def add(severity, message = nil, progname = nil, &block)
+      return true unless @drain_url
+
       if message.nil?
         if block_given?
           message = block.call
