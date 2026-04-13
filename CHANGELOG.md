@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.3
+
+- Fix file switcher in apps with strict CSP rules.
+
 ## 0.4.2
 
 - Avoid loops in the SocketLogger and improve the documentation.
