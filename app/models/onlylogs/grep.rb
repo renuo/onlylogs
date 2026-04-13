@@ -23,7 +23,7 @@ module Onlylogs
         io.each_line do |line|
           # Line numbers are no longer outputted by super_grep/super_ripgrep
           # Use String.new to create a copy and prevent memory retention from IO buffers
-          content = String.new(line.chomp)
+          content = String.new(line.chomp, encoding: Encoding::UTF_8).scrub
 
           if block_given?
             yield content

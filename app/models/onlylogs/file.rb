@@ -88,7 +88,7 @@ module Onlylogs
         while (line = file.gets)
           if line.end_with?("\n")
             # Complete line - store as simple string
-            lines << line.chomp
+            lines << line.chomp.force_encoding(Encoding::UTF_8).scrub
             self.last_position = file.pos
           else
             # Incomplete line at EOF - skip it
