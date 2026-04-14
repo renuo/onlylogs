@@ -18,5 +18,7 @@ gem "openssl", "~> 3.3.1"
 
 gem "standard", require: false
 
+gem "lograge"
+
 # Start debugger with binding.b [https://github.com/ruby/debug]
 # gem "debug", ">= 1.0.0"

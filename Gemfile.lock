@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    onlylogs (0.4.4)
+    onlylogs (0.4.5)
       rails (~> 8.0)
 
 GEM
@@ -112,6 +112,11 @@ GEM
     language_server-protocol (3.17.0.5)
     lint_roller (1.1.0)
     logger (1.7.0)
+    lograge (0.14.0)
+      actionpack (>= 4)
+      activesupport (>= 4)
+      railties (>= 4)
+      request_store (~> 1.0)
     loofah (2.24.1)
       crass (~> 1.0.2)
       nokogiri (>= 1.12.0)
@@ -216,6 +221,8 @@ GEM
     regexp_parser (2.11.3)
     reline (0.6.2)
       io-console (~> 0.5)
+    request_store (1.7.0)
+      rack (>= 1.4)
     rubocop (1.84.2)
       json (~> 2.3)
       language_server-protocol (~> 3.17.0.2)
@@ -292,6 +299,7 @@ PLATFORMS
 DEPENDENCIES
   faker
   importmap-rails
+  lograge
   onlylogs!
   openssl (~> 3.3.1)
   propshaft

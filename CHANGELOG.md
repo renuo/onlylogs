@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.5
+
+- Fix compatibility with lograge.
+
 ## 0.4.4
 
 - Remove favicons.

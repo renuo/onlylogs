@@ -28,7 +28,7 @@ module Onlylogs
       if @drain_url
         start_sender
       else
-        $stderr.puts "Onlylogs::HttpLogger error: ONLYLOGS_DRAIN_URL is not set; logger is disabled."
+        $stderr.puts "Onlylogs::HttpLogger error: ONLYLOGS_DRAIN_URL is not set; logger is disabled." # rubocop:disable Style/StderrPuts
       end
     end
 
@@ -45,7 +45,7 @@ module Onlylogs
       end
 
       formatted = format_message(format_severity(severity), Time.now, progname, message.to_s)
-      @queue << formatted if formatted && @drain_url
+      @queue << formatted.chomp if formatted && @drain_url
       super
     end
 
@@ -57,6 +57,7 @@ module Onlylogs
 
     def flush
       send_batch(drain_queue)
+      super
     end
 
     private
