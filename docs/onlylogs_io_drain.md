@@ -89,19 +89,30 @@ bin/onlylogs_sidecar
 
 ## Keeping Local Files While Streaming
 
-If you want to stream your logs to onlylogs.io but also keep local log files with rotation, use `ActiveSupport::BroadcastLogger`:
+Use the `HttpLogger`'s built-in `local_fallback` parameter to write to a local file **and** stream to onlylogs.io
+with a single logger:
 
 ```ruby
 # config/environments/production.rb
-local = Onlylogs::Logger.new(Rails.root.join("log", "production.log"), 5, 100.megabytes)
-remote = Onlylogs::HttpLogger.new  # or Onlylogs::SocketLogger.new
-
-config.logger = ActiveSupport::BroadcastLogger.new(local, remote)
+log_file = Logger::LogDevice.new(
+  Rails.root.join("log", "production.log"), shift_age: 5, shift_size: 100.megabytes
+)
+config.logger = Onlylogs::HttpLogger.new(local_fallback: log_file)
 ```
 
-The local logger supports standard Ruby log rotation (keep 5 files of 100 MB each in the example above).
 Every log line is written to the local file **and** forwarded to onlylogs.io.
+The `LogDevice` handles rotation (keep 5 files of 100 MB each in the example above).
 If the remote connection fails, logs continue to be written locally without interruption.
+
+> **Warning — do not use `ActiveSupport::BroadcastLogger` with two tagged loggers.**
+> This is a known Rails bug: [rails/rails#56669](https://github.com/rails/rails/issues/56669).
+>
+> ```ruby
+> # DO NOT do this:
+> local = Onlylogs::Logger.new("production.log", 5, 100.megabytes)
+> remote = Onlylogs::HttpLogger.new
+> config.logger = ActiveSupport::BroadcastLogger.new(local, remote)
+> ```
 
 ## Vector
 
