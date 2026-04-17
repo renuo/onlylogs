@@ -18,7 +18,7 @@ If you already have a disk, you can just keep there also your log files (as well
 
 This section explains how to setup onlylogs to self host your logs and access them directly from your Rails app.
 
-If instead you want to stream your logs to https://onlylogs.io, head to the onlylogs.io instructions page.
+If instead you want to stream your logs to https://onlylogs.io, head to [the onlylogs.io instructions page](https://onlylogs.io/instructions).
 
 Add this line to your application's Gemfile:
 
