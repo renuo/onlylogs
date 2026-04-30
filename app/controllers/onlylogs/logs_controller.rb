@@ -7,10 +7,18 @@ module Onlylogs
 
       @available_log_files = Onlylogs.available_log_files
       @log_file_path = selected_log_file_path
+      @encrypted_log_file_path = Onlylogs::SecureFilePath.encrypt(@log_file_path.to_s) if @log_file_path
 
       @filter = params[:filter]
       @autoscroll = params[:autoscroll] != "false"
       @mode = @filter.blank? ? (params[:mode] || "live") : "search" # "live" or "search"
+    end
+
+    def download
+      file_path = selected_log_file_path
+      send_file file_path, filename: ::File.basename(file_path), disposition: :attachment
+    rescue SecurityError, Onlylogs::SecureFilePath::SecurityError
+      render plain: "Forbidden", status: :forbidden
     end
 
     private

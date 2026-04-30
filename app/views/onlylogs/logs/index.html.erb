@@ -14,6 +14,10 @@
     .log-file-dropdown {
         margin-left: 0.5rem;
     }
+
+    .download-btn {
+        margin-left: 0.5rem;
+    }
 </style>
 <div class="grid">
   <div class="grid-header">
@@ -28,6 +32,9 @@
             </option>
           <% end %>
         </select>
+      <% end %>
+      <% if @log_file_path %>
+        <%= link_to "Download", download_log_path(log_file_path: @encrypted_log_file_path), class: "download-btn" %>
       <% end %>
     <% end %>
   </div>
