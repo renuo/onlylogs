@@ -16,9 +16,10 @@ class Onlylogs::FileTest < ActiveSupport::TestCase
   end
 
   test "raises error during initialization when file does not exist" do
-    assert_raises(Onlylogs::Error, /File not found/) do
+    error = assert_raises(Onlylogs::Error) do
       Onlylogs::File.new("/path/to/nonexistent/file.log")
     end
+    assert_match(/File not found/, error.message)
   end
 
   test "go_to_position sets the position correctly" do
