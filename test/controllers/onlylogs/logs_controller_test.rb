@@ -19,19 +19,19 @@ module Onlylogs
     end
 
     test "download sends file for valid encrypted path" do
-      get "/onlylogs/download", params: { log_file_path: @encrypted_path }
+      get "/onlylogs/download", params: {log_file_path: @encrypted_path}
       assert_response :success
       assert_equal ::File.read(@log_file), response.body
     end
 
     test "download returns forbidden for invalid encrypted path" do
-      get "/onlylogs/download", params: { log_file_path: "tampered_garbage" }
+      get "/onlylogs/download", params: {log_file_path: "tampered_garbage"}
       assert_response :forbidden
     end
 
     test "download returns forbidden for path outside permitted list" do
       encrypted_bad = Onlylogs::SecureFilePath.encrypt("/etc/passwd")
-      get "/onlylogs/download", params: { log_file_path: encrypted_bad }
+      get "/onlylogs/download", params: {log_file_path: encrypted_bad}
       assert_response :forbidden
     end
 
