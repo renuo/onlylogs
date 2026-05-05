@@ -15,6 +15,8 @@ module Onlylogs
     end
 
     def download
+      return render(plain: "Bad Request", status: :bad_request) if params[:log_file_path].blank?
+
       file_path = selected_log_file_path
       send_file file_path, filename: ::File.basename(file_path), disposition: :attachment
     rescue SecurityError, Onlylogs::SecureFilePath::SecurityError

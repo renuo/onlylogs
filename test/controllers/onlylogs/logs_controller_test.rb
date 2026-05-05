@@ -24,6 +24,16 @@ module Onlylogs
       assert_equal ::File.read(@log_file), response.body
     end
 
+    test "download returns bad request when log_file_path param is missing" do
+      get "/onlylogs/download"
+      assert_response :bad_request
+    end
+
+    test "download returns bad request when log_file_path param is blank" do
+      get "/onlylogs/download", params: {log_file_path: ""}
+      assert_response :bad_request
+    end
+
     test "download returns forbidden for invalid encrypted path" do
       get "/onlylogs/download", params: {log_file_path: "tampered_garbage"}
       assert_response :forbidden
