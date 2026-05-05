@@ -7,7 +7,6 @@ module Onlylogs
 
       @available_log_files = Onlylogs.available_log_files
       @log_file_path = selected_log_file_path
-      @encrypted_log_file_path = Onlylogs::SecureFilePath.encrypt(@log_file_path.to_s) if @log_file_path
 
       @filter = params[:filter]
       @autoscroll = params[:autoscroll] != "false"
@@ -15,12 +14,18 @@ module Onlylogs
     end
 
     def download
-      return render(plain: "Bad Request", status: :bad_request) if params[:log_file_path].blank?
+      if params[:log_file_path].blank?
+        return render(plain: "Bad Request: missing required parameter 'log_file_path' (encrypted log file path).", status: :bad_request)
+      end
 
       file_path = selected_log_file_path
       send_file file_path, filename: ::File.basename(file_path), disposition: :attachment
-    rescue SecurityError, Onlylogs::SecureFilePath::SecurityError
-      render plain: "Forbidden", status: :forbidden
+    rescue Onlylogs::SecureFilePath::SecurityError
+      render plain: "Bad Request: 'log_file_path' could not be decrypted (tampered or malformed token).", status: :bad_request
+    rescue SecurityError
+      render plain: "Forbidden: requested log file path is not in the allowed list.", status: :forbidden
+    rescue ActionController::MissingFile, Errno::ENOENT
+      render plain: "Not Found: log file is currently unreadable (it may have been rotated, moved, or temporarily unavailable).", status: :not_found
     end
 
     private

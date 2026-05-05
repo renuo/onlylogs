@@ -34,15 +34,23 @@ module Onlylogs
       assert_response :bad_request
     end
 
-    test "download returns forbidden for invalid encrypted path" do
+    test "download returns bad request for tampered encrypted token" do
       get "/onlylogs/download", params: {log_file_path: "tampered_garbage"}
-      assert_response :forbidden
+      assert_response :bad_request
     end
 
     test "download returns forbidden for path outside permitted list" do
       encrypted_bad = Onlylogs::SecureFilePath.encrypt("/etc/passwd")
       get "/onlylogs/download", params: {log_file_path: encrypted_bad}
       assert_response :forbidden
+    end
+
+    test "download returns not found when file is missing" do
+      missing_path = Onlylogs::Engine.root.join("test", "fixtures", "files", "deleted_between_listing_and_download.log").to_s
+      assert Onlylogs.file_path_permitted?(missing_path)
+      encrypted_missing = Onlylogs::SecureFilePath.encrypt(missing_path)
+      get "/onlylogs/download", params: {log_file_path: encrypted_missing}
+      assert_response :not_found
     end
 
     test "index shows download link when log files available" do
