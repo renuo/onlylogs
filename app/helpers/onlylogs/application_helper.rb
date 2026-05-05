@@ -5,9 +5,5 @@ module Onlylogs
       relative = pathname.relative_path_from(Rails.root).to_s
       relative.start_with?("..") ? pathname.basename.to_s : relative
     end
-
-    def encrypted_log_file_path(file)
-      Onlylogs::SecureFilePath.encrypt(file.to_s)
-    end
   end
 end

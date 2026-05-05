@@ -25,14 +25,14 @@
       <%= form_with url: root_path, method: :get, local: true, class: "log-file-dropdown", data: { controller: "auto-submit" } do %>
         <select id="log_file_path" name="log_file_path" data-action="change->auto-submit#submit">
           <% @available_log_files.each do |file| %>
-            <option value="<%= encrypted_log_file_path(file) %>" <%= "selected" if file.to_s == @log_file_path.to_s %>>
+            <option value="<%= Onlylogs::SecureFilePath.encrypt(file) %>" <%= "selected" if file.to_s == @log_file_path.to_s %>>
               <%= log_file_label(file) %>
             </option>
           <% end %>
         </select>
       <% end %>
       <% if @log_file_path %>
-        <%= link_to "Download", download_log_path(log_file_path: encrypted_log_file_path(@log_file_path)), class: "download-link" %>
+        <%= link_to "Download", download_log_path(log_file_path: Onlylogs::SecureFilePath.encrypt(@log_file_path)), class: "download-link" %>
       <% end %>
     <% end %>
   </div>
