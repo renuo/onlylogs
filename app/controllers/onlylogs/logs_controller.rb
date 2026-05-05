@@ -22,7 +22,7 @@ module Onlylogs
       send_file file_path, filename: ::File.basename(file_path), disposition: :attachment
     rescue Onlylogs::SecureFilePath::SecurityError
       render plain: "Bad Request: 'log_file_path' could not be decrypted (tampered or malformed token).", status: :bad_request
-    rescue SecurityError
+    rescue Onlylogs::ForbiddenPathError
       render plain: "Forbidden: requested log file path is not in the allowed list.", status: :forbidden
     rescue ActionController::MissingFile, Errno::ENOENT
       render plain: "Not Found: log file is currently unreadable (it may have been rotated, moved, or temporarily unavailable).", status: :not_found
@@ -38,7 +38,7 @@ module Onlylogs
       if Onlylogs.file_path_permitted?(decrypted_path)
         decrypted_path
       else
-        raise SecurityError, "File path not allowed"
+        raise Onlylogs::ForbiddenPathError, "File path not allowed"
       end
     end
 
