@@ -37,8 +37,11 @@ module Onlylogs
 
     def authorized_log_file_path(encrypted_path)
       decrypted_path = Onlylogs::SecureFilePath.decrypt(encrypted_path)
-      raise Onlylogs::ForbiddenPathError, "File path not allowed" unless Onlylogs.file_path_permitted?(decrypted_path)
-      decrypted_path
+      if Onlylogs.file_path_permitted?(decrypted_path)
+        decrypted_path
+      else
+        raise Onlylogs::ForbiddenPathError, "File path not allowed"
+      end
     end
 
     def default_log_file_path
