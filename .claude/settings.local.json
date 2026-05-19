@@ -3,7 +3,9 @@
     "allow": [
       "Bash(bin/rails test:*)",
       "Bash(cat:*)",
-      "Bash(bin/rails runner:*)"
+      "Bash(bin/rails runner:*)",
+      "Bash(bundle exec:*)",
+      "Bash(ruby:*)"
     ]
   }
 }
