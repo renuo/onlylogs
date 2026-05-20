@@ -5,7 +5,6 @@ require "test_helper"
 module Onlylogs
   class LogsControllerTest < ActionDispatch::IntegrationTest
     setup do
-      Onlylogs.instance_variable_set(:@configuration, nil)
       Onlylogs.configure do |config|
         config.disable_basic_authentication = true
         config.log_file_patterns = [
