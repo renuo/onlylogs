@@ -72,5 +72,29 @@ module Onlylogs
       get "/onlylogs/download", params: {log_file_path: @encrypted_path}, headers: auth_header
       assert_response :success
     end
+
+    test "download allows downloading of file with rotation suffix" do
+      rotated_log_path = Onlylogs::Engine.root.join("test", "fixtures", "files", "rotated.log.1").to_s
+      get "/onlylogs/download", params: {log_file_path: Onlylogs::SecureFilePath.encrypt(rotated_log_path)}
+      assert_response :success
+    end
+
+    test "download returns forbidden for a file that exists but is not whitelisted" do
+      disallowed_path = Onlylogs::Engine.root.join("test", "fixtures", "files", "development.log").to_s
+
+      Onlylogs.configure do |config|
+        config.log_file_patterns = [Rails.root.join("log", "*.log")]
+      end
+
+      get "/onlylogs/download", params: {log_file_path: Onlylogs::SecureFilePath.encrypt(disallowed_path)}
+      assert_response :forbidden
+
+      Onlylogs.configure do |config|
+        config.log_file_patterns = [Onlylogs::Engine.root.join("test", "fixtures", "files", "*.log")]
+      end
+
+      get "/onlylogs/download", params: {log_file_path: Onlylogs::SecureFilePath.encrypt(disallowed_path)}
+      assert_response :success
+    end
   end
 end
