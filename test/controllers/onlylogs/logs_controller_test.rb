@@ -96,5 +96,16 @@ module Onlylogs
       get "/onlylogs/download", params: {log_file_path: Onlylogs::SecureFilePath.encrypt(disallowed_path)}
       assert_response :success
     end
+
+    test "download returns not found for a file that does not exist but would be whitelisted" do
+      not_found_path = Onlylogs::Engine.root.join("test", "fixtures", "files", "nonexistent.log").to_s
+      get "/onlylogs/download", params: {log_file_path: Onlylogs::SecureFilePath.encrypt(not_found_path)}
+      assert_response :not_found
+    end
+
+    test "download returns bad request when encrypted path is not valid" do
+      get "/onlylogs/download", params: {log_file_path: "invalid_encrypted_string"}
+      assert_response :bad_request
+    end
   end
 end
