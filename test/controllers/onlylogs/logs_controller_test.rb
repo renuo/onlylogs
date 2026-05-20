@@ -57,5 +57,20 @@ module Onlylogs
       assert_response :success
       assert_select "a[href*='download']"
     end
+
+    test "download is basic auth protected when basic auth is enabled" do
+      Onlylogs.configure do |config|
+        config.disable_basic_authentication = false
+        config.basic_auth_user = "user"
+        config.basic_auth_password = "password"
+      end
+
+      get "/onlylogs/download", params: {log_file_path: @encrypted_path}
+      assert_response :unauthorized
+
+      auth_header = {"Authorization" => ActionController::HttpAuthentication::Basic.encode_credentials("user", "password")}
+      get "/onlylogs/download", params: {log_file_path: @encrypted_path}, headers: auth_header
+      assert_response :success
+    end
   end
 end
