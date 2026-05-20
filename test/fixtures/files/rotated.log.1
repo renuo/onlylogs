@@ -1,0 +1,125 @@
+Started GET "/" for 127.0.0.1 at 2025-09-02 13:12:36 +0200
+  [1m[35m (0.2ms)[0m  [1m[35mCREATE TABLE "schema_migrations" ("version" varchar NOT NULL PRIMARY KEY) /*application='Dummy'*/[0m
+  [1m[35m (0.1ms)[0m  [1m[35mCREATE TABLE "ar_internal_metadata" ("key" varchar NOT NULL PRIMARY KEY, "value" varchar, "created_at" datetime(6) NOT NULL, "updated_at" datetime(6) NOT NULL) /*application='Dummy'*/[0m
+  [1m[36mActiveRecord::SchemaMigration Load (0.1ms)[0m  [1m[34mSELECT "schema_migrations"."version" FROM "schema_migrations" ORDER BY "schema_migrations"."version" ASC /*application='Dummy'*/[0m
+Processing by Rails::WelcomeController#index as HTML
+  Rendering /Users/alessandrorodi/.rbenv/versions/3.4.1/lib/ruby/gems/3.4.0/gems/railties-8.0.2.1/lib/rails/templates/rails/welcome/index.html.erb
+  Rendered /Users/alessandrorodi/.rbenv/versions/3.4.1/lib/ruby/gems/3.4.0/gems/railties-8.0.2.1/lib/rails/templates/rails/welcome/index.html.erb (Duration: 0.3ms | GC: 0.0ms)
+Completed 200 OK in 59ms (Views: 2.0ms | ActiveRecord: 0.0ms (0 queries, 0 cached) | GC: 0.2ms)
+
+
+Started GET "/onlylogs" for 127.0.0.1 at 2025-09-02 13:12:45 +0200
+Processing by Onlylogs::LogsController#index as HTML
+  Rendering layout /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/views/layouts/onlylogs/application.html.erb
+  Rendering /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/views/onlylogs/logs/index.html.erb within layouts/onlylogs/application
+  Rendered /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/views/onlylogs/shared/_log_container.html.erb (Duration: 0.9ms | GC: 0.0ms)
+  Rendered /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/views/onlylogs/logs/index.html.erb within layouts/onlylogs/application (Duration: 1.6ms | GC: 0.0ms)
+Importmap skipped missing path: stimulus.min.js
+Importmap skipped missing path: stimulus-loading.js
+Importmap skipped missing path: stimulus.min.js
+Importmap skipped missing path: stimulus-loading.js
+Importmap skipped missing path: stimulus.min.js
+Importmap skipped missing path: stimulus-loading.js
+  Rendered layout /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/views/layouts/onlylogs/application.html.erb (Duration: 6.0ms | GC: 0.0ms)
+Completed 200 OK in 33ms (Views: 6.9ms | ActiveRecord: 0.0ms (0 queries, 0 cached) | GC: 0.0ms)
+
+
+Started GET "/assets/onlylogs/application-ad72591a.js" for 127.0.0.1 at 2025-09-02 13:12:45 +0200
+Started GET "/assets/actioncable.esm-e0ec9819.js" for 127.0.0.1 at 2025-09-02 13:12:45 +0200
+Started GET "/assets/onlylogs/controllers/application-3affb389.js" for 127.0.0.1 at 2025-09-02 13:12:45 +0200
+Started GET "/assets/onlylogs/controllers/index-c3f5d3c4.js" for 127.0.0.1 at 2025-09-02 13:12:46 +0200
+Started GET "/assets/onlylogs/controllers/log_streamer_controller-4f4b078c.js" for 127.0.0.1 at 2025-09-02 13:12:46 +0200
+Started GET "/favicon.ico" for 127.0.0.1 at 2025-09-02 13:12:46 +0200
+  
+ActionController::RoutingError (No route matches [GET] "/favicon.ico"):
+  
+Started GET "/onlylogs" for 127.0.0.1 at 2025-09-02 13:12:53 +0200
+Processing by Onlylogs::LogsController#index as HTML
+  Rendering layout /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/views/layouts/onlylogs/application.html.erb
+  Rendering /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/views/onlylogs/logs/index.html.erb within layouts/onlylogs/application
+  Rendered /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/views/onlylogs/shared/_log_container.html.erb (Duration: 0.0ms | GC: 0.0ms)
+  Rendered /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/views/onlylogs/logs/index.html.erb within layouts/onlylogs/application (Duration: 0.1ms | GC: 0.0ms)
+  Rendered layout /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/views/layouts/onlylogs/application.html.erb (Duration: 0.5ms | GC: 0.0ms)
+Completed 200 OK in 28ms (Views: 0.7ms | ActiveRecord: 0.0ms (0 queries, 0 cached) | GC: 0.0ms)
+
+
+Started GET "/.well-known/appspecific/com.chrome.devtools.json" for 127.0.0.1 at 2025-09-02 13:12:55 +0200
+  
+ActionController::RoutingError (No route matches [GET] "/.well-known/appspecific/com.chrome.devtools.json"):
+  
+Started GET "/onlylogs" for 127.0.0.1 at 2025-09-02 13:14:46 +0200
+  [1m[36mActiveRecord::SchemaMigration Load (0.1ms)[0m  [1m[34mSELECT "schema_migrations"."version" FROM "schema_migrations" ORDER BY "schema_migrations"."version" ASC /*application='Dummy'*/[0m
+Processing by Onlylogs::LogsController#index as HTML
+  Rendering layout /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/views/layouts/onlylogs/application.html.erb
+  Rendering /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/views/onlylogs/logs/index.html.erb within layouts/onlylogs/application
+  Rendered /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/views/onlylogs/shared/_log_container.html.erb (Duration: 0.7ms | GC: 0.0ms)
+  Rendered /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/views/onlylogs/logs/index.html.erb within layouts/onlylogs/application (Duration: 1.6ms | GC: 0.0ms)
+  Rendered layout /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/views/layouts/onlylogs/application.html.erb (Duration: 9.0ms | GC: 0.2ms)
+Completed 200 OK in 140ms (Views: 13.0ms | ActiveRecord: 0.0ms (0 queries, 0 cached) | GC: 0.7ms)
+
+
+Started GET "/.well-known/appspecific/com.chrome.devtools.json" for 127.0.0.1 at 2025-09-02 13:14:46 +0200
+Started GET "/assets/onlylogs/application-ad72591a.js" for 127.0.0.1 at 2025-09-02 13:14:46 +0200
+Started GET "/assets/stimulus.min-4b1e420e.js" for 127.0.0.1 at 2025-09-02 13:14:46 +0200
+  
+ActionController::RoutingError (No route matches [GET] "/.well-known/appspecific/com.chrome.devtools.json"):
+  
+Started GET "/assets/onlylogs/controllers/application-3affb389.js" for 127.0.0.1 at 2025-09-02 13:14:46 +0200
+Started GET "/assets/onlylogs/controllers/log_streamer_controller-4f4b078c.js" for 127.0.0.1 at 2025-09-02 13:14:47 +0200
+Started GET "/assets/stimulus-loading-1fc53fe7.js" for 127.0.0.1 at 2025-09-02 13:14:47 +0200
+Started GET "/assets/actioncable.esm-e0ec9819.js" for 127.0.0.1 at 2025-09-02 13:14:47 +0200
+Started GET "/assets/onlylogs/controllers/index-c3f5d3c4.js" for 127.0.0.1 at 2025-09-02 13:14:47 +0200
+Started GET "/assets/stimulus.min-2395e199.js.map" for 127.0.0.1 at 2025-09-02 13:14:47 +0200
+Started GET "/cable" for 127.0.0.1 at 2025-09-02 13:14:48 +0200
+Started GET "/cable" [WebSocket] for 127.0.0.1 at 2025-09-02 13:14:48 +0200
+Successfully upgraded to WebSocket (REQUEST_METHOD: GET, HTTP_CONNECTION: Upgrade, HTTP_UPGRADE: websocket)
+Could not execute command from ({"command" => "subscribe", "identifier" => "{\"channel\":\"Onlylogs::LogsChannel\"}"}) [NameError - uninitialized constant Onlylogs::ApplicationCable]: /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/channels/onlylogs/logs_channel.rb:4:in '<module:Onlylogs>' | /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/channels/onlylogs/logs_channel.rb:3:in '<top (required)>' | /Users/alessandrorodi/.rbenv/versions/3.4.1/lib/ruby/3.4.0/bundled_gems.rb:82:in 'Kernel.require' | /Users/alessandrorodi/.rbenv/versions/3.4.1/lib/ruby/3.4.0/bundled_gems.rb:82:in 'block (2 levels) in Kernel#replace_require' | /Users/alessandrorodi/.rbenv/versions/3.4.1/lib/ruby/gems/3.4.0/gems/zeitwerk-2.7.3/lib/zeitwerk/core_ext/kernel.rb:26:in 'Kernel#require'
+Could not execute command from ({"command" => "subscribe", "identifier" => "{\"channel\":\"Onlylogs::LogsChannel\"}"}) [NameError - uninitialized constant Onlylogs::ApplicationCable]: /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/channels/onlylogs/logs_channel.rb:4:in '<module:Onlylogs>' | /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/channels/onlylogs/logs_channel.rb:3:in '<top (required)>' | /Users/alessandrorodi/.rbenv/versions/3.4.1/lib/ruby/3.4.0/bundled_gems.rb:82:in 'Kernel.require' | /Users/alessandrorodi/.rbenv/versions/3.4.1/lib/ruby/3.4.0/bundled_gems.rb:82:in 'block (2 levels) in Kernel#replace_require' | /Users/alessandrorodi/.rbenv/versions/3.4.1/lib/ruby/gems/3.4.0/gems/zeitwerk-2.7.3/lib/zeitwerk/core_ext/kernel.rb:26:in 'Kernel#require'
+Could not execute command from ({"command" => "subscribe", "identifier" => "{\"channel\":\"Onlylogs::LogsChannel\"}"}) [NameError - uninitialized constant Onlylogs::ApplicationCable]: /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/channels/onlylogs/logs_channel.rb:4:in '<module:Onlylogs>' | /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/channels/onlylogs/logs_channel.rb:3:in '<top (required)>' | /Users/alessandrorodi/.rbenv/versions/3.4.1/lib/ruby/3.4.0/bundled_gems.rb:82:in 'Kernel.require' | /Users/alessandrorodi/.rbenv/versions/3.4.1/lib/ruby/3.4.0/bundled_gems.rb:82:in 'block (2 levels) in Kernel#replace_require' | /Users/alessandrorodi/.rbenv/versions/3.4.1/lib/ruby/gems/3.4.0/gems/zeitwerk-2.7.3/lib/zeitwerk/core_ext/kernel.rb:26:in 'Kernel#require'
+Could not execute command from ({"command" => "subscribe", "identifier" => "{\"channel\":\"Onlylogs::LogsChannel\"}"}) [NameError - uninitialized constant Onlylogs::ApplicationCable]: /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/channels/onlylogs/logs_channel.rb:4:in '<module:Onlylogs>' | /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/channels/onlylogs/logs_channel.rb:3:in '<top (required)>' | /Users/alessandrorodi/.rbenv/versions/3.4.1/lib/ruby/3.4.0/bundled_gems.rb:82:in 'Kernel.require' | /Users/alessandrorodi/.rbenv/versions/3.4.1/lib/ruby/3.4.0/bundled_gems.rb:82:in 'block (2 levels) in Kernel#replace_require' | /Users/alessandrorodi/.rbenv/versions/3.4.1/lib/ruby/gems/3.4.0/gems/zeitwerk-2.7.3/lib/zeitwerk/core_ext/kernel.rb:26:in 'Kernel#require'
+Could not execute command from ({"command" => "subscribe", "identifier" => "{\"channel\":\"Onlylogs::LogsChannel\"}"}) [NameError - uninitialized constant Onlylogs::ApplicationCable]: /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/channels/onlylogs/logs_channel.rb:4:in '<module:Onlylogs>' | /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/channels/onlylogs/logs_channel.rb:3:in '<top (required)>' | /Users/alessandrorodi/.rbenv/versions/3.4.1/lib/ruby/3.4.0/bundled_gems.rb:82:in 'Kernel.require' | /Users/alessandrorodi/.rbenv/versions/3.4.1/lib/ruby/3.4.0/bundled_gems.rb:82:in 'block (2 levels) in Kernel#replace_require' | /Users/alessandrorodi/.rbenv/versions/3.4.1/lib/ruby/gems/3.4.0/gems/zeitwerk-2.7.3/lib/zeitwerk/core_ext/kernel.rb:26:in 'Kernel#require'
+Could not execute command from ({"command" => "subscribe", "identifier" => "{\"channel\":\"Onlylogs::LogsChannel\"}"}) [NameError - uninitialized constant Onlylogs::ApplicationCable]: /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/channels/onlylogs/logs_channel.rb:4:in '<module:Onlylogs>' | /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/channels/onlylogs/logs_channel.rb:3:in '<top (required)>' | /Users/alessandrorodi/.rbenv/versions/3.4.1/lib/ruby/3.4.0/bundled_gems.rb:82:in 'Kernel.require' | /Users/alessandrorodi/.rbenv/versions/3.4.1/lib/ruby/3.4.0/bundled_gems.rb:82:in 'block (2 levels) in Kernel#replace_require' | /Users/alessandrorodi/.rbenv/versions/3.4.1/lib/ruby/gems/3.4.0/gems/zeitwerk-2.7.3/lib/zeitwerk/core_ext/kernel.rb:26:in 'Kernel#require'
+Started GET "/onlylogs" for 127.0.0.1 at 2025-09-02 13:14:51 +0200
+Processing by Onlylogs::LogsController#index as HTML
+  Rendering layout /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/views/layouts/onlylogs/application.html.erb
+  Rendering /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/views/onlylogs/logs/index.html.erb within layouts/onlylogs/application
+  Rendered /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/views/onlylogs/shared/_log_container.html.erb (Duration: 0.0ms | GC: 0.0ms)
+  Rendered /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/views/onlylogs/logs/index.html.erb within layouts/onlylogs/application (Duration: 0.1ms | GC: 0.0ms)
+  Rendered layout /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/views/layouts/onlylogs/application.html.erb (Duration: 0.6ms | GC: 0.0ms)
+Completed 200 OK in 29ms (Views: 0.8ms | ActiveRecord: 0.0ms (0 queries, 0 cached) | GC: 0.0ms)
+
+
+Started GET "/cable" for 127.0.0.1 at 2025-09-02 13:14:51 +0200
+Started GET "/cable" [WebSocket] for 127.0.0.1 at 2025-09-02 13:14:51 +0200
+Successfully upgraded to WebSocket (REQUEST_METHOD: GET, HTTP_CONNECTION: Upgrade, HTTP_UPGRADE: websocket)
+Could not execute command from ({"command" => "subscribe", "identifier" => "{\"channel\":\"Onlylogs::LogsChannel\"}"}) [NameError - uninitialized constant Onlylogs::ApplicationCable]: /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/channels/onlylogs/logs_channel.rb:4:in '<module:Onlylogs>' | /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/channels/onlylogs/logs_channel.rb:3:in '<top (required)>' | /Users/alessandrorodi/.rbenv/versions/3.4.1/lib/ruby/3.4.0/bundled_gems.rb:82:in 'Kernel.require' | /Users/alessandrorodi/.rbenv/versions/3.4.1/lib/ruby/3.4.0/bundled_gems.rb:82:in 'block (2 levels) in Kernel#replace_require' | /Users/alessandrorodi/.rbenv/versions/3.4.1/lib/ruby/gems/3.4.0/gems/zeitwerk-2.7.3/lib/zeitwerk/core_ext/kernel.rb:26:in 'Kernel#require'
+Could not execute command from ({"command" => "subscribe", "identifier" => "{\"channel\":\"Onlylogs::LogsChannel\"}"}) [NameError - uninitialized constant Onlylogs::ApplicationCable]: /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/channels/onlylogs/logs_channel.rb:4:in '<module:Onlylogs>' | /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/channels/onlylogs/logs_channel.rb:3:in '<top (required)>' | /Users/alessandrorodi/.rbenv/versions/3.4.1/lib/ruby/3.4.0/bundled_gems.rb:82:in 'Kernel.require' | /Users/alessandrorodi/.rbenv/versions/3.4.1/lib/ruby/3.4.0/bundled_gems.rb:82:in 'block (2 levels) in Kernel#replace_require' | /Users/alessandrorodi/.rbenv/versions/3.4.1/lib/ruby/gems/3.4.0/gems/zeitwerk-2.7.3/lib/zeitwerk/core_ext/kernel.rb:26:in 'Kernel#require'
+Could not execute command from ({"command" => "subscribe", "identifier" => "{\"channel\":\"Onlylogs::LogsChannel\"}"}) [NameError - uninitialized constant Onlylogs::ApplicationCable]: /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/channels/onlylogs/logs_channel.rb:4:in '<module:Onlylogs>' | /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/channels/onlylogs/logs_channel.rb:3:in '<top (required)>' | /Users/alessandrorodi/.rbenv/versions/3.4.1/lib/ruby/3.4.0/bundled_gems.rb:82:in 'Kernel.require' | /Users/alessandrorodi/.rbenv/versions/3.4.1/lib/ruby/3.4.0/bundled_gems.rb:82:in 'block (2 levels) in Kernel#replace_require' | /Users/alessandrorodi/.rbenv/versions/3.4.1/lib/ruby/gems/3.4.0/gems/zeitwerk-2.7.3/lib/zeitwerk/core_ext/kernel.rb:26:in 'Kernel#require'
+Could not execute command from ({"command" => "subscribe", "identifier" => "{\"channel\":\"Onlylogs::LogsChannel\"}"}) [NameError - uninitialized constant Onlylogs::ApplicationCable]: /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/channels/onlylogs/logs_channel.rb:4:in '<module:Onlylogs>' | /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/channels/onlylogs/logs_channel.rb:3:in '<top (required)>' | /Users/alessandrorodi/.rbenv/versions/3.4.1/lib/ruby/3.4.0/bundled_gems.rb:82:in 'Kernel.require' | /Users/alessandrorodi/.rbenv/versions/3.4.1/lib/ruby/3.4.0/bundled_gems.rb:82:in 'block (2 levels) in Kernel#replace_require' | /Users/alessandrorodi/.rbenv/versions/3.4.1/lib/ruby/gems/3.4.0/gems/zeitwerk-2.7.3/lib/zeitwerk/core_ext/kernel.rb:26:in 'Kernel#require'
+Could not execute command from ({"command" => "subscribe", "identifier" => "{\"channel\":\"Onlylogs::LogsChannel\"}"}) [NameError - uninitialized constant Onlylogs::ApplicationCable]: /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/channels/onlylogs/logs_channel.rb:4:in '<module:Onlylogs>' | /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/channels/onlylogs/logs_channel.rb:3:in '<top (required)>' | /Users/alessandrorodi/.rbenv/versions/3.4.1/lib/ruby/3.4.0/bundled_gems.rb:82:in 'Kernel.require' | /Users/alessandrorodi/.rbenv/versions/3.4.1/lib/ruby/3.4.0/bundled_gems.rb:82:in 'block (2 levels) in Kernel#replace_require' | /Users/alessandrorodi/.rbenv/versions/3.4.1/lib/ruby/gems/3.4.0/gems/zeitwerk-2.7.3/lib/zeitwerk/core_ext/kernel.rb:26:in 'Kernel#require'
+Could not execute command from ({"command" => "subscribe", "identifier" => "{\"channel\":\"Onlylogs::LogsChannel\"}"}) [NameError - uninitialized constant Onlylogs::ApplicationCable]: /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/channels/onlylogs/logs_channel.rb:4:in '<module:Onlylogs>' | /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/channels/onlylogs/logs_channel.rb:3:in '<top (required)>' | /Users/alessandrorodi/.rbenv/versions/3.4.1/lib/ruby/3.4.0/bundled_gems.rb:82:in 'Kernel.require' | /Users/alessandrorodi/.rbenv/versions/3.4.1/lib/ruby/3.4.0/bundled_gems.rb:82:in 'block (2 levels) in Kernel#replace_require' | /Users/alessandrorodi/.rbenv/versions/3.4.1/lib/ruby/gems/3.4.0/gems/zeitwerk-2.7.3/lib/zeitwerk/core_ext/kernel.rb:26:in 'Kernel#require'
+Could not execute command from ({"command" => "subscribe", "identifier" => "{\"channel\":\"Onlylogs::LogsChannel\"}"}) [NameError - uninitialized constant Onlylogs::ApplicationCable]: /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/channels/onlylogs/logs_channel.rb:4:in '<module:Onlylogs>' | /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/channels/onlylogs/logs_channel.rb:3:in '<top (required)>' | /Users/alessandrorodi/.rbenv/versions/3.4.1/lib/ruby/3.4.0/bundled_gems.rb:82:in 'Kernel.require' | /Users/alessandrorodi/.rbenv/versions/3.4.1/lib/ruby/3.4.0/bundled_gems.rb:82:in 'block (2 levels) in Kernel#replace_require' | /Users/alessandrorodi/.rbenv/versions/3.4.1/lib/ruby/gems/3.4.0/gems/zeitwerk-2.7.3/lib/zeitwerk/core_ext/kernel.rb:26:in 'Kernel#require'
+Started GET "/onlylogs" for 127.0.0.1 at 2025-09-02 13:14:53 +0200
+Processing by Onlylogs::LogsController#index as HTML
+  Rendering layout /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/views/layouts/onlylogs/application.html.erb
+  Rendering /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/views/onlylogs/logs/index.html.erb within layouts/onlylogs/application
+  Rendered /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/views/onlylogs/shared/_log_container.html.erb (Duration: 0.0ms | GC: 0.0ms)
+  Rendered /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/views/onlylogs/logs/index.html.erb within layouts/onlylogs/application (Duration: 0.1ms | GC: 0.0ms)
+  Rendered layout /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/views/layouts/onlylogs/application.html.erb (Duration: 0.5ms | GC: 0.0ms)
+Completed 200 OK in 28ms (Views: 0.7ms | ActiveRecord: 0.0ms (0 queries, 0 cached) | GC: 0.0ms)
+
+
+Finished "/cable" [WebSocket] for 127.0.0.1 at 2025-09-02 13:14:53 +0200
+Started GET "/cable" for 127.0.0.1 at 2025-09-02 13:14:53 +0200
+Started GET "/cable" [WebSocket] for 127.0.0.1 at 2025-09-02 13:14:53 +0200
+Successfully upgraded to WebSocket (REQUEST_METHOD: GET, HTTP_CONNECTION: Upgrade, HTTP_UPGRADE: websocket)
+Could not execute command from ({"command" => "subscribe", "identifier" => "{\"channel\":\"Onlylogs::LogsChannel\"}"}) [NameError - uninitialized constant Onlylogs::ApplicationCable]: /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/channels/onlylogs/logs_channel.rb:4:in '<module:Onlylogs>' | /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/channels/onlylogs/logs_channel.rb:3:in '<top (required)>' | /Users/alessandrorodi/.rbenv/versions/3.4.1/lib/ruby/3.4.0/bundled_gems.rb:82:in 'Kernel.require' | /Users/alessandrorodi/.rbenv/versions/3.4.1/lib/ruby/3.4.0/bundled_gems.rb:82:in 'block (2 levels) in Kernel#replace_require' | /Users/alessandrorodi/.rbenv/versions/3.4.1/lib/ruby/gems/3.4.0/gems/zeitwerk-2.7.3/lib/zeitwerk/core_ext/kernel.rb:26:in 'Kernel#require'
+Could not execute command from ({"command" => "subscribe", "identifier" => "{\"channel\":\"Onlylogs::LogsChannel\"}"}) [NameError - uninitialized constant Onlylogs::ApplicationCable]: /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/channels/onlylogs/logs_channel.rb:4:in '<module:Onlylogs>' | /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/channels/onlylogs/logs_channel.rb:3:in '<top (required)>' | /Users/alessandrorodi/.rbenv/versions/3.4.1/lib/ruby/3.4.0/bundled_gems.rb:82:in 'Kernel.require' | /Users/alessandrorodi/.rbenv/versions/3.4.1/lib/ruby/3.4.0/bundled_gems.rb:82:in 'block (2 levels) in Kernel#replace_require' | /Users/alessandrorodi/.rbenv/versions/3.4.1/lib/ruby/gems/3.4.0/gems/zeitwerk-2.7.3/lib/zeitwerk/core_ext/kernel.rb:26:in 'Kernel#require'
+Started GET "/onlylogs" for 127.0.0.1 at 2025-09-02 13:14:54 +0200
+Processing by Onlylogs::LogsController#index as HTML
+  Rendering layout /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/views/layouts/onlylogs/application.html.erb
+  Rendering /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/views/onlylogs/logs/index.html.erb within layouts/onlylogs/application
+  Rendered /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/views/onlylogs/shared/_log_container.html.erb (Duration: 0.0ms | GC: 0.0ms)
+  Rendered /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/views/onlylogs/logs/index.html.erb within layouts/onlylogs/application (Duration: 0.1ms | GC: 0.0ms)
+  Rendered layout /Users/alessandrorodi/RenuoWorkspace/onlylogs/app/views/layouts/onlylogs/application.html.erb (Duration: 0.5ms | GC: 0.0ms)
+Completed 200 OK in 29ms (Views: 0.7ms | ActiveRecord: 0.0ms (0 queries, 0 cached) | GC: 0.0ms)

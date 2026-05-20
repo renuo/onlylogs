@@ -14,6 +14,10 @@
     .log-file-dropdown {
         margin-left: 0.5rem;
     }
+
+    .download-link {
+        margin-left: 0.5rem;
+    }
 </style>
 <div class="grid">
   <div class="grid-header">
@@ -21,13 +25,14 @@
       <%= form_with url: root_path, method: :get, local: true, class: "log-file-dropdown", data: { controller: "auto-submit" } do %>
         <select id="log_file_path" name="log_file_path" data-action="change->auto-submit#submit">
           <% @available_log_files.each do |file| %>
-            <% encrypted_path = Onlylogs::SecureFilePath.encrypt(file.to_s) %>
-            <% relative_path = Pathname.new(file).relative_path_from(Rails.root).to_s %>
-            <option value="<%= encrypted_path %>" <%= "selected" if file.to_s == @log_file_path.to_s %>>
-              <%= relative_path %>
+            <option value="<%= Onlylogs::SecureFilePath.encrypt(file) %>" <%= "selected" if file.to_s == @log_file_path.to_s %>>
+              <%= log_file_label(file) %>
             </option>
           <% end %>
         </select>
+      <% end %>
+      <% if @log_file_path %>
+        <%= link_to "Download", download_log_path(log_file_path: Onlylogs::SecureFilePath.encrypt(@log_file_path)), class: "download-link" %>
       <% end %>
     <% end %>
   </div>

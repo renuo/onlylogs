@@ -14,6 +14,8 @@ require "onlylogs/http_logger"
 # loader.setup
 
 module Onlylogs
+  class ForbiddenPathError < StandardError; end
+
   if defined?(Importmap)
     mattr_accessor :importmap, default: Importmap::Map.new
   end

@@ -5,7 +5,6 @@ module Onlylogs
     class SecurityError < StandardError; end
 
     def self.encrypt(file_path)
-      encryptor = ActiveSupport::MessageEncryptor.new(encryption_key)
       encrypted = encryptor.encrypt_and_sign(file_path.to_s)
       Base64.urlsafe_encode64(encrypted).tr("=", "")
     rescue => e
@@ -15,15 +14,14 @@ module Onlylogs
 
     def self.decrypt(encrypted_path)
       decoded = Base64.urlsafe_decode64(encrypted_path)
-      encryptor = ActiveSupport::MessageEncryptor.new(encryption_key)
       encryptor.decrypt_and_verify(decoded)
     rescue => e
       Rails.logger.error "Onlylogs: Decryption failed: #{e.message}"
       raise SecurityError, "Invalid encrypted file path"
     end
 
-    private_class_method def self.encryption_key
-      Rails.application.secret_key_base[0..31]
+    private_class_method def self.encryptor
+      @encryptor ||= ActiveSupport::MessageEncryptor.new(Rails.application.secret_key_base[0..31])
     end
   end
 end

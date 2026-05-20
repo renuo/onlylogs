@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.0
+
+- Add file download button next to log file selector.
+
 ## 0.4.5
 
 - Fix compatibility with lograge.
