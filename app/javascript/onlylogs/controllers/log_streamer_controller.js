@@ -86,11 +86,13 @@ export default class LogStreamerController extends Controller {
 
   toggleAutoScroll() {
     this.autoScrollValue = !this.autoScrollValue;
+    this.#updateUrlParam('autoscroll', this.autoScrollValue ? null : 'false');
     this.scroll();
   }
 
   toggleRegexpMode() {
     this.regexpModeValue = this.regexpModeTarget.checked;
+    this.#updateUrlParam('regexp_mode', this.regexpModeValue ? 'true' : null);
     // If we have a filter applied, reconnect to apply the new regexp mode
     if (this.filterInputTarget.value && this.filterInputTarget.value.trim() !== '') {
       this.reconnectWithNewMode();
@@ -112,8 +114,10 @@ export default class LogStreamerController extends Controller {
   }
 
   applyFilter() {
+    const filterValue = this.filterInputTarget.value;
+
     // If filter is applied, disable live mode
-    if (this.filterInputTarget.value && this.filterInputTarget.value.trim() !== '') {
+    if (filterValue && filterValue.trim() !== '') {
       this.liveModeTarget.checked = false;
       this.modeValue = 'search';
     } else {
@@ -125,6 +129,7 @@ export default class LogStreamerController extends Controller {
     // Update visual state
     this.updateLiveModeState();
     this.updateStopButtonVisibility();
+    this.#updateUrlParam('filter', filterValue || null);
 
     // Use the global debounced reconnection (300ms delay)
     this.reconnectWithNewMode();
@@ -167,6 +172,9 @@ export default class LogStreamerController extends Controller {
     // Update visual state
     this.updateLiveModeState();
     this.updateStopButtonVisibility();
+
+    // Update URL with cleared filter
+    this.#updateUrlParam('filter');
 
     // Reconnect with cleared filter and live mode
     this.reconnectWithNewMode();
@@ -389,5 +397,18 @@ export default class LogStreamerController extends Controller {
     this.clusterize.destroy();
     this.clusterize = null;
     this.#initializeClusterize();
+  }
+
+  #updateUrlParam(param, value = null) {
+    const params = new URLSearchParams(window.location.search);
+
+    if (value != null) {
+      params.set(param, value);
+    } else {
+      params.delete(param);
+    }
+
+    const newUrl = `${window.location.pathname}?${params.toString()}`;
+    window.history.replaceState(null, '', newUrl);
   }
 }

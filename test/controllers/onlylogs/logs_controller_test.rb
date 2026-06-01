@@ -107,5 +107,13 @@ module Onlylogs
       get "/onlylogs/download", params: {log_file_path: "invalid_encrypted_string"}
       assert_response :bad_request
     end
+
+    test "index persists multiple parameters together" do
+      get "/onlylogs", params: {filter: "warning", autoscroll: "false", regexp_mode: "true"}
+      assert_response :success
+      assert_select "[data-log-streamer-filter-value='warning']"
+      assert_select "[data-log-streamer-auto-scroll-value='false']"
+      assert_select "[data-log-streamer-regexp-mode-value='true']"
+    end
   end
 end
