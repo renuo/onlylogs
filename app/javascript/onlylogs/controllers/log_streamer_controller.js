@@ -86,13 +86,13 @@ export default class LogStreamerController extends Controller {
 
   toggleAutoScroll() {
     this.autoScrollValue = !this.autoScrollValue;
-    this.#updateUrlParams();
+    this.#updateUrlParam('autoscroll', this.autoScrollValue ? null : 'false');
     this.scroll();
   }
 
   toggleRegexpMode() {
     this.regexpModeValue = this.regexpModeTarget.checked;
-    this.#updateUrlParams();
+    this.#updateUrlParam('regexp_mode', this.regexpModeValue ? 'true' : null);
     // If we have a filter applied, reconnect to apply the new regexp mode
     if (this.filterInputTarget.value && this.filterInputTarget.value.trim() !== '') {
       this.reconnectWithNewMode();
@@ -114,8 +114,10 @@ export default class LogStreamerController extends Controller {
   }
 
   applyFilter() {
+    const filterValue = this.filterInputTarget.value;
+
     // If filter is applied, disable live mode
-    if (this.filterInputTarget.value && this.filterInputTarget.value.trim() !== '') {
+    if (filterValue && filterValue.trim() !== '') {
       this.liveModeTarget.checked = false;
       this.modeValue = 'search';
     } else {
@@ -127,8 +129,7 @@ export default class LogStreamerController extends Controller {
     // Update visual state
     this.updateLiveModeState();
     this.updateStopButtonVisibility();
-
-    this.#updateUrlParams();
+    this.#updateUrlParam('filter', filterValue || null);
 
     // Use the global debounced reconnection (300ms delay)
     this.reconnectWithNewMode();
@@ -173,7 +174,7 @@ export default class LogStreamerController extends Controller {
     this.updateStopButtonVisibility();
 
     // Update URL with cleared filter
-    this.#updateUrlParams();
+    this.#updateUrlParam('filter');
 
     // Reconnect with cleared filter and live mode
     this.reconnectWithNewMode();
@@ -398,32 +399,15 @@ export default class LogStreamerController extends Controller {
     this.#initializeClusterize();
   }
 
-  #updateUrlParams() {
+  #updateUrlParam(param, value = null) {
     const params = new URLSearchParams(window.location.search);
 
-    // Update or remove filter parameter
-    const filterValue = this.filterInputTarget.value;
-    if (filterValue && filterValue.trim() !== '') {
-      params.set('filter', filterValue);
+    if (value != null) {
+      params.set(param, value);
     } else {
-      params.delete('filter');
+      params.delete(param);
     }
 
-    // Update autoscroll parameter
-    if (!this.autoScrollValue) {
-      params.set('autoscroll', 'false');
-    } else {
-      params.delete('autoscroll');
-    }
-
-    // Update regexp mode parameter
-    if (this.regexpModeValue) {
-      params.set('regexp_mode', 'true');
-    } else {
-      params.delete('regexp_mode');
-    }
-
-    // Update the URL without reloading the page
     const newUrl = `${window.location.pathname}?${params.toString()}`;
     window.history.replaceState(null, '', newUrl);
   }
