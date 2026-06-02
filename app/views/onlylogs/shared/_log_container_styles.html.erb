@@ -24,6 +24,27 @@
             }
         }
 
+        &[data-log-streamer-mode-value="search"] .onlylogs-expand-btn {
+            cursor: pointer;
+            padding: 0 0.5rem;
+            margin-right: 0.25rem;
+            background: none;
+            border: none;
+            color: #666;
+            font-weight: bold;
+            font-size: 1.1em;
+            line-height: 1;
+
+            &:hover {
+                color: #333;
+            }
+        }
+
+        .onlylogs-log-line-wrapper {
+            display: flex;
+            align-items: center;
+        }
+
         .clusterize-content {
             outline: 0;
         }
@@ -72,10 +93,19 @@
             color: lch(95% 2 0);
         }
 
+        .clusterize-content {
+          min-width: max-content;
+        }
+
         pre {
             margin: 0 !important;
             padding: 0.2rem;
             word-break: break-word;  /* allow breaking long tokens like UUIDs/SQL */
+            white-space: pre;
+
+            &.highlighted-context-line {
+              background-color: rgba(255, 193, 7, 0.3);
+            }
         }
 
         a {
