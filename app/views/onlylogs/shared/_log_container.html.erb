@@ -1,4 +1,4 @@
-<%# locals: (log_file_path:, tail: 100, filter: "", autoscroll: true) %>
+<%# locals: (log_file_path:, tail: 100, filter: "", autoscroll: true, regexp_mode: false) %>
 <script nonce="<%= request.content_security_policy_nonce %>"
         src="https://cdn.jsdelivr.net/npm/clusterize.js@0.18.1/clusterize.min.js"></script>
 <%= render "onlylogs/shared/log_container_styles" %>
@@ -17,6 +17,7 @@
      data-log-streamer-cursor-position-value="<%= cursor_position %>"
      data-log-streamer-filter-value="<%= filter %>"
      data-log-streamer-auto-scroll-value="<%= autoscroll %>"
+     data-log-streamer-regexp-mode-value="<%= regexp_mode %>"
      data-log-streamer-mode-value="<%= mode %>"
      class="onlylogs-log-container" >
     <div data-log-streamer-target="logLines" data-text-selection-target="logLines" id="scrollArea" class="onlylogs-log-lines clusterize-scroll">
@@ -48,7 +49,7 @@
         </div>
         <div>
           <label style="margin-bottom: 0;">
-            <input id="regexpMode" type="checkbox" name="regexpMode" data-log-streamer-target="regexpMode" data-text-selection-target="regexpMode" data-action="change->log-streamer#toggleRegexpMode">
+            <input id="regexpMode" type="checkbox" <%= regexp_mode ? "checked" : "" %> name="regexpMode" data-log-streamer-target="regexpMode" data-text-selection-target="regexpMode" data-action="change->log-streamer#toggleRegexpMode">
             <u>R</u>egexp Mode
           </label>
         </div>
