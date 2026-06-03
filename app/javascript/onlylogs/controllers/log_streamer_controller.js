@@ -28,6 +28,9 @@ export default class LogStreamerController extends Controller {
 
     this.#updateWebsocketStatus('disconnected');
 
+    // Listen for selection events from text-selection controller
+    this.element.addEventListener('text-selection:start', () => this.pauseForSelection())
+
     this.start();
     this.updateLiveModeState();
     this.scroll();
@@ -41,6 +44,9 @@ export default class LogStreamerController extends Controller {
       clearTimeout(this.reconnectTimeout);
       this.reconnectTimeout = null;
     }
+
+    // Remove event listeners
+    this.element.removeEventListener('text-selection:start', () => this.pauseForSelection())
 
     // Destroy clusterize instance
     if (this.clusterize) {
@@ -90,6 +96,24 @@ export default class LogStreamerController extends Controller {
     this.scroll();
   }
 
+  pauseForSelection() {
+    // Enter "highlighting mode" - disable both autoscroll and live mode
+    if (this.autoScrollValue) {
+      this.autoScrollValue = false;
+      const autoscrollCheckbox = document.querySelector('input[name="autoscroll"]')
+      if (autoscrollCheckbox) {
+        autoscrollCheckbox.checked = false;
+      }
+    }
+
+    if (this.isLiveMode()) {
+      this.liveModeTarget.checked = false;
+      this.modeValue = 'search';
+      this.updateLiveModeState();
+      this.stop();
+    }
+  }
+
   toggleRegexpMode() {
     this.regexpModeValue = this.regexpModeTarget.checked;
     this.#updateUrlParam('regexp_mode', this.regexpModeValue ? 'true' : null);
@@ -102,14 +126,14 @@ export default class LogStreamerController extends Controller {
   toggleLiveMode() {
     // this condition looks revered, but the value here has been changed already. so the live mode has been enabled.
     if (this.isLiveMode()) {
-      this.clearFilter();
       this.modeValue = 'live';
-      this.reconnectWithNewMode();
-      return;
-    }
-    else {
+      this.updateLiveModeState();
+      if (!this.isRunning) {
+        this.start();
+      }
+    } else {
+      // Prevent unchecking - live mode can only be disabled by applying a filter
       this.liveModeTarget.checked = true;
-      return false;
     }
   }
 
@@ -192,11 +216,14 @@ export default class LogStreamerController extends Controller {
 
   updateLiveModeState() {
     const liveModeLabel = this.liveModeTarget.closest('label');
+    const hasFilter = this.filterInputTarget.value && this.filterInputTarget.value.trim() !== '';
 
-    if (this.isLiveMode()) {
-      liveModeLabel.classList.remove('live-mode-sticky');
-    } else {
+    if (hasFilter) {
       liveModeLabel.classList.add('live-mode-sticky');
+      this.liveModeTarget.disabled = true;
+    } else {
+      liveModeLabel.classList.remove('live-mode-sticky');
+      this.liveModeTarget.disabled = false;
     }
   }
 
