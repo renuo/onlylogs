@@ -7,17 +7,24 @@ export default class TextSelectionController extends Controller {
     this.boundHandleTextSelection = this.handleTextSelection.bind(this)
     this.boundHandleDocumentClick = this.handleDocumentClick.bind(this)
     this.boundHandleSelectionChange = this.handleSelectionChange.bind(this)
-    
+    this.boundHandleMouseDown = this.handleMouseDown.bind(this)
+
     // Only listen for text selection on the log lines, not the toolbar
+    this.logLinesTarget.addEventListener('mousedown', this.boundHandleMouseDown)
     this.logLinesTarget.addEventListener('mouseup', this.boundHandleTextSelection)
     document.addEventListener('click', this.boundHandleDocumentClick)
     document.addEventListener('selectionchange', this.boundHandleSelectionChange)
   }
 
   disconnect() {
+    this.logLinesTarget.removeEventListener('mousedown', this.boundHandleMouseDown)
     this.logLinesTarget.removeEventListener('mouseup', this.boundHandleTextSelection)
     document.removeEventListener('click', this.boundHandleDocumentClick)
     document.removeEventListener('selectionchange', this.boundHandleSelectionChange)
+  }
+
+  handleMouseDown() {
+    this.element.dispatchEvent(new CustomEvent('text-selection:start'))
   }
 
   handleTextSelection(event) {
