@@ -28,9 +28,6 @@ export default class LogStreamerController extends Controller {
 
     this.#updateWebsocketStatus('disconnected');
 
-    // Listen for selection events from text-selection controller
-    this.element.addEventListener('text-selection:start', () => this.pauseForSelection())
-
     this.start();
     this.updateLiveModeState();
     this.scroll();
@@ -44,9 +41,6 @@ export default class LogStreamerController extends Controller {
       clearTimeout(this.reconnectTimeout);
       this.reconnectTimeout = null;
     }
-
-    // Remove event listeners
-    this.element.removeEventListener('text-selection:start', () => this.pauseForSelection())
 
     // Destroy clusterize instance
     if (this.clusterize) {
@@ -97,6 +91,7 @@ export default class LogStreamerController extends Controller {
   }
 
   pauseForSelection() {
+    // Triggered by TextSelectionController#handleMouseDown via text-selection:start event
     // Enter "highlighting mode" - disable both autoscroll and live mode
     if (this.autoScrollValue) {
       this.autoScrollValue = false;

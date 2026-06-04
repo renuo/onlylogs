@@ -24,7 +24,7 @@ export default class TextSelectionController extends Controller {
   }
 
   handleMouseDown() {
-    this.element.dispatchEvent(new CustomEvent('text-selection:start'))
+    this.dispatch("start")
   }
 
   handleTextSelection(event) {
