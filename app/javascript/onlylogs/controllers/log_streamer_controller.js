@@ -12,7 +12,7 @@ export default class LogStreamerController extends Controller {
     regexpMode: { type: Boolean, default: false }
   };
 
-  static targets = ["logLines", "filterInput", "results", "liveMode", "message", "regexpMode", "websocketStatus", "stopButton", "clearButton"];
+  static targets = ["logLines", "filterInput", "results", "liveMode", "message", "regexpMode", "websocketStatus", "stopButton", "clearButton", "autoscroll"];
 
   connect() {
     this.consumer = createConsumer();
@@ -100,10 +100,7 @@ export default class LogStreamerController extends Controller {
     // Enter "highlighting mode" - disable both autoscroll and live mode
     if (this.autoScrollValue) {
       this.autoScrollValue = false;
-      const autoscrollCheckbox = document.querySelector('input[name="autoscroll"]')
-      if (autoscrollCheckbox) {
-        autoscrollCheckbox.checked = false;
-      }
+      this.autoscrollTarget.checked = false;
     }
 
     if (this.isLiveMode()) {
