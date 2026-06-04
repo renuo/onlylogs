@@ -359,7 +359,7 @@ bin/simulate_latency enable 300/100
 
 # Custom port: 120ms ±30ms on port 8080
 bin/simulate_latency enable -p 8080
-
+```
 
 
 **Testing and monitoring:**
