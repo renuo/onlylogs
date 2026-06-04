@@ -1,9 +1,12 @@
 #!/usr/bin/env ruby
 # Continuous log writer - appends logs for testing
-# Usage: ruby continuous_log_writer.rb [logs_per_batch] [interval_seconds]
-# Example: ruby continuous_log_writer.rb 5 1  (5 logs every 1 second)
+# Usage: ./bin/continuous_log_writer [logs_per_batch] [interval_seconds]
+# Example: ./bin/continuous_log_writer 5 1  (5 logs every 1 second)
 
-log_file = File.expand_path("log/development.log", __dir__)
+# Find the log directory relative to this script
+log_dir = File.expand_path("../../test/dummy/log", __FILE__)
+log_file = File.join(log_dir, "development.log")
+
 logs_per_batch = (ARGV[0] || 1).to_i
 interval = (ARGV[1] || 2).to_i
 counter = 0
