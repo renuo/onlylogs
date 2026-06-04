@@ -290,37 +290,92 @@ You are more than welcome to help and contribute to this package.
 
 The app uses minitest and includes a dummy app, so getting started should be straightforward.
 
+### Getting Started
+
+First, install dependencies:
+
+```bash
+bundle install
+```
+
+Then start the dummy Rails app:
+
+```bash
+cd test/dummy
+bundle exec rails s
+```
+
+The dummy app will be available at `http://localhost:3000` and onlylogs at `http://localhost:3000/onlylogs`.
+
+### Generating Test Logs
+
+To test onlylogs with live log data, use the continuous log writer script. This is especially useful for testing real-time log streaming and UI behavior.
+
+```bash
+# Generate 1 log entry every 2 seconds (default)
+bin/continuous_log_writer
+
+# Generate 5 log entries every 1 second
+bin/continuous_log_writer 5 1
+
+# Generate 10 log entries every 3 seconds
+bin/continuous_log_writer 10 3
+```
+
+The script will write logs to `test/dummy/log/development.log`, which will appear in real-time in the onlylogs UI at `http://localhost:3000/onlylogs`. 
+
+**Example workflow:**
+
+```bash
+# Terminal 1: Start the Rails app
+cd test/dummy && bundle exec rails s
+
+# Terminal 2: Generate test logs while viewing in the UI
+bin/continuous_log_writer 3 1
+```
+
+Open `http://localhost:3000/onlylogs` in your browser and watch logs appear as the script writes them.
+
 ### Latency Simulation
 
 For testing how onlylogs behaves under production-like network conditions, you can simulate latency for HTTP requests and WebSocket connections using the included latency simulation tool.
 
-### Usage
+**Parameters:**
+- **Latency** (default: 120ms): The base network delay added to all traffic
+- **Jitter** (default: 30ms): Random variation (±) applied to the latency (changes every 2 seconds to simulate real network conditions)
+- **Port** (default: 3000): The port to apply latency simulation to
+
+**Common scenarios:**
 
 ```bash
-# Enable latency simulation (120±30ms jitter on port 3000)
-./bin/simulate_latency enable
+# Default: 120ms ±30ms jitter (simulates typical 4G/LTE conditions)
+bin/simulate_latency enable
 
-# Enable custom latency simulation (150±30ms jitter on port 3000)
-./bin/simulate_latency enable 150
+# High latency: 500ms (simulates poor connectivity)
+bin/simulate_latency enable 500
 
-# Enable custom latency and jitter (200±50ms jitter on port 3000)
-./bin/simulate_latency enable 200/50
+# High latency with high variation: 300ms ±100ms (simulates unstable connections)
+bin/simulate_latency enable 300/100
 
-# Enable latency simulation on custom port (120±30ms jitter on port 8080)
-./bin/simulate_latency enable -p 8080
-
-# Enable custom latency and jitter on custom port (150±50ms jitter on port 8080)
-./bin/simulate_latency enable 150/50 -p 8080
-
-# Test the latency
-./bin/simulate_latency test
-
-# Check current status
-./bin/simulate_latency status
-
-# Disable and clean up
-./bin/simulate_latency disable
+# Custom port: 120ms ±30ms on port 8080
+bin/simulate_latency enable -p 8080
 ```
+
+
+**Testing and monitoring:**
+
+```bash
+# Test the current latency configuration
+bin/simulate_latency test
+
+# Check current status and active pipes
+bin/simulate_latency status
+
+# Disable and restore normal network conditions
+bin/simulate_latency disable
+```
+
+The `test` command will run 10 HTTP requests and 10 WebSocket connections, showing you the actual round-trip times and helping you verify the latency is working as expected.
 
 ### Performance Testing
 
