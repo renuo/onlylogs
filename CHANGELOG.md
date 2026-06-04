@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.1
+
+- Update URL parameters when updating the filter and regexp so that they are copy-pastable.
+
 ## 0.5.0
 
 - Add file download button next to log file selector.
