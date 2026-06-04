@@ -19,6 +19,7 @@
      data-log-streamer-auto-scroll-value="<%= autoscroll %>"
      data-log-streamer-regexp-mode-value="<%= regexp_mode %>"
      data-log-streamer-mode-value="<%= mode %>"
+     data-action="text-selection:start->log-streamer#pauseForSelection"
      class="onlylogs-log-container" >
     <div data-log-streamer-target="logLines" data-text-selection-target="logLines" id="scrollArea" class="onlylogs-log-lines clusterize-scroll">
       <div id="contentArea" class="clusterize-content">
@@ -43,7 +44,7 @@
         </div>
         <div>
           <label style="margin-bottom: 0;">
-            <input id="autoscroll" type="checkbox" <%= autoscroll ? "checked" : "" %> name="autoscroll" data-keyboard-shortcuts-target="autoscroll" data-action="change->log-streamer#toggleAutoScroll">
+            <input id="autoscroll" type="checkbox" <%= autoscroll ? "checked" : "" %> name="autoscroll" data-log-streamer-target="autoscroll" data-keyboard-shortcuts-target="autoscroll" data-action="change->log-streamer#toggleAutoScroll">
             <u>A</u>utoscroll
           </label>
         </div>

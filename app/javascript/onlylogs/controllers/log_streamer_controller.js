@@ -12,7 +12,7 @@ export default class LogStreamerController extends Controller {
     regexpMode: { type: Boolean, default: false }
   };
 
-  static targets = ["logLines", "filterInput", "results", "liveMode", "message", "regexpMode", "websocketStatus", "stopButton", "clearButton"];
+  static targets = ["logLines", "filterInput", "results", "liveMode", "message", "regexpMode", "websocketStatus", "stopButton", "clearButton", "autoscroll"];
 
   connect() {
     this.consumer = createConsumer();
@@ -90,6 +90,22 @@ export default class LogStreamerController extends Controller {
     this.scroll();
   }
 
+  pauseForSelection() {
+    // Triggered by TextSelectionController#handleMouseDown via text-selection:start event
+    // Enter "highlighting mode" - disable both autoscroll and live mode
+    if (this.autoScrollValue) {
+      this.autoScrollValue = false;
+      this.autoscrollTarget.checked = false;
+    }
+
+    if (this.isLiveMode()) {
+      this.liveModeTarget.checked = false;
+      this.modeValue = 'search';
+      this.updateLiveModeState();
+      this.stop();
+    }
+  }
+
   toggleRegexpMode() {
     this.regexpModeValue = this.regexpModeTarget.checked;
     this.#updateUrlParam('regexp_mode', this.regexpModeValue ? 'true' : null);
@@ -102,14 +118,14 @@ export default class LogStreamerController extends Controller {
   toggleLiveMode() {
     // this condition looks revered, but the value here has been changed already. so the live mode has been enabled.
     if (this.isLiveMode()) {
-      this.clearFilter();
       this.modeValue = 'live';
-      this.reconnectWithNewMode();
-      return;
-    }
-    else {
+      this.updateLiveModeState();
+      if (!this.isRunning) {
+        this.start();
+      }
+    } else {
+      // Prevent unchecking - live mode can only be disabled by applying a filter
       this.liveModeTarget.checked = true;
-      return false;
     }
   }
 
@@ -192,11 +208,14 @@ export default class LogStreamerController extends Controller {
 
   updateLiveModeState() {
     const liveModeLabel = this.liveModeTarget.closest('label');
+    const hasFilter = this.filterInputTarget.value && this.filterInputTarget.value.trim() !== '';
 
-    if (this.isLiveMode()) {
-      liveModeLabel.classList.remove('live-mode-sticky');
-    } else {
+    if (hasFilter) {
       liveModeLabel.classList.add('live-mode-sticky');
+      this.liveModeTarget.disabled = true;
+    } else {
+      liveModeLabel.classList.remove('live-mode-sticky');
+      this.liveModeTarget.disabled = false;
     }
   }
 
