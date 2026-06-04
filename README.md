@@ -313,13 +313,13 @@ To test onlylogs with live log data, use the continuous log writer script. This 
 
 ```bash
 # Generate 1 log entry every 2 seconds (default)
-./bin/continuous_log_writer
+bin/continuous_log_writer
 
 # Generate 5 log entries every 1 second
-./bin/continuous_log_writer 5 1
+bin/continuous_log_writer 5 1
 
 # Generate 10 log entries every 3 seconds
-./bin/continuous_log_writer 10 3
+bin/continuous_log_writer 10 3
 ```
 
 The script will write logs to `test/dummy/log/development.log`, which will appear in real-time in the onlylogs UI at `http://localhost:3000/onlylogs`. 
@@ -331,7 +331,7 @@ The script will write logs to `test/dummy/log/development.log`, which will appea
 cd test/dummy && bundle exec rails s
 
 # Terminal 2: Generate test logs while viewing in the UI
-./bin/continuous_log_writer 3 1
+bin/continuous_log_writer 3 1
 ```
 
 Open `http://localhost:3000/onlylogs` in your browser and watch logs appear as the script writes them.
@@ -349,44 +349,30 @@ For testing how onlylogs behaves under production-like network conditions, you c
 
 ```bash
 # Default: 120ms ±30ms jitter (simulates typical 4G/LTE conditions)
-./bin/simulate_latency enable
+bin/simulate_latency enable
 
 # High latency: 500ms (simulates poor connectivity)
-./bin/simulate_latency enable 500
+bin/simulate_latency enable 500
 
 # High latency with high variation: 300ms ±100ms (simulates unstable connections)
-./bin/simulate_latency enable 300/100
+bin/simulate_latency enable 300/100
 
 # Custom port: 120ms ±30ms on port 8080
-./bin/simulate_latency enable -p 8080
+bin/simulate_latency enable -p 8080
 
 
-**Practical workflow:**
-
-```bash
-# Terminal 1: Start latency simulation with 200ms delay
-./bin/simulate_latency enable 200
-
-# Terminal 2: Start the Rails app
-cd test/dummy && bundle exec rails s
-
-# Terminal 3: Generate test logs
-./bin/continuous_log_writer 5 1
-```
-
-Now open `http://localhost:3000/onlylogs` and observe how the UI performs with network latency. You'll notice slower response times and WebSocket updates taking longer.
 
 **Testing and monitoring:**
 
 ```bash
 # Test the current latency configuration
-./bin/simulate_latency test
+bin/simulate_latency test
 
 # Check current status and active pipes
-./bin/simulate_latency status
+bin/simulate_latency status
 
 # Disable and restore normal network conditions
-./bin/simulate_latency disable
+bin/simulate_latency disable
 ```
 
 The `test` command will run 10 HTTP requests and 10 WebSocket connections, showing you the actual round-trip times and helping you verify the latency is working as expected.
