@@ -7,23 +7,51 @@ require "uri"
 # Unlike SocketLogger, it does not require a sidecar process or Puma plugin,
 # so it works from any process: Puma, GoodJob, Sidekiq, rake tasks, migrations, etc.
 
+# When the drain is unreachable or unresponsive, we do two things to protect the app:
+# * an upper bound to the in-memory queue: log lines can never accumulate without limit and
+#   exhaust memory
+# * cooldown: once the drain is known to be failing we stop attempting
+#   requests for a cooldown period instead of blocking on every send for the full
+#   read timeout (a down host accepts the TCP/TLS connection but never answers).
 module Onlylogs
   class HttpLogger < Onlylogs::Logger
     DEFAULT_BATCH_SIZE = 100
     DEFAULT_FLUSH_INTERVAL = 0.5
+    DEFAULT_MAX_QUEUE_SIZE = 10_000
+
+    # Keep timeouts short: a single slow/dead drain must never stall the app for long.
+    DEFAULT_OPEN_TIMEOUT = 0.5
+    DEFAULT_READ_TIMEOUT = 0.5
+
+    # Open the circuit after this many consecutive failed sends
+    CIRCUIT_FAILURE_THRESHOLD = 3
+    # ...and keep it open for this long once it is open.
+    CIRCUIT_COOLDOWN = 30
 
     def initialize(
       local_fallback: $stdout,
       drain_url: ENV["ONLYLOGS_DRAIN_URL"],
       batch_size: ENV.fetch("ONLYLOGS_BATCH_SIZE", DEFAULT_BATCH_SIZE).to_i,
-      flush_interval: ENV.fetch("ONLYLOGS_FLUSH_INTERVAL", DEFAULT_FLUSH_INTERVAL).to_f
+      flush_interval: ENV.fetch("ONLYLOGS_FLUSH_INTERVAL", DEFAULT_FLUSH_INTERVAL).to_f,
+      max_queue_size: ENV.fetch("ONLYLOGS_MAX_QUEUE_SIZE", DEFAULT_MAX_QUEUE_SIZE).to_i,
+      open_timeout: ENV.fetch("ONLYLOGS_OPEN_TIMEOUT", DEFAULT_OPEN_TIMEOUT).to_f,
+      read_timeout: ENV.fetch("ONLYLOGS_READ_TIMEOUT", DEFAULT_READ_TIMEOUT).to_f,
+      circuit_cooldown: ENV.fetch("ONLYLOGS_CIRCUIT_COOLDOWN", CIRCUIT_COOLDOWN).to_f
     )
       super(local_fallback)
       @drain_url = drain_url
       @batch_size = batch_size
       @flush_interval = flush_interval
+      @max_queue_size = max_queue_size
+      @open_timeout = open_timeout
+      @read_timeout = read_timeout
+      @circuit_cooldown = circuit_cooldown
       @queue = Queue.new
       @mutex = Mutex.new
+
+      @consecutive_failures = 0
+      @circuit_open_until = nil
+      @dropped = 0
 
       if @drain_url
         start_sender
@@ -45,7 +73,7 @@ module Onlylogs
       end
 
       formatted = format_message(format_severity(severity), Time.now, progname, message.to_s)
-      @queue << formatted.chomp if formatted && @drain_url
+      enqueue(formatted.chomp) if formatted
       super
     end
 
@@ -61,6 +89,18 @@ module Onlylogs
     end
 
     private
+
+    # Push a line onto the queue unless it is full. Dropping is intentional: blocking the
+    # caller (a request thread) or growing without bound (OOM) are both worse than losing
+    # logs while the drain is unavailable.
+    def enqueue(line)
+      if @queue.size >= @max_queue_size
+        @mutex.synchronize { @dropped += 1 }
+        return
+      end
+
+      @queue << line
+    end
 
     def start_sender
       @running = true
@@ -102,20 +142,61 @@ module Onlylogs
 
     def send_batch(lines)
       return if lines.empty?
+      # Drain is known to be down: skip the request entirely so we don't block for the
+      # full read timeout on every batch. The lines are dropped (best-effort logging).
+      return if circuit_open?
 
       uri = URI.parse(@drain_url)
       http = Net::HTTP.new(uri.host, uri.port)
       http.use_ssl = (uri.scheme == "https")
-      http.read_timeout = 5
-      http.open_timeout = 2
+      http.read_timeout = @read_timeout
+      http.open_timeout = @open_timeout
 
       request = Net::HTTP::Post.new(uri.path)
       request.body = lines.join("\n")
       request.content_type = "text/plain"
 
       http.start { |h| h.request(request) }
+      record_success
     rescue => e
-      warn "Onlylogs::HttpLogger error: #{e.class}: #{e.message}"
+      record_failure
+      Kernel.warn "Onlylogs::HttpLogger error: #{e.class}: #{e.message}"
+    end
+
+    def circuit_open?
+      @mutex.synchronize { !@circuit_open_until.nil? && Time.now < @circuit_open_until }
+    end
+
+    def record_success
+      @mutex.synchronize do
+        @consecutive_failures = 0
+        @circuit_open_until = nil
+      end
+    end
+
+    def record_failure
+      opened = false
+      dropped = 0
+
+      @mutex.synchronize do
+        @consecutive_failures += 1
+        next if @consecutive_failures < CIRCUIT_FAILURE_THRESHOLD
+
+        # (Re)open the circuit. record_failure only runs on a real send attempt — send_batch
+        # short-circuits while the circuit is open — so reaching here always means the drain
+        # is still down and we should pause again (this is how recovery retries every cooldown).
+        @circuit_open_until = Time.now + @circuit_cooldown
+        opened = true
+        dropped = @dropped
+        @dropped = 0
+      end
+
+      # Warn outside the mutex:
+      # doing it inside the lock would re-enter @mutex through add -> enqueue and raise a recursive-lock error.
+      return unless opened
+
+      suffix = dropped.positive? ? " (#{dropped} log lines dropped)" : ""
+      Kernel.warn "Onlylogs::HttpLogger: drain unavailable, pausing for #{@circuit_cooldown}s#{suffix}"
     end
   end
 end
