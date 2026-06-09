@@ -23,6 +23,10 @@ module Onlylogs
     DEFAULT_OPEN_TIMEOUT = 0.5
     DEFAULT_READ_TIMEOUT = 0.5
 
+    # How long Net::HTTP may keep an idle connection around for reuse. Comfortably longer than
+    # the default flush interval so normal traffic reuses one connection across many batches.
+    DEFAULT_KEEP_ALIVE_TIMEOUT = 30
+
     # Open the circuit after this many consecutive failed sends
     CIRCUIT_FAILURE_THRESHOLD = 3
     # ...and keep it open for this long once it is open.
@@ -36,18 +40,23 @@ module Onlylogs
       max_queue_size: ENV.fetch("ONLYLOGS_MAX_QUEUE_SIZE", DEFAULT_MAX_QUEUE_SIZE).to_i,
       open_timeout: ENV.fetch("ONLYLOGS_OPEN_TIMEOUT", DEFAULT_OPEN_TIMEOUT).to_f,
       read_timeout: ENV.fetch("ONLYLOGS_READ_TIMEOUT", DEFAULT_READ_TIMEOUT).to_f,
-      circuit_cooldown: ENV.fetch("ONLYLOGS_CIRCUIT_COOLDOWN", CIRCUIT_COOLDOWN).to_f
+      circuit_cooldown: ENV.fetch("ONLYLOGS_CIRCUIT_COOLDOWN", CIRCUIT_COOLDOWN).to_f,
+      keep_alive_timeout: ENV.fetch("ONLYLOGS_KEEP_ALIVE_TIMEOUT", DEFAULT_KEEP_ALIVE_TIMEOUT).to_f
     )
       super(local_fallback)
       @drain_url = drain_url
+      @uri = URI.parse(drain_url) if drain_url
       @batch_size = batch_size
       @flush_interval = flush_interval
       @max_queue_size = max_queue_size
       @open_timeout = open_timeout
       @read_timeout = read_timeout
       @circuit_cooldown = circuit_cooldown
+      @keep_alive_timeout = keep_alive_timeout
       @queue = Queue.new
       @mutex = Mutex.new
+      @http_mutex = Mutex.new
+      @http = nil
 
       @consecutive_failures = 0
       @circuit_open_until = nil
@@ -56,12 +65,13 @@ module Onlylogs
       if @drain_url
         start_sender
       else
-        $stderr.puts "Onlylogs::HttpLogger error: ONLYLOGS_DRAIN_URL is not set; logger is disabled." # rubocop:disable Style/StderrPuts
+        $stderr.puts "Onlylogs::HttpLogger: ONLYLOGS_DRAIN_URL is not set; logging locally only." # rubocop:disable Style/StderrPuts
       end
     end
 
     def add(severity, message = nil, progname = nil, &block)
-      return true unless @drain_url
+      # No drain configured: behave as a plain local logger instead of dropping everything.
+      return super unless @drain_url
 
       if message.nil?
         if block_given?
@@ -81,6 +91,7 @@ module Onlylogs
       flush
       @running = false
       @sender_thread&.join(2)
+      close_connection
     end
 
     def flush
@@ -146,21 +157,58 @@ module Onlylogs
       # full read timeout on every batch. The lines are dropped (best-effort logging).
       return if circuit_open?
 
-      uri = URI.parse(@drain_url)
-      http = Net::HTTP.new(uri.host, uri.port)
-      http.use_ssl = (uri.scheme == "https")
-      http.read_timeout = @read_timeout
-      http.open_timeout = @open_timeout
-
-      request = Net::HTTP::Post.new(uri.path)
-      request.body = lines.join("\n")
-      request.content_type = "text/plain"
-
-      http.start { |h| h.request(request) }
+      deliver(lines.join("\n"))
       record_success
     rescue => e
       record_failure
       Kernel.warn "Onlylogs::HttpLogger error: #{e.class}: #{e.message}"
+    end
+
+    # POST the body over a persistent (kept-alive) connection.
+    def deliver(body)
+      @http_mutex.synchronize do
+        attempts = 0
+        begin
+          attempts += 1
+          reused = !@http.nil?
+          connection.request(build_request(body))
+        rescue
+          close_connection
+          retry if reused && attempts < 2
+          raise
+        end
+      end
+    end
+
+    def build_request(body)
+      request = Net::HTTP::Post.new(@uri.path)
+      request.body = body
+      request.content_type = "text/plain"
+      request
+    end
+
+    # Lazily opens and memoizes the connection. Only assigns @http once #start succeeds, so a
+    # failed connect leaves @http nil and the next send starts clean. Caller holds @http_mutex.
+    def connection
+      return @http if @http
+
+      http = Net::HTTP.new(@uri.host, @uri.port)
+      http.use_ssl = (@uri.scheme == "https")
+      http.read_timeout = @read_timeout
+      http.open_timeout = @open_timeout
+      http.keep_alive_timeout = @keep_alive_timeout
+      http.start
+      @http = http
+    end
+
+    # Caller holds @http_mutex, or no other thread can touch @http (shutdown after the sender
+    # thread has joined).
+    def close_connection
+      @http&.finish
+    rescue IOError
+      # already closed
+    ensure
+      @http = nil
     end
 
     def circuit_open?

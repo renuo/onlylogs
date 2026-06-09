@@ -20,11 +20,9 @@ module Onlylogs
             break
           end
           Thread.new(client) do |conn|
-            request = ""
             content_length = 0
 
             while (line = conn.gets)
-              request += line
               content_length = line.split(": ")[1].to_i if line.start_with?("Content-Length:")
               break if line.strip.empty?
             end
@@ -80,6 +78,42 @@ module Onlylogs
       combined = bodies.join("\n")
 
       assert_includes combined, "interval flush line"
+    end
+
+    test "logs locally when no drain URL is configured instead of dropping everything" do
+      local = StringIO.new
+
+      logger = capture_stderr do
+        Onlylogs::HttpLogger.new(local_fallback: local, drain_url: nil)
+      end
+
+      logger.add(Logger::INFO, "local only line")
+      logger.close
+
+      assert_includes local.string, "local only line"
+    end
+
+    test "reuses a single TCP connection across batches (keep-alive)" do
+      server, port, connections = start_keep_alive_server
+
+      logger = Onlylogs::HttpLogger.new(
+        drain_url: "http://127.0.0.1:#{port}/drain",
+        batch_size: 1,
+        flush_interval: 0.05,
+        keep_alive_timeout: 30
+      )
+
+      logger.add(Logger::INFO, "first batch")
+      sleep 0.2
+      logger.add(Logger::INFO, "second batch")
+      sleep 0.2
+      logger.close
+
+      assert_equal 1, connections.value,
+        "expected both batches to reuse one keep-alive connection, got #{connections.value}"
+    ensure
+      logger&.close
+      server&.close
     end
 
     test "does not crash when drain URL is unreachable" do
@@ -236,6 +270,70 @@ module Onlylogs
       yield
     ensure
       $stderr = original
+    end
+
+    # A thread-safe integer the server thread bumps on each accepted connection.
+    class Counter
+      def initialize
+        @mutex = Mutex.new
+        @value = 0
+      end
+
+      def increment
+        @mutex.synchronize { @value += 1 }
+      end
+
+      def value
+        @mutex.synchronize { @value }
+      end
+    end
+
+    # Returns [server, port, counter] for an HTTP/1.1 keep-alive server: it serves multiple
+    # requests per connection (looping until the client closes) and counts how many distinct
+    # TCP connections were accepted, so a test can assert the client reused one.
+    def start_keep_alive_server
+      server = TCPServer.new("127.0.0.1", 0)
+      port = server.addr[1]
+      connections = Counter.new
+
+      Thread.new do
+        loop do
+          client = begin
+            server.accept
+          rescue
+            break
+          end
+          connections.increment
+
+          Thread.new(client) do |conn|
+            loop do
+              content_length = 0
+              saw_headers = false
+
+              while (line = conn.gets)
+                content_length = line.split(": ")[1].to_i if line.start_with?("Content-Length:")
+                if line.strip.empty?
+                  saw_headers = true
+                  break
+                end
+              end
+
+              break unless saw_headers
+
+              conn.read(content_length) if content_length > 0
+              conn.print "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n"
+            end
+          ensure
+            begin
+              conn.close
+            rescue
+              nil
+            end
+          end
+        end
+      end
+
+      [server, port, connections]
     end
 
     # Returns [server, port] for a server that accepts connections but never replies,

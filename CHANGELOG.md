@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.3
+
+- Reuse Http connection.
+
+## 0.5.2
+
+- `HttpLogger` now falls back to logging locally when `ONLYLOGS_DRAIN_URL` is not set, instead of silently dropping all log lines.
+
 ## 0.5.1
 
 - Update URL parameters when updating the filter and regexp so that they are copy-pastable.
