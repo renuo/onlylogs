@@ -168,7 +168,7 @@ module Onlylogs
     def deliver(body)
       @http_mutex.synchronize do
         attempts = 0
-        begin
+        response = begin
           attempts += 1
           reused = !@http.nil?
           connection.request(build_request(body))
@@ -177,7 +177,21 @@ module Onlylogs
           retry if reused && attempts < 2
           raise
         end
+
+        # Checked outside the rescue on purpose: a non-2xx is an application-level error on a
+        # healthy connection, so it must NOT trigger the reconnect-retry above (that would hammer
+        # an erroring drain on a perfectly good socket). Raising here records a failure instead.
+        ensure_success!(response)
       end
+    end
+
+    # Net::HTTP does not raise on 4xx/5xx; it returns the response. Treat any non-2xx as a
+    # failed delivery so send_batch records it and the circuit can open. Without this a drain
+    # that is up but answering 500/413 would look like success and we'd silently drop every batch.
+    def ensure_success!(response)
+      return if response.is_a?(Net::HTTPSuccess)
+
+      raise "drain responded #{response.code} #{response.message}"
     end
 
     def build_request(body)

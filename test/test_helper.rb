@@ -1,3 +1,11 @@
+require "simplecov"
+
+SimpleCov.start do
+  enable_coverage :branch
+  add_filter "/test/"
+  track_files "lib/**/*.rb"
+end
+
 # Configure Rails Environment
 ENV["RAILS_ENV"] = "test"
 
@@ -5,6 +13,9 @@ require_relative "../test/dummy/config/environment"
 ActiveRecord::Migrator.migrations_paths = [File.expand_path("../test/dummy/db/migrate", __dir__)]
 ActiveRecord::Migrator.migrations_paths << File.expand_path("../db/migrate", __dir__)
 require "rails/test_help"
+
+# Shared test support (mock servers, helpers, …).
+Dir[File.expand_path("support/**/*.rb", __dir__)].each { |file| require file }
 
 # Load fixtures from the engine
 if ActiveSupport::TestCase.respond_to?(:fixture_paths=)

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- `HttpLogger` now treats a non-2xx response as a failed delivery.
+
 ## 0.5.3
 
 - Reuse Http connection.

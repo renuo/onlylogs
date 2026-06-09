@@ -18,6 +18,8 @@ gem "openssl", "~> 3.3.1"
 
 gem "standard", require: false
 
+gem "simplecov", require: false
+
 gem "lograge"
 
 # Start debugger with binding.b [https://github.com/ruby/debug]
