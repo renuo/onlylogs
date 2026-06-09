@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- `HttpLogger` can now buffer undeliverable batches to disk and replay them when the drain
+  recovers (and on the next boot), so a transient outage or a restart no longer loses logs.
 - `HttpLogger` now treats a non-2xx response as a failed delivery.
 
 ## 0.5.3

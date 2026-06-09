@@ -2,6 +2,7 @@
 
 require "net/http"
 require "uri"
+require_relative "spool"
 
 # This logger sends messages to onlylogs.io (or any Vector-compatible sink) directly via HTTP.
 # Unlike SocketLogger, it does not require a sidecar process or Puma plugin,
@@ -13,6 +14,10 @@ require "uri"
 # * cooldown: once the drain is known to be failing we stop attempting
 #   requests for a cooldown period instead of blocking on every send for the full
 #   read timeout (a down host accepts the TCP/TLS connection but never answers).
+#
+# By default an on-disk Spool buffers any batch we could not deliver and replays it once the
+# drain recovers, so a transient outage or a restart does not lose logs. It is on by default
+# (set ONLYLOGS_SPOOL_DIR empty to disable) and bounded by bytes; see Onlylogs::Spool.
 module Onlylogs
   class HttpLogger < Onlylogs::Logger
     DEFAULT_BATCH_SIZE = 100
@@ -41,7 +46,9 @@ module Onlylogs
       open_timeout: ENV.fetch("ONLYLOGS_OPEN_TIMEOUT", DEFAULT_OPEN_TIMEOUT).to_f,
       read_timeout: ENV.fetch("ONLYLOGS_READ_TIMEOUT", DEFAULT_READ_TIMEOUT).to_f,
       circuit_cooldown: ENV.fetch("ONLYLOGS_CIRCUIT_COOLDOWN", CIRCUIT_COOLDOWN).to_f,
-      keep_alive_timeout: ENV.fetch("ONLYLOGS_KEEP_ALIVE_TIMEOUT", DEFAULT_KEEP_ALIVE_TIMEOUT).to_f
+      keep_alive_timeout: ENV.fetch("ONLYLOGS_KEEP_ALIVE_TIMEOUT", DEFAULT_KEEP_ALIVE_TIMEOUT).to_f,
+      spool_dir: ENV.fetch("ONLYLOGS_SPOOL_DIR", default_spool_dir),
+      spool_max_bytes: ENV.fetch("ONLYLOGS_SPOOL_MAX_BYTES", Spool::DEFAULT_MAX_BYTES).to_i
     )
       super(local_fallback)
       @drain_url = drain_url
@@ -57,12 +64,14 @@ module Onlylogs
       @mutex = Mutex.new
       @http_mutex = Mutex.new
       @http = nil
+      @spool = nil
 
       @consecutive_failures = 0
       @circuit_open_until = nil
       @dropped = 0
 
       if @drain_url
+        @spool = build_spool(spool_dir, spool_max_bytes)
         start_sender
       else
         $stderr.puts "Onlylogs::HttpLogger: ONLYLOGS_DRAIN_URL is not set; logging locally only." # rubocop:disable Style/StderrPuts
@@ -117,6 +126,9 @@ module Onlylogs
       @running = true
 
       @sender_thread = Thread.new do
+        # Replay anything left in the spool by a previous run or a crashed/redeployed sibling.
+        drain_spool
+
         batch = []
         last_flush = Time.now
 
@@ -153,15 +165,68 @@ module Onlylogs
 
     def send_batch(lines)
       return if lines.empty?
-      # Drain is known to be down: skip the request entirely so we don't block for the
-      # full read timeout on every batch. The lines are dropped (best-effort logging).
-      return if circuit_open?
 
-      deliver(lines.join("\n"))
+      body = lines.join("\n")
+
+      # Drain is known to be down: skip the request entirely so we don't block for the full read
+      # timeout on every batch. Buffer the batch so the cooldown does not cost us data (without a
+      # spool configured, spool_write is a no-op and the batch is dropped — best-effort logging).
+      if circuit_open?
+        spool_write(body)
+        return
+      end
+
+      deliver(body)
       record_success
+      # The drain just answered: replay anything we had buffered while it was unavailable.
+      drain_spool
     rescue => e
       record_failure
+      spool_write(body)
       Kernel.warn "Onlylogs::HttpLogger error: #{e.class}: #{e.message}"
+    end
+
+    def spool_write(body)
+      @spool&.write(body)
+    end
+
+    # Replay buffered batches now that the drain is responding. Oldest first; stop at the first
+    # failure (record it and leave the rest on disk) so a drain that just went down again does not
+    # burn the whole backlog into the void.
+    def drain_spool
+      return unless @spool
+
+      @spool.replay do |body|
+        deliver(body)
+        record_success
+        true
+      rescue => e
+        record_failure
+        Kernel.warn "Onlylogs::HttpLogger replay error: #{e.class}: #{e.message}"
+        false
+      end
+    end
+
+    def build_spool(dir, max_bytes)
+      return if dir.nil? || dir.to_s.strip.empty?
+
+      Spool.new(dir: dir, max_bytes: max_bytes)
+    rescue => e
+      Kernel.warn "Onlylogs::HttpLogger: spool disabled (#{e.class}: #{e.message})"
+      nil
+    end
+
+    # The spool is on by default. It lives under the app's tmp dir, which survives a drain outage
+    # while the app keeps running; point ONLYLOGS_SPOOL_DIR at a persistent volume to also survive
+    # redeploys, or set it empty to disable.
+    def default_spool_dir
+      base = if defined?(Rails) && Rails.respond_to?(:root) && Rails.root
+        Rails.root.to_s
+      else
+        ::Dir.pwd
+      end
+
+      ::File.join(base, "tmp", "onlylogs", "spool")
     end
 
     # POST the body over a persistent (kept-alive) connection.

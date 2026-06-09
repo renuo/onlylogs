@@ -2,6 +2,8 @@
 
 require "test_helper"
 require "socket"
+require "tmpdir"
+require "fileutils"
 
 module Onlylogs
   class HttpLoggerTest < ActiveSupport::TestCase
@@ -177,6 +179,78 @@ module Onlylogs
       end
     end
 
+    # With a spool configured, a failing drain must not lose data: batches are buffered to disk
+    # while it is down and replayed once it recovers.
+    test "buffers batches to disk while the drain is failing, then replays them on recovery" do
+      dir = ::Dir.mktmpdir
+      drain = build_drain(status: 503)
+      logger = build_logger(drain, batch_size: 1, flush_interval: 0.01, circuit_cooldown: 0.3, spool_dir: dir)
+
+      capture_stderr do
+        3.times { |i| logger.add(Logger::INFO, "buffered #{i}") }
+
+        # Wait until the circuit has tripped: that guarantees all three sends failed and were
+        # buffered, so the drain flip below cannot race with a still-in-flight batch.
+        assert wait_until { logger.instance_variable_get(:@circuit_open_until) },
+          "the failing drain should buffer batches and trip the circuit"
+        refute_empty ::Dir.glob(::File.join(dir, "*.batch")),
+          "the failed batches should be on disk in the spool"
+
+        # Drain recovers; once the cooldown lapses the next successful send replays the backlog.
+        drain.status = 200
+        sleep 0.4
+        logger.add(Logger::INFO, "recovery trigger")
+
+        assert wait_until { ::Dir.glob(::File.join(dir, "*.batch")).empty? },
+          "the spool should drain once the drain recovers"
+      end
+
+      assert_includes drain.received, "buffered 0"
+      assert_includes drain.received, "buffered 2"
+      assert_includes drain.received, "recovery trigger"
+    ensure
+      logger&.close
+      ::FileUtils.remove_entry(dir) if dir && ::File.directory?(dir)
+    end
+
+    # The spool survives a process restart: a new logger picks up files a previous run left behind.
+    test "replays batches left in the spool by a previous run (survives restart)" do
+      dir = ::Dir.mktmpdir
+      previous = Onlylogs::Spool.new(dir: dir)
+      previous.write("orphaned one")
+      previous.write("orphaned two")
+
+      drain = build_drain(status: 200)
+      logger = build_logger(drain, batch_size: 1, flush_interval: 0.01, spool_dir: dir)
+
+      assert wait_until { ::Dir.glob(::File.join(dir, "*.batch")).empty? },
+        "a new logger should replay spool files left by a previous run"
+
+      assert_includes drain.received, "orphaned one"
+      assert_includes drain.received, "orphaned two"
+    ensure
+      logger&.close
+      ::FileUtils.remove_entry(dir) if dir && ::File.directory?(dir)
+    end
+
+    # The spool is opt-out: enabled by default, disabled by an empty ONLYLOGS_SPOOL_DIR.
+    test "enables the disk spool by default and lets an empty dir opt out" do
+      drain = build_drain(status: 200)
+
+      default_logger = Onlylogs::HttpLogger.new(drain_url: drain.url)
+      @loggers << default_logger
+      spool = default_logger.instance_variable_get(:@spool)
+      assert spool, "the spool should be enabled by default"
+
+      disabled = Onlylogs::HttpLogger.new(drain_url: drain.url, spool_dir: "")
+      @loggers << disabled
+      assert_nil disabled.instance_variable_get(:@spool),
+        "an empty spool dir should opt out of buffering"
+    ensure
+      spool_dir = spool&.instance_variable_get(:@dir)
+      ::FileUtils.remove_entry(spool_dir) if spool_dir && ::File.directory?(spool_dir)
+    end
+
     private
 
     # Spins up a MockDrain and registers it so teardown closes it. See MockDrain for `status:`.
@@ -188,7 +262,10 @@ module Onlylogs
     # the no-drain case) and registers it so teardown closes it.
     def build_logger(target, **opts)
       url = target.is_a?(MockDrain) ? target.url : target
-      Onlylogs::HttpLogger.new(drain_url: url, **opts).tap { |logger| @loggers << logger }
+      # The spool is on by default; disable it here for test isolation so unrelated tests don't
+      # share the default on-disk spool dir. Spool tests pass an explicit spool_dir to opt back in.
+      options = {spool_dir: nil}.merge(opts)
+      Onlylogs::HttpLogger.new(drain_url: url, **options).tap { |logger| @loggers << logger }
     end
 
     # Polls the block until it returns a truthy value (returns it) or the timeout elapses.
