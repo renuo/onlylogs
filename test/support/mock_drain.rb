@@ -24,6 +24,15 @@ class MockDrain
     "http://127.0.0.1:#{@server.addr[1]}#{path}"
   end
 
+  # Flip the response status at runtime, e.g. to simulate a drain recovering mid-test.
+  def status=(value)
+    @mutex.synchronize { @status = value }
+  end
+
+  def status
+    @mutex.synchronize { @status }
+  end
+
   def received
     @mutex.synchronize { @bodies.compact.join("\n") }
   end
@@ -56,7 +65,7 @@ class MockDrain
 
   def serve(conn)
     # Hold the socket open and never reply: the client blocks until its read timeout.
-    return @mutex.synchronize { @hanging << conn } if @status == :hang
+    return @mutex.synchronize { @hanging << conn } if status == :hang
 
     while handle_request(conn)
     end
@@ -82,7 +91,8 @@ class MockDrain
     body = conn.read(content_length) if content_length > 0
     @mutex.synchronize { @bodies << body } if body
 
-    conn.print "HTTP/1.1 #{@status} #{Rack::Utils::HTTP_STATUS_CODES.fetch(@status, "Status")}\r\nContent-Length: 0\r\n\r\n"
+    code = status
+    conn.print "HTTP/1.1 #{code} #{Rack::Utils::HTTP_STATUS_CODES.fetch(code, "Status")}\r\nContent-Length: 0\r\n\r\n"
     true
   end
 

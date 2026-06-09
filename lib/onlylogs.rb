@@ -3,6 +3,7 @@ require "onlylogs/configuration"
 require "onlylogs/engine"
 require "onlylogs/formatter"
 require "onlylogs/logger"
+require "onlylogs/spool"
 require "onlylogs/socket_logger"
 require "onlylogs/http_logger"
 
