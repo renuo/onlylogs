@@ -1,3 +1,11 @@
+require "simplecov"
+
+SimpleCov.start do
+  enable_coverage :branch
+  add_filter "/test/"
+  track_files "lib/**/*.rb"
+end
+
 # Configure Rails Environment
 ENV["RAILS_ENV"] = "test"
 
