@@ -195,7 +195,9 @@ module Onlylogs
     end
 
     def build_request(body)
-      request = Net::HTTP::Post.new(@uri.path)
+      # request_uri (not path): it defaults to "/" when the drain URL has no path — Net::HTTP::Post.new("")
+      # raises "HTTP request path is empty" — and it carries any query string (e.g. ?token=...) along.
+      request = Net::HTTP::Post.new(@uri.request_uri)
       request.body = body
       request.content_type = "text/plain"
       request

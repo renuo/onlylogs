@@ -153,6 +153,19 @@ module Onlylogs
       end
     end
 
+    # A drain URL without a path (e.g. "https://onlylogs.io") must still deliver. Net::HTTP::Post.new("")
+    # raises "HTTP request path is empty", so without defaulting the path to "/" every send would fail
+    # and the circuit would open permanently — buffering every batch to the spool forever.
+    test "delivers to a drain URL that has no path" do
+      drain = build_drain
+      logger = build_logger(drain.url(""), batch_size: 1, flush_interval: 0.01, spool_dir: "")
+
+      logger.add(Logger::INFO, "pathless drain line")
+
+      assert wait_until { drain.received.include?("pathless drain line") },
+        "a drain URL without a path should default to / and deliver"
+    end
+
     # After the cooldown elapses the logger retries once; if the drain is still down the
     # circuit must reopen. A regression here silently reverts to a per-send timeout stall.
     test "reopens the circuit after the cooldown while the drain stays down" do
