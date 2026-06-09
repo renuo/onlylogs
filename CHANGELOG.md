@@ -1,15 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.5.3
 
+- Reuse Http connection.
 - `HttpLogger` can now buffer undeliverable batches to disk and replay them when the drain
   recovers (and on the next boot), so a transient outage or a restart no longer loses logs.
 - `HttpLogger` now treats a non-2xx response as a failed delivery.
 - `HttpLogger` now accepts a drain URL without a path (e.g. `https://onlylogs.io`) and forwards any query string, instead of failing every send.
-
-## 0.5.3
-
-- Reuse Http connection.
 
 ## 0.5.2
 
