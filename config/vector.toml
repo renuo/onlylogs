@@ -1,0 +1,32 @@
+# Where Vector keeps internal state (buffers, etc.)
+data_dir = "/usr/local/var/lib/vector"
+
+# --- 1) SOURCE: UDP socket listening on localhost:6000 ---
+
+[sources.udp_logs]
+type = "socket"
+mode = "udp"                       # UDP mode
+address = "127.0.0.1:6000"
+
+# --- 2) SINK: console (for debugging, optional but very handy) ---
+
+[sinks.console]
+type = "console"
+inputs = ["udp_logs"]
+encoding.codec = "json"
+target = "stdout"
+
+# --- 3) SINK: Onlylogs HTTP drain ---
+
+[sinks.onlylogs]
+type = "http"
+inputs = ["udp_logs"]             # consume events from udp_logs
+method = "post"
+uri = "${ONLYLOGS_DSN}"
+
+encoding.codec = "text"
+
+#[sinks.onlylogs.request]
+# Adjust headers if Onlylogs expects something specific
+#headers.Content-Type = "application/json"
+
