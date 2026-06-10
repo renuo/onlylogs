@@ -19,21 +19,37 @@ module Onlylogs
 
       results = []
 
-      IO.popen(command_args, err: "/dev/null") do |io|
-        io.each_line do |line|
-          # Line numbers are no longer outputted by super_grep/super_ripgrep
-          # Use String.new to create a copy and prevent memory retention from IO buffers
-          content = String.new(line.chomp, encoding: Encoding::UTF_8).scrub
+      begin
+        IO.popen(command_args, err: "/dev/null") do |io|
+          io.each_line do |line|
+            # Line numbers are no longer outputted by super_grep/super_ripgrep
+            # Use String.new to create a copy and prevent memory retention from IO buffers
+            content = String.new(line.chomp, encoding: Encoding::UTF_8).scrub
 
-          if block_given?
-            yield content
-          else
-            results << content
+            if block_given?
+              yield content
+            else
+              results << content
+            end
           end
         end
+      ensure
+        drop_page_cache(file_path)
       end
 
       block_given? ? nil : results
+    end
+
+    # Searching a large log file pulls the whole file into the OS page cache.
+    # In a container the kernel charges that cache to the cgroup, so a few
+    # searches over multi-GB logs can exhaust the memory limit and trigger an
+    # OOM kill even though no Ruby memory leaked. Hint the kernel to drop the
+    # pages we just read. Best-effort: advise is only a hint and is unsupported
+    # on some platforms, so never let it break a search.
+    def self.drop_page_cache(file_path)
+      ::File.open(file_path) { |file| file.advise(:dontneed) }
+    rescue StandardError
+      nil
     end
 
     def self.match_line?(line, string, regexp_mode: false)
