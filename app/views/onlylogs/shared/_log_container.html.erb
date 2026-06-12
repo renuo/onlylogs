@@ -1,4 +1,4 @@
-<%# locals: (log_file_path:, tail: 100, filter: "", autoscroll: true, regexp_mode: false, mode: nil) %>
+<%# locals: (log_file_path:, tail: 100, filter: "", autoscroll: true, regexp_mode: false, start_position: nil, end_position: nil, mode: nil) %>
 <script nonce="<%= request.content_security_policy_nonce %>"
         src="https://cdn.jsdelivr.net/npm/clusterize.js@0.18.1/clusterize.min.js"></script>
 <%= render "onlylogs/shared/log_container_styles" %>
@@ -6,6 +6,9 @@
 <%
     mode = local_assigns[:mode] || (filter.blank? ? "live" : "static")
     file_size = File.size(log_file_path)
+    start_position = local_assigns[:start_position]
+    end_position = local_assigns[:end_position]
+    byte_offset = request.params[:byte_offset]
 
     raise SecurityError, "File path not allowed" unless Onlylogs.file_path_permitted?(log_file_path)
 
@@ -14,6 +17,8 @@
 
 <div data-controller="log-streamer text-selection keyboard-shortcuts"
      data-log-streamer-file-path-value="<%= encrypted_log_file_path %>"
+     <% if start_position.present? %>data-log-streamer-start-position-value="<%= start_position %>"<% end %>
+     <% if end_position.present? %>data-log-streamer-end-position-value="<%= end_position %>"<% end %>
      data-log-streamer-filter-value="<%= filter %>"
      data-log-streamer-auto-scroll-value="<%= autoscroll %>"
      data-log-streamer-regexp-mode-value="<%= regexp_mode %>"
@@ -91,6 +96,9 @@
           </button>
         </div>
         <div>
+          <span data-log-streamer-target="results" style="color: #666;">Results: 0</span>
+        </div>
+        <div>
           <button type="button"
                   data-log-streamer-target="stopButton"
                   class="stop-search-button hidden-button"
@@ -99,13 +107,7 @@
             ⏹️ Stop
           </button>
         </div>
-        <div>
-          <span data-log-streamer-target="results" class="results-text">Results: 0</span>
-        </div>
         <div data-log-streamer-target="message"></div>
-        <% unless Onlylogs.ripgrep_enabled? %>
-          <span class="grep-warning" title="Search is slow. Install ripgrep for better performance">⚠️</span>
-        <% end %>
         <div class="file-size" title="File size: <%= number_to_human_size(File.size(log_file_path)) %>">
           <%= number_to_human_size(File.size(log_file_path)) %>
         </div>

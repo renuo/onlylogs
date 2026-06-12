@@ -9,10 +9,12 @@ export default class LogStreamerController extends Controller {
     filter: { type: String, default: '' },
     mode: { type: String, default: 'live' },
     regexpMode: { type: Boolean, default: false },
-    fileSize: { type: Number, default: 0 }
+    fileSize: { type: Number, default: 0 },
+    startPosition: { type: Number, default: 0 },
+    endPosition: { type: Number, default: 0 }
   };
 
-  static targets = ["logLines", "filterInput", "results", "liveMode", "message", "regexpMode", "websocketStatus", "stopButton", "clearButton", "autoscroll", "rangeSliderContainer", "startSlider", "endSlider", "startOutput", "endOutput"];
+  static targets = ["logLines", "filterInput", "results", "liveMode", "message", "regexpMode", "websocketStatus", "stopButton", "clearButton", "autoscroll", "rangeSliderContainer", "startSlider", "endSlider", "startOutput", "endOutput", "byteOffsetInput"];
 
   connect() {
     this.consumer = createConsumer();
@@ -227,6 +229,23 @@ export default class LogStreamerController extends Controller {
     this.subscription.perform('stop_watcher');
   }
 
+  jumpToByteOffset(e) {
+    if (e.type === 'keydown' && e.key !== 'Enter') {
+      return;
+    }
+
+    e.preventDefault();
+    const input = this.element.querySelector('[data-log-streamer-target="byteOffsetInput"]');
+    const byteOffset = input?.value?.trim();
+
+    if (byteOffset && byteOffset !== '') {
+      const params = new URLSearchParams(window.location.search);
+      params.set('byte_offset', byteOffset);
+      const newUrl = `${window.location.pathname}?${params.toString()}`;
+      window.location.href = newUrl;
+    }
+  }
+
   clearLogs() {
     this.clear();
     this.#hideMessage();
@@ -331,14 +350,27 @@ export default class LogStreamerController extends Controller {
    * Handle successful connection
    */
   #handleConnected() {
-    this.subscription.perform('initialize_watcher', {
+    const payload = {
       file_path: this.filePathValue,
       filter: this.filterInputTarget.value,
       mode: this.modeValue,
-      regexp_mode: this.regexpModeValue,
-      start_position: parseInt(this.startSliderTarget.value),
-      end_position: parseInt(this.endSliderTarget.value)
-    });
+      regexp_mode: this.regexpModeValue
+    };
+
+    // Use range slider values if available and not at defaults
+    const startSliderValue = parseInt(this.startSliderTarget.value);
+    const endSliderValue = parseInt(this.endSliderTarget.value);
+
+    if (startSliderValue > 0 || endSliderValue < this.fileSizeValue) {
+      payload.start_position = startSliderValue;
+      payload.end_position = endSliderValue;
+    } else if (this.hasStartPositionValue && this.startPositionValue > 0) {
+      // Fallback to URL-based start/end positions
+      payload.start_position = this.startPositionValue;
+      payload.end_position = this.endPositionValue;
+    }
+
+    this.subscription.perform('initialize_watcher', payload);
 
     this.element.classList.add("log-streamer--connected");
     this.element.classList.remove("log-streamer--disconnected", "log-streamer--rejected");
