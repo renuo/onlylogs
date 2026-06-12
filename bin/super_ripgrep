@@ -58,12 +58,13 @@ query_regex=$(printf "%s" "$query_regex" | sed -E "s/ +/([[:space:]]|$placeholde
 actual_color_regex='\x1b\[[0-9;]*m'
 query_regex="${query_regex//$placeholder/$actual_color_regex}"
 
-# Build ripgrep command.
+# Build ripgrep command
 # --no-mmap: read the file with read() instead of memory-mapping it. mmap'ing a
 # multi-GB log file maps the whole file into the process and, in a container,
 # charges those pages to the cgroup as active memory, which can trigger an OOM
 # kill. Plain read() pages are ordinary, readily-reclaimable page cache.
-rg_cmd="rg --color=never --no-filename --no-mmap"
+# --byte-offset: include byte offset in output for the logs-around-line feature
+rg_cmd="rg --color=never --no-filename --byte-offset --no-mmap"
 [ -n "$max_matches" ] && rg_cmd="$rg_cmd --max-count=$max_matches"
 
 # Handle byte range if specified

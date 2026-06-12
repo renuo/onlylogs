@@ -28,31 +28,31 @@ class Onlylogs::GrepTest < ActiveSupport::TestCase
   test_both_engine_modes "it can grep for a simple string in a log file" do |engine_name|
     lines = Onlylogs::Grep.grep("[DEBUG]", @fixture_path)
     assert_equal 49, lines.length, "Failed with #{engine_name}"
-    assert_equal "[DEBUG] Initializing database connection - Line 2", lines.first
-    assert_equal "[DEBUG] Application metrics - Line 98", lines.last
+    assert_equal "[DEBUG] Initializing database connection - Line 2", lines.first[:content]
+    assert_equal "[DEBUG] Application metrics - Line 98", lines.last[:content]
   end
 
   test_both_engine_modes "it can grep a simple string in a log file and yield each returned line" do |engine_name|
     lines = []
-    Onlylogs::Grep.grep("[DEBUG]", @fixture_path) do |content|
-      lines << content
+    Onlylogs::Grep.grep("[DEBUG]", @fixture_path) do |result|
+      lines << result
     end
     assert_equal 49, lines.length, "Failed with #{engine_name}"
-    assert_equal "[DEBUG] Initializing database connection - Line 2", lines.first
-    assert_equal "[DEBUG] Application metrics - Line 98", lines.last
+    assert_equal "[DEBUG] Initializing database connection - Line 2", lines.first[:content]
+    assert_equal "[DEBUG] Application metrics - Line 98", lines.last[:content]
   end
 
   test_both_engine_modes "it returns all INFO lines" do |engine_name|
     lines = Onlylogs::Grep.grep("[INFO]", @fixture_path)
     assert_equal 50, lines.length, "Failed with #{engine_name}"
-    assert_equal "[INFO] Application started - Line 1", lines.first
-    assert_equal "[INFO] Metrics collected: 150 data points - Line 99", lines.last
+    assert_equal "[INFO] Application started - Line 1", lines.first[:content]
+    assert_equal "[INFO] Metrics collected: 150 data points - Line 99", lines.last[:content]
   end
 
   test_both_engine_modes "it can grep a string when the line contains ansi colors" do |engine_name|
     expected_line = "\e[1m\e[36mActiveRecord::SchemaMigration Load (0.0ms)\e[0m  \e[1m\e[34mSELECT ...\e[0m"
     lines = Onlylogs::Grep.grep("(0.0ms) SELECT", @special_lines_path)
-    assert_equal [expected_line], lines, "Failed with #{engine_name}"
+    assert_equal [expected_line], lines.map { |l| l[:content] }, "Failed with #{engine_name}"
   end
 
   test_both_engine_modes "it can grep a string with special regex characters" do |engine_name|

@@ -59,7 +59,7 @@ module Onlylogs
         read_static(file_path, filter, regexp_mode, start_position, end_position)
       else
         # Follow the tail of the file indefinitely
-        start_log_watcher(file_path, filter, regexp_mode)
+        start_log_watcher(file_path, live_tail_position(file_path), filter, regexp_mode)
       end
     end
 
@@ -87,7 +87,11 @@ module Onlylogs
     # an explicit cursor (matches the default whole-file live-mode page load).
     LIVE_TAIL_BYTES = 10_000
 
-    def start_log_watcher(file_path, filter = nil, regexp_mode = false)
+    def live_tail_position(file_path)
+      [::File.size(file_path) - LIVE_TAIL_BYTES, 0].max
+    end
+
+    def start_log_watcher(file_path, cursor_position, filter = nil, regexp_mode = false)
       return if @log_watcher_running
 
       @log_watcher_running = true
@@ -96,14 +100,13 @@ module Onlylogs
 
       transmit({action: "message", content: "Reading file. Please wait..."})
 
-      # Start from LIVE_TAIL_BYTES from the end, or from the beginning if file is smaller
-      starting_position = [::File.size(file_path) - LIVE_TAIL_BYTES, 0].max
-      @log_file = Onlylogs::File.new(file_path, last_position: starting_position)
+      @log_file = Onlylogs::File.new(file_path, last_position: cursor_position)
 
       transmit({action: "message", content: ""})
 
       @log_watcher_thread = Thread.new do
         Rails.logger.silence(Logger::ERROR) do
+          current_byte_offset = cursor_position
           @log_file.watch do |new_lines|
             break unless @log_watcher_running
 
@@ -116,7 +119,8 @@ module Onlylogs
               #   next
               # end
 
-              lines_to_send << render_log_line(log_line)
+              lines_to_send << render_log_line(log_line, byte_offset: current_byte_offset)
+              current_byte_offset += log_line.bytesize
             end
 
             if lines_to_send.any?
@@ -244,8 +248,19 @@ module Onlylogs
       Rails.logger.error "Error reading byte range: #{e.message}"
     end
 
+<<<<<<< HEAD
     def render_log_line(log_line)
       "<pre>#{FilePathParser.parse(AnsiColorParser.parse(ERB::Util.html_escape(log_line)))}</pre>"
+=======
+    def render_log_line(log_line, byte_offset: nil, show_expand_button: false)
+      parsed = FilePathParser.parse(AnsiColorParser.parse(ERB::Util.html_escape(log_line)))
+
+      {
+        content: parsed,
+        byte_offset: byte_offset,
+        show_expand_button: show_expand_button
+      }
+>>>>>>> d562515 (Add explore mode to view logs around a specific byte offset)
     end
   end
 end
