@@ -115,5 +115,50 @@ module Onlylogs
       assert_select "[data-log-streamer-auto-scroll-value='false']"
       assert_select "[data-log-streamer-regexp-mode-value='true']"
     end
+
+    test "index handles byte_offset param and sets search mode with byteoffset type" do
+      get "/onlylogs", params: {byte_offset: "50000"}
+      assert_response :success
+      # Should be in search mode with byteoffset search type
+      assert_select "[data-log-streamer-mode-value='search']"
+      assert_select "[data-log-streamer-search-type-value='byteoffset']"
+      assert_select "[data-log-streamer-filter-value='']"
+      assert_select "[data-log-streamer-auto-scroll-value='false']"
+    end
+
+    test "index calculates cursor_position from byte_offset" do
+      get "/onlylogs", params: {byte_offset: "50000"}
+      assert_response :success
+      # cursor_position should be byte_offset - 10000 = 40000
+      assert_select "[data-log-streamer-cursor-position-value='40000']"
+    end
+
+    test "index sets end_position from byte_offset" do
+      get "/onlylogs", params: {byte_offset: "50000"}
+      assert_response :success
+      # end_position should be byte_offset + 10000 = 60000
+      assert_select "[data-log-streamer-end-position-value='60000']"
+    end
+
+    test "index sets search_type to filter when filter param is present" do
+      get "/onlylogs", params: {filter: "warning"}
+      assert_response :success
+      assert_select "[data-log-streamer-mode-value='search']"
+      assert_select "[data-log-streamer-search-type-value='filter']"
+    end
+
+    test "index preserves autoscroll and regexp_mode params when not exploring" do
+      get "/onlylogs", params: {filter: "warning", autoscroll: "true", regexp_mode: "true"}
+      assert_response :success
+      assert_select "[data-log-streamer-auto-scroll-value='true']"
+      assert_select "[data-log-streamer-regexp-mode-value='true']"
+    end
+
+    test "index byte_offset with cursor_position boundary at 0" do
+      get "/onlylogs", params: {byte_offset: "5000"}
+      assert_response :success
+      # cursor_position should be max(5000 - 10000, 0) = 0
+      assert_select "[data-log-streamer-cursor-position-value='0']"
+    end
   end
 end

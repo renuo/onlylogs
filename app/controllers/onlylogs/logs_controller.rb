@@ -12,6 +12,11 @@ module Onlylogs
       @autoscroll = params[:autoscroll] != "false"
       @regexp_mode = params[:regexp_mode] == "true"
       @mode = @filter.blank? ? (params[:mode] || "live") : "search" # "live" or "search"
+      @search_type = @filter.present? ? "filter" : nil
+      @start_position = nil
+      @end_position = nil
+
+      handle_byte_offset if params[:byte_offset].present?
     end
 
     def download
@@ -30,6 +35,18 @@ module Onlylogs
     end
 
     private
+
+    def handle_byte_offset
+      byte_offset = params[:byte_offset]&.to_i
+      return unless byte_offset.present?
+
+      @start_position = [byte_offset - 10000, 0].max
+      @end_position = byte_offset + 10000
+      @filter = nil
+      @mode = "search"
+      @search_type = "byteoffset"
+      @autoscroll = false
+    end
 
     def selected_log_file_path
       return default_log_file_path if params[:log_file_path].blank?
