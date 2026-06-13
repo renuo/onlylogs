@@ -4,13 +4,12 @@ import { createConsumer } from "@rails/actioncable";
 export default class LogStreamerController extends Controller {
   static values = {
     filePath: { type: String },
-    cursorPosition: { type: Number, default: 0 },
+    startPosition: { type: Number, default: 0 },
     endPosition: { type: Number, default: 0 },
     autoScroll: { type: Boolean, default: true },
     autoStart: { type: Boolean, default: true },
     filter: { type: String, default: '' },
     mode: { type: String, default: 'live' },
-    searchType: { type: String, default: null },
     regexpMode: { type: Boolean, default: false }
   };
 
@@ -103,7 +102,7 @@ export default class LogStreamerController extends Controller {
 
     if (this.isLiveMode()) {
       this.liveModeTarget.checked = false;
-      this.modeValue = 'search';
+      this.modeValue = 'static';
       this.updateLiveModeState();
       this.stop();
     }
@@ -135,17 +134,18 @@ export default class LogStreamerController extends Controller {
   applyFilter() {
     const filterValue = this.filterInputTarget.value;
 
-    // If filter is applied, disable live mode and set search type
+    // A filter switches to static mode; an empty filter goes back to live.
     if (filterValue && filterValue.trim() !== '') {
       this.liveModeTarget.checked = false;
-      this.modeValue = 'search';
-      this.searchTypeValue = 'filter';
+      this.modeValue = 'static';
     } else {
-      // If no filter, enable live mode
       this.liveModeTarget.checked = true;
       this.modeValue = 'live';
-      this.searchTypeValue = null;
     }
+
+    // Applying a filter searches the whole file, so drop any explore window.
+    this.startPositionValue = 0;
+    this.endPositionValue = 0;
 
     // Update visual state
     this.updateLiveModeState();
@@ -185,11 +185,11 @@ export default class LogStreamerController extends Controller {
   }
 
   clearFilter() {
-    // Clear filter, byte_offset, and search type to go back to pure live mode
+    // Clear filter and explore window to go back to pure live mode
     this.filterInputTarget.value = '';
     this.byteOffsetInputTarget.value = '';
     this.modeValue = 'live';
-    this.searchTypeValue = null;
+    this.startPositionValue = 0;
     this.endPositionValue = 0;
     this.contextLineHighlighted = false;
 
@@ -263,9 +263,17 @@ export default class LogStreamerController extends Controller {
         .find(pre => Number(pre.dataset.byteOffset) === target ||
           Math.abs(Number(pre.dataset.byteOffset) - target) < 1000);
       if (closestPre) {
-        closestPre.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        this.#scrollVerticallyToCenter(closestPre);
       }
     }
+  }
+
+  #scrollVerticallyToCenter(element) {
+    const container = this.logLinesTarget;
+    const containerRect = container.getBoundingClientRect();
+    const elementRect = element.getBoundingClientRect();
+    const delta = (elementRect.top - containerRect.top) - (container.clientHeight / 2) + (elementRect.height / 2);
+    container.scrollBy({ top: delta, behavior: 'smooth' });
   }
 
   #applyContextLineHighlight(target) {
@@ -277,9 +285,21 @@ export default class LogStreamerController extends Controller {
 
     if (!closestPre) return;
 
-    [closestPre.previousElementSibling, closestPre, closestPre.nextElementSibling]
+    const row = this.#rowElement(closestPre);
+    [row.previousElementSibling, row, row.nextElementSibling]
       .filter(Boolean)
       .forEach(line => line.classList.add('highlighted-context-line'));
+  }
+
+  // A row is either a bare <pre> or an expand-button wrapper <div> directly
+  // under the clusterize content area. Walk up to that top-level element so the
+  // highlight covers the whole line, including the "+" toggle.
+  #rowElement(element) {
+    let node = element;
+    while (node.parentElement && !node.parentElement.classList.contains('clusterize-content')) {
+      node = node.parentElement;
+    }
+    return node;
   }
 
   updateLiveModeState() {
@@ -294,7 +314,7 @@ export default class LogStreamerController extends Controller {
   }
 
   updateStopButtonVisibility() {
-    const shouldShow = this.modeValue === 'search' && this.subscription && this.isRunning && !this.isSearchFinished;
+    const shouldShow = this.modeValue === 'static' && this.subscription && this.isRunning && !this.isSearchFinished;
     this.stopButtonTarget.style.display = shouldShow ? 'inline-block' : 'none';
   }
 
@@ -336,21 +356,19 @@ export default class LogStreamerController extends Controller {
    */
   #handleConnected() {
     const data = {
-      cursor_position: this.cursorPositionValue,
       file_path: this.filePathValue,
       filter: this.filterInputTarget.value,
       mode: this.modeValue,
       regexp_mode: this.regexpModeValue
     };
 
-    // Only send end_position if it's set (when expanding context around a search result)
-    if (this.endPositionValue > 0) {
-      data.end_position = this.endPositionValue;
-    }
-
-    // Send search_type if it's set
-    if (this.searchTypeValue) {
-      data.search_type = this.searchTypeValue;
+    if (this.modeValue === 'static') {
+      // A byte-offset explore window reads a bounded range. Without a window
+      // (start/end), a static read is a whole-file filter search.
+      if (this.endPositionValue > 0) {
+        data.start_position = this.startPositionValue;
+        data.end_position = this.endPositionValue;
+      }
     }
 
     this.subscription.perform('initialize_watcher', data);
@@ -490,7 +508,6 @@ export default class LogStreamerController extends Controller {
     return {
       isRunning: this.isRunning,
       filePath: this.filePathValue,
-      cursorPosition: this.cursorPositionValue,
       lineCount: this.clusterize.getRowsAmount(),
       connected: this.subscription && this.subscription.identifier
     };
@@ -513,10 +530,11 @@ export default class LogStreamerController extends Controller {
           // Optional: handle cluster change
         },
         clusterChanged: () => {
-          // Re-apply highlighting when cluster changes (for virtual scrolling)
-          // Only highlight if we're in byteoffset mode
-          if (this.searchTypeValue === 'byteoffset') {
-            const target = Number(new URLSearchParams(window.location.search).get('byte_offset'));
+          // Re-apply highlighting when cluster changes (for virtual scrolling).
+          // The byte_offset URL param is the highlight anchor for an explore window.
+          const params = new URLSearchParams(window.location.search);
+          if (params.has('byte_offset')) {
+            const target = Number(params.get('byte_offset'));
             if (!Number.isNaN(target)) {
               this.#applyContextLineHighlight(target);
             }

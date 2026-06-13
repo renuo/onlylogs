@@ -11,8 +11,7 @@ module Onlylogs
       @filter = params[:filter]
       @autoscroll = params[:autoscroll] != "false"
       @regexp_mode = params[:regexp_mode] == "true"
-      @mode = @filter.blank? ? (params[:mode] || "live") : "search" # "live" or "search"
-      @search_type = @filter.present? ? "filter" : nil
+      @mode = @filter.blank? ? (params[:mode] || "live") : "static" # "live" or "static"
       @start_position = nil
       @end_position = nil
 
@@ -36,15 +35,16 @@ module Onlylogs
 
     private
 
+    EXPLORE_WINDOW_BYTES = 10_000
+
     def handle_byte_offset
       byte_offset = params[:byte_offset]&.to_i
       return unless byte_offset.present?
 
-      @start_position = [byte_offset - 10000, 0].max
-      @end_position = byte_offset + 10000
+      @start_position = [byte_offset - EXPLORE_WINDOW_BYTES, 0].max
+      @end_position = byte_offset + EXPLORE_WINDOW_BYTES
       @filter = nil
-      @mode = "search"
-      @search_type = "byteoffset"
+      @mode = "static"
       @autoscroll = false
     end
 

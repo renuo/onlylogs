@@ -39,23 +39,18 @@ module Onlylogs
         return
       end
 
-      cursor_position = data["cursor_position"] || 0
       filter = data["filter"].presence
       mode = data["mode"] || "live"
-      search_type = data["search_type"]
       regexp_mode = data["regexp_mode"] == true || data["regexp_mode"] == "true"
       start_position = data["start_position"]&.to_i || 0
       end_position = data["end_position"]&.to_i
 
-      if mode == "search" && search_type != "byteoffset"
-        # For filter-based search, read the entire file with filter and send all matching lines
-        read_entire_file_with_filter(file_path, filter, regexp_mode, start_position, end_position)
-      elsif search_type == "byteoffset"
-        # For byteoffset search, read a fixed range
-        start_log_watcher(file_path, cursor_position, filter, regexp_mode, end_position)
+      if mode == "static"
+        # Read a bounded snapshot once, then finish.
+        read_static(file_path, filter, regexp_mode, start_position, end_position)
       else
-        # For live mode, stream indefinitely without end position
-        start_log_watcher(file_path, cursor_position, filter, regexp_mode)
+        # Follow the tail of the file indefinitely. 
+        start_log_watcher(file_path, live_tail_position(file_path), filter, regexp_mode)
       end
     end
 
@@ -79,13 +74,20 @@ module Onlylogs
       stop_log_watcher
     end
 
-    def start_log_watcher(file_path, cursor_position, filter = nil, regexp_mode = false, end_position = nil)
+    # Bytes from the end of the file to show when starting a live tail without
+    # an explicit cursor (matches the default whole-file live-mode page load).
+    LIVE_TAIL_BYTES = 10_000
+
+    def live_tail_position(file_path)
+      [::File.size(file_path) - LIVE_TAIL_BYTES, 0].max
+    end
+
+    def start_log_watcher(file_path, cursor_position, filter = nil, regexp_mode = false)
       return if @log_watcher_running
 
       @log_watcher_running = true
       @filter = filter
       @regexp_mode = regexp_mode
-      @end_position = end_position
 
       transmit({action: "message", content: "Reading file. Please wait..."})
 
@@ -103,12 +105,6 @@ module Onlylogs
             lines_to_send = []
 
             new_lines.each do |log_line|
-              # Stop if we've reached the end position (only when expanding context)
-              if @end_position && @end_position > 0 && current_byte_offset >= @end_position
-                @log_watcher_running = false
-                break
-              end
-
               # Filters in live mode are not yet implemented
               # if @filter.present? && !Onlylogs::Grep.match_line?(log_line.text, @filter, regexp_mode: @regexp_mode)
               #   next
@@ -131,8 +127,6 @@ module Onlylogs
         Rails.logger.error e.backtrace.join("\n")
       ensure
         @log_watcher_running = false
-        # Send finish message if we had an end position (byteoffset mode)
-        transmit({action: "finish", content: "Context loaded."}) if @end_position.present?
       end
     end
 
@@ -158,11 +152,11 @@ module Onlylogs
       @log_file = nil
     end
 
-    def read_entire_file_with_filter(file_path, filter = nil, regexp_mode = false, start_position = 0, end_position = nil)
+    def read_static(file_path, filter = nil, regexp_mode = false, start_position = 0, end_position = nil)
       @log_watcher_running = true
       @log_file = Onlylogs::File.new(file_path, last_position: 0)
 
-      transmit({action: "message", content: "Searching..."})
+      transmit({action: "message", content: filter.present? ? "Searching..." : "Loading..."})
 
       @batch_sender = BatchSender.new(self)
       @batch_sender.start
@@ -189,7 +183,7 @@ module Onlylogs
         @batch_sender.stop
 
         # Send completion message
-        if line_count >= Onlylogs.max_line_matches
+        if Onlylogs.max_line_matches && line_count >= Onlylogs.max_line_matches
           transmit({action: "finish", content: "Search finished. Search results limit reached."})
         else
           transmit({action: "finish", content: "Search finished."})

@@ -24,7 +24,7 @@
             }
         }
 
-        &[data-log-streamer-mode-value="search"] .onlylogs-expand-btn {
+        .onlylogs-expand-btn {
             cursor: pointer;
             padding: 0 0.5rem;
             margin-right: 0.25rem;
@@ -91,13 +91,15 @@
 
         pre {
             margin: 0 !important;
-            padding: 0.2rem;
+            padding: 0 0.2rem;
+            line-height: var(--onlylogs-line-height, 1.6rem);
+            min-height: var(--onlylogs-line-height, 1.6rem);
             word-break: break-word;  /* allow breaking long tokens like UUIDs/SQL */
             white-space: pre;
+        }
 
-            &.highlighted-context-line {
-              background-color: rgba(255, 193, 7, 0.3);
-            }
+        .highlighted-context-line {
+            background-color: rgba(255, 193, 7, 0.3);
         }
 
         a {
