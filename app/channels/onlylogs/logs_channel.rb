@@ -39,19 +39,18 @@ module Onlylogs
         return
       end
 
-      cursor_position = data["cursor_position"] || 0
       filter = data["filter"].presence
       mode = data["mode"] || "live"
       regexp_mode = data["regexp_mode"] == true || data["regexp_mode"] == "true"
       start_position = data["start_position"]&.to_i || 0
       end_position = data["end_position"]&.to_i
 
-      if mode == "search"
-        # For search mode, read the entire file with filter and send all matching lines
-        read_entire_file_with_filter(file_path, filter, regexp_mode, start_position, end_position)
+      if mode == "static"
+        # Read a bounded snapshot once, then finish.
+        read_static(file_path, filter, regexp_mode, start_position, end_position)
       else
-        # For live mode, start the watcher
-        start_log_watcher(file_path, cursor_position, filter, regexp_mode)
+        # Follow the tail of the file indefinitely. 
+        start_log_watcher(file_path, live_tail_position(file_path), filter, regexp_mode)
       end
     end
 
@@ -75,6 +74,14 @@ module Onlylogs
       stop_log_watcher
     end
 
+    # Bytes from the end of the file to show when starting a live tail without
+    # an explicit cursor (matches the default whole-file live-mode page load).
+    LIVE_TAIL_BYTES = 10_000
+
+    def live_tail_position(file_path)
+      [::File.size(file_path) - LIVE_TAIL_BYTES, 0].max
+    end
+
     def start_log_watcher(file_path, cursor_position, filter = nil, regexp_mode = false)
       return if @log_watcher_running
 
@@ -90,6 +97,7 @@ module Onlylogs
 
       @log_watcher_thread = Thread.new do
         Rails.logger.silence(Logger::ERROR) do
+          current_byte_offset = cursor_position
           @log_file.watch do |new_lines|
             break unless @log_watcher_running
 
@@ -102,7 +110,8 @@ module Onlylogs
               #   next
               # end
 
-              lines_to_send << render_log_line(log_line)
+              lines_to_send << render_log_line(log_line, byte_offset: current_byte_offset)
+              current_byte_offset += log_line.bytesize
             end
 
             if lines_to_send.any?
@@ -143,11 +152,11 @@ module Onlylogs
       @log_file = nil
     end
 
-    def read_entire_file_with_filter(file_path, filter = nil, regexp_mode = false, start_position = 0, end_position = nil)
+    def read_static(file_path, filter = nil, regexp_mode = false, start_position = 0, end_position = nil)
       @log_watcher_running = true
       @log_file = Onlylogs::File.new(file_path, last_position: 0)
 
-      transmit({action: "message", content: "Searching..."})
+      transmit({action: "message", content: filter.present? ? "Searching..." : "Loading..."})
 
       @batch_sender = BatchSender.new(self)
       @batch_sender.start
@@ -156,11 +165,15 @@ module Onlylogs
 
       begin
         Rails.logger.silence(Logger::ERROR) do
-          @log_file.grep(filter, regexp_mode: regexp_mode, start_position: start_position, end_position: end_position) do |log_line|
+          @log_file.grep(filter, regexp_mode: regexp_mode, start_position: start_position, end_position: end_position) do |result|
             break if @batch_sender.nil?
 
+            # Result is now a hash with {byte_offset, content}
+            byte_offset = result[:byte_offset]
+            log_line = result[:content]
+
             # Add to batch buffer (sender thread will handle sending)
-            @batch_sender.add_line(render_log_line(log_line))
+            @batch_sender.add_line(render_log_line(log_line, byte_offset: byte_offset, show_expand_button: true))
 
             line_count += 1
           end
@@ -170,7 +183,7 @@ module Onlylogs
         @batch_sender.stop
 
         # Send completion message
-        if line_count >= Onlylogs.max_line_matches
+        if Onlylogs.max_line_matches && line_count >= Onlylogs.max_line_matches
           transmit({action: "finish", content: "Search finished. Search results limit reached."})
         else
           transmit({action: "finish", content: "Search finished."})
@@ -184,8 +197,14 @@ module Onlylogs
       end
     end
 
-    def render_log_line(log_line)
-      "<pre>#{FilePathParser.parse(AnsiColorParser.parse(ERB::Util.html_escape(log_line)))}</pre>"
+    def render_log_line(log_line, byte_offset: nil, show_expand_button: false)
+      parsed = FilePathParser.parse(AnsiColorParser.parse(ERB::Util.html_escape(log_line)))
+
+      {
+        content: parsed,
+        byte_offset: byte_offset,
+        show_expand_button: show_expand_button
+      }
     end
   end
 end

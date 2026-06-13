@@ -4,7 +4,8 @@ import { createConsumer } from "@rails/actioncable";
 export default class LogStreamerController extends Controller {
   static values = {
     filePath: { type: String },
-    cursorPosition: { type: Number, default: 0 },
+    startPosition: { type: Number, default: 0 },
+    endPosition: { type: Number, default: 0 },
     autoScroll: { type: Boolean, default: true },
     autoStart: { type: Boolean, default: true },
     filter: { type: String, default: '' },
@@ -12,7 +13,7 @@ export default class LogStreamerController extends Controller {
     regexpMode: { type: Boolean, default: false }
   };
 
-  static targets = ["logLines", "filterInput", "results", "liveMode", "message", "regexpMode", "websocketStatus", "stopButton", "clearButton", "autoscroll"];
+  static targets = ["logLines", "filterInput", "byteOffsetInput", "results", "liveMode", "message", "regexpMode", "websocketStatus", "stopButton", "clearButton", "autoscroll"];
 
   connect() {
     this.consumer = createConsumer();
@@ -21,6 +22,7 @@ export default class LogStreamerController extends Controller {
     this.isRunning = false;
     this.reconnectTimeout = null;
     this.isSearchFinished = true;
+    this.contextLineHighlighted = false;
 
     // Initialize clusterize
     this.clusterize = null;
@@ -100,7 +102,7 @@ export default class LogStreamerController extends Controller {
 
     if (this.isLiveMode()) {
       this.liveModeTarget.checked = false;
-      this.modeValue = 'search';
+      this.modeValue = 'static';
       this.updateLiveModeState();
       this.stop();
     }
@@ -116,9 +118,9 @@ export default class LogStreamerController extends Controller {
   }
 
   toggleLiveMode() {
-    // this condition looks revered, but the value here has been changed already. so the live mode has been enabled.
     if (this.isLiveMode()) {
       this.modeValue = 'live';
+      this.clearFilter();
       this.updateLiveModeState();
       if (!this.isRunning) {
         this.start();
@@ -132,20 +134,25 @@ export default class LogStreamerController extends Controller {
   applyFilter() {
     const filterValue = this.filterInputTarget.value;
 
-    // If filter is applied, disable live mode
+    // A filter switches to static mode; an empty filter goes back to live.
     if (filterValue && filterValue.trim() !== '') {
       this.liveModeTarget.checked = false;
-      this.modeValue = 'search';
+      this.modeValue = 'static';
     } else {
-      // If no filter, enable live mode
       this.liveModeTarget.checked = true;
       this.modeValue = 'live';
     }
+
+    // Applying a filter searches the whole file, so drop any explore window.
+    this.startPositionValue = 0;
+    this.endPositionValue = 0;
 
     // Update visual state
     this.updateLiveModeState();
     this.updateStopButtonVisibility();
     this.#updateUrlParam('filter', filterValue || null);
+    this.#updateUrlParam('byte_offset', null);
+    this.byteOffsetInputTarget.value = '';
 
     // Use the global debounced reconnection (300ms delay)
     this.reconnectWithNewMode();
@@ -178,19 +185,29 @@ export default class LogStreamerController extends Controller {
   }
 
   clearFilter() {
-    // Clear the filter input
+    // Clear filter and explore window to go back to pure live mode
     this.filterInputTarget.value = '';
-
-    // Re-enable live mode
-    this.liveModeTarget.checked = true;
+    this.byteOffsetInputTarget.value = '';
     this.modeValue = 'live';
+    this.startPositionValue = 0;
+    this.endPositionValue = 0;
+    this.contextLineHighlighted = false;
+
+    // Remove any highlighting
+    this.logLinesTarget.querySelectorAll('.highlighted-context-line').forEach(el => {
+      el.classList.remove('highlighted-context-line');
+    });
+
+    // Re-enable live mode checkbox
+    this.liveModeTarget.checked = true;
 
     // Update visual state
     this.updateLiveModeState();
     this.updateStopButtonVisibility();
 
-    // Update URL with cleared filter
-    this.#updateUrlParam('filter');
+    // Update URL with cleared params
+    this.#updateUrlParam('filter', null);
+    this.#updateUrlParam('byte_offset', null);
 
     // Reconnect with cleared filter and live mode
     this.reconnectWithNewMode();
@@ -206,21 +223,98 @@ export default class LogStreamerController extends Controller {
     this.#hideMessage();
   }
 
+  jumpToByteOffset(e) {
+    if (e instanceof KeyboardEvent && e.key !== 'Enter') return;
+
+    const byteOffset = this.byteOffsetInputTarget.value;
+    if (!byteOffset || isNaN(byteOffset)) return;
+
+    const params = new URLSearchParams(window.location.search);
+    params.set('byte_offset', byteOffset);
+    params.delete('filter');
+    window.location.href = `${window.location.pathname}?${params.toString()}`;
+  }
+
+  handleExpandClick(e) {
+    const btn = e.target.closest('.onlylogs-expand-btn');
+    if (!btn) return;
+
+    const byteOffset = btn.getAttribute('data-byte-offset');
+    if (!byteOffset) return;
+
+    const params = new URLSearchParams(window.location.search);
+    params.set('byte_offset', byteOffset);
+    params.delete('filter');
+    params.set('autoscroll', 'false');
+    params.delete('regexp_mode');
+
+    window.location.href = `${window.location.pathname}?${params.toString()}`;
+  }
+
+  #highlightContextLine() {
+    const target = Number(new URLSearchParams(window.location.search).get('byte_offset'));
+    if (Number.isNaN(target)) return;
+
+    this.#applyContextLineHighlight(target);
+
+    // Only scroll on initial highlight
+    if (!this.contextLineHighlighted) {
+      const closestPre = [...this.logLinesTarget.querySelectorAll('pre[data-byte-offset]')]
+        .find(pre => Number(pre.dataset.byteOffset) === target ||
+          Math.abs(Number(pre.dataset.byteOffset) - target) < 1000);
+      if (closestPre) {
+        this.#scrollVerticallyToCenter(closestPre);
+      }
+    }
+  }
+
+  #scrollVerticallyToCenter(element) {
+    const container = this.logLinesTarget;
+    const containerRect = container.getBoundingClientRect();
+    const elementRect = element.getBoundingClientRect();
+    const delta = (elementRect.top - containerRect.top) - (container.clientHeight / 2) + (elementRect.height / 2);
+    container.scrollBy({ top: delta, behavior: 'smooth' });
+  }
+
+  #applyContextLineHighlight(target) {
+    const closestPre = [...this.logLinesTarget.querySelectorAll('pre[data-byte-offset]')]
+      .reduce((closest, pre) => {
+        const distance = Math.abs(Number(pre.dataset.byteOffset) - target);
+        return !closest || distance < closest.distance ? { pre, distance } : closest;
+      }, null)?.pre;
+
+    if (!closestPre) return;
+
+    const row = this.#rowElement(closestPre);
+    [row.previousElementSibling, row, row.nextElementSibling]
+      .filter(Boolean)
+      .forEach(line => line.classList.add('highlighted-context-line'));
+  }
+
+  // A row is either a bare <pre> or an expand-button wrapper <div> directly
+  // under the clusterize content area. Walk up to that top-level element so the
+  // highlight covers the whole line, including the "+" toggle.
+  #rowElement(element) {
+    let node = element;
+    while (node.parentElement && !node.parentElement.classList.contains('clusterize-content')) {
+      node = node.parentElement;
+    }
+    return node;
+  }
+
   updateLiveModeState() {
     const liveModeLabel = this.liveModeTarget.closest('label');
     const hasFilter = this.filterInputTarget.value && this.filterInputTarget.value.trim() !== '';
 
     if (hasFilter) {
-      liveModeLabel.classList.add('live-mode-sticky');
       this.liveModeTarget.disabled = true;
     } else {
-      liveModeLabel.classList.remove('live-mode-sticky');
       this.liveModeTarget.disabled = false;
     }
   }
 
   updateStopButtonVisibility() {
-    const shouldShow = !this.isLiveMode() && this.subscription && this.isRunning && !this.isSearchFinished;
+    const shouldShow = this.modeValue === 'static' && this.subscription && this.isRunning && !this.isSearchFinished;
     this.stopButtonTarget.style.display = shouldShow ? 'inline-block' : 'none';
   }
 
@@ -261,13 +355,23 @@ export default class LogStreamerController extends Controller {
    * Handle successful connection
    */
   #handleConnected() {
-    this.subscription.perform('initialize_watcher', {
-      cursor_position: this.cursorPositionValue,
+    const data = {
       file_path: this.filePathValue,
       filter: this.filterInputTarget.value,
       mode: this.modeValue,
       regexp_mode: this.regexpModeValue
-    });
+    };
+
+    if (this.modeValue === 'static') {
+      // A byte-offset explore window reads a bounded range. Without a window
+      // (start/end), a static read is a whole-file filter search.
+      if (this.endPositionValue > 0) {
+        data.start_position = this.startPositionValue;
+        data.end_position = this.endPositionValue;
+      }
+    }
+
+    this.subscription.perform('initialize_watcher', data);
 
     this.element.classList.add("log-streamer--connected");
     this.element.classList.remove("log-streamer--disconnected", "log-streamer--rejected");
@@ -293,9 +397,20 @@ export default class LogStreamerController extends Controller {
     try {
       // Append new lines to clusterize
       if (lines.length > 0) {
-        this.clusterize.append(lines);
+        // Render JSON log lines into HTML strings
+        const renderedLines = lines.map(line => this.#renderLogLineHtml(line));
+        this.clusterize.append(renderedLines);
         this.#updateResultsDisplay();
         this.scroll();
+
+        // Find and highlight lines around the target byte offset
+        const params = new URLSearchParams(window.location.search);
+        if (params.has('byte_offset') && !this.contextLineHighlighted) {
+          setTimeout(() => {
+            this.#highlightContextLine();
+            this.contextLineHighlighted = true;
+          }, 100);
+        }
       }
 
       // Update stop button visibility after processing lines
@@ -303,6 +418,19 @@ export default class LogStreamerController extends Controller {
 
     } catch (error) {
       console.error('Error handling log lines:', error);
+    }
+  }
+
+  #renderLogLineHtml(logLine) {
+    // logLine is now a JSON object: {content, byte_offset, show_expand_button}
+    const { content, byte_offset, show_expand_button } = logLine;
+
+    if (byte_offset && show_expand_button) {
+      return `<div style="display: flex; align-items: center;"><button class="onlylogs-expand-btn" data-byte-offset="${byte_offset}" data-action="click->log-streamer#handleExpandClick">+</button><pre data-byte-offset="${byte_offset}">${content}</pre></div>`;
+    } else if (byte_offset) {
+      return `<pre data-byte-offset="${byte_offset}">${content}</pre>`;
+    } else {
+      return `<pre>${content}</pre>`;
     }
   }
 
@@ -380,7 +508,6 @@ export default class LogStreamerController extends Controller {
     return {
       isRunning: this.isRunning,
       filePath: this.filePathValue,
-      cursorPosition: this.cursorPositionValue,
       lineCount: this.clusterize.getRowsAmount(),
       connected: this.subscription && this.subscription.identifier
     };
@@ -403,7 +530,15 @@ export default class LogStreamerController extends Controller {
           // Optional: handle cluster change
         },
         clusterChanged: () => {
-          // Optional: handle after cluster change
+          // Re-apply highlighting when cluster changes (for virtual scrolling).
+          // The byte_offset URL param is the highlight anchor for an explore window.
+          const params = new URLSearchParams(window.location.search);
+          if (params.has('byte_offset')) {
+            const target = Number(params.get('byte_offset'));
+            if (!Number.isNaN(target)) {
+              this.#applyContextLineHighlight(target);
+            }
+          }
         },
         scrollingProgress: (progress) => {
           // Optional: handle scrolling progress
