@@ -141,6 +141,11 @@ export default class LogStreamerController extends Controller {
       this.updateLiveModeState();
 
       this.start();
+    } else {
+      // User unchecked - disable live mode and pause
+      this.modeValue = 'static';
+      this.updateLiveModeState();
+      this.stop();
     }
   }
 
