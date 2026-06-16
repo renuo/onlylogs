@@ -1,11 +1,10 @@
-<%# locals: (log_file_path:, tail: 100, filter: "", autoscroll: true, regexp_mode: false) %>
+<%# locals: (log_file_path:, tail: 100, filter: "", autoscroll: true, regexp_mode: false, mode: nil) %>
 <script nonce="<%= request.content_security_policy_nonce %>"
         src="https://cdn.jsdelivr.net/npm/clusterize.js@0.18.1/clusterize.min.js"></script>
 <%= render "onlylogs/shared/log_container_styles" %>
 
 <%
-    mode = filter.blank? ? "live" : "search"
-    cursor_position = mode == "search" ? 0 : [File.size(log_file_path) - (tail * 100), 0].max
+    mode = local_assigns[:mode] || (filter.blank? ? "live" : "static")
 
     raise SecurityError, "File path not allowed" unless Onlylogs.file_path_permitted?(log_file_path)
 

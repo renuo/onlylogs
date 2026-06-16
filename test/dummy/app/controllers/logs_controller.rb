@@ -23,6 +23,6 @@ class LogsController < ApplicationController
     @max_lines = (params[:max_lines] || 100).to_i
     @filter = params[:filter]
     @autoscroll = params[:autoscroll] != "false"
-    @mode = @filter.blank? ? (params[:mode] || "live") : "search"
+    @mode = @filter.blank? ? (params[:mode] || "live") : "static"
   end
 end

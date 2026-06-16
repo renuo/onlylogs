@@ -100,7 +100,7 @@ export default class LogStreamerController extends Controller {
 
     if (this.isLiveMode()) {
       this.liveModeTarget.checked = false;
-      this.modeValue = 'search';
+      this.modeValue = 'static';
       this.updateLiveModeState();
       this.stop();
     }
@@ -132,12 +132,11 @@ export default class LogStreamerController extends Controller {
   applyFilter() {
     const filterValue = this.filterInputTarget.value;
 
-    // If filter is applied, disable live mode
+    // A filter switches to static mode; an empty filter goes back to live.
     if (filterValue && filterValue.trim() !== '') {
       this.liveModeTarget.checked = false;
-      this.modeValue = 'search';
+      this.modeValue = 'static';
     } else {
-      // If no filter, enable live mode
       this.liveModeTarget.checked = true;
       this.modeValue = 'live';
     }
@@ -220,7 +219,7 @@ export default class LogStreamerController extends Controller {
   }
 
   updateStopButtonVisibility() {
-    const shouldShow = !this.isLiveMode() && this.subscription && this.isRunning && !this.isSearchFinished;
+    const shouldShow = this.modeValue === 'static' && this.subscription && this.isRunning && !this.isSearchFinished;
     this.stopButtonTarget.style.display = shouldShow ? 'inline-block' : 'none';
   }
 
