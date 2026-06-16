@@ -42,10 +42,12 @@ module Onlylogs
       filter = data["filter"].presence
       mode = data["mode"] || "live"
       regexp_mode = data["regexp_mode"] == true || data["regexp_mode"] == "true"
+      start_position = data["start_position"]&.to_i || 0
+      end_position = data["end_position"]&.to_i
 
       if mode == "static"
         # Read the entire file with filter and send all matching lines
-        read_static(file_path, filter, regexp_mode)
+        read_static(file_path, filter, regexp_mode, start_position, end_position)
       else
         # Follow the tail of the file indefinitely
         start_log_watcher(file_path, filter, regexp_mode)
@@ -146,7 +148,7 @@ module Onlylogs
       @log_file = nil
     end
 
-    def read_static(file_path, filter = nil, regexp_mode = false)
+    def read_static(file_path, filter = nil, regexp_mode = false, start_position = 0, end_position = nil)
       @log_watcher_running = true
       @log_file = Onlylogs::File.new(file_path, last_position: 0)
 
@@ -159,7 +161,7 @@ module Onlylogs
 
       begin
         Rails.logger.silence(Logger::ERROR) do
-          @log_file.grep(filter, regexp_mode: regexp_mode) do |log_line|
+          @log_file.grep(filter, regexp_mode: regexp_mode, start_position: start_position, end_position: end_position) do |log_line|
             break if @batch_sender.nil?
 
             # Add to batch buffer (sender thread will handle sending)
