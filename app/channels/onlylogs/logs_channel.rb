@@ -9,6 +9,13 @@ module Onlylogs
     end
 
     def initialize_watcher(data)
+      # Prevent duplicate calls with identical parameters
+      if @last_initialize_params == data
+        Rails.logger.info "Onlylogs: Ignoring duplicate initialize_watcher call"
+        return
+      end
+
+      @last_initialize_params = data.dup
       cleanup_existing_operations
 
       # Decrypt and verify the file path
