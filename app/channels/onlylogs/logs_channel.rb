@@ -39,7 +39,6 @@ module Onlylogs
         return
       end
 
-      cursor_position = data["cursor_position"] || 0
       filter = data["filter"].presence
       mode = data["mode"] || "live"
       regexp_mode = data["regexp_mode"] == true || data["regexp_mode"] == "true"
@@ -48,8 +47,8 @@ module Onlylogs
         # Read the entire file with filter and send all matching lines
         read_static(file_path, filter, regexp_mode)
       else
-        # For live mode, start the watcher
-        start_log_watcher(file_path, cursor_position, filter, regexp_mode)
+        # Follow the tail of the file indefinitely
+        start_log_watcher(file_path, filter, regexp_mode)
       end
     end
 
@@ -73,7 +72,11 @@ module Onlylogs
       stop_log_watcher
     end
 
-    def start_log_watcher(file_path, cursor_position, filter = nil, regexp_mode = false)
+    # Bytes from the end of the file to show when starting a live tail without
+    # an explicit cursor (matches the default whole-file live-mode page load).
+    LIVE_TAIL_BYTES = 10_000
+
+    def start_log_watcher(file_path, filter = nil, regexp_mode = false)
       return if @log_watcher_running
 
       @log_watcher_running = true
@@ -82,7 +85,9 @@ module Onlylogs
 
       transmit({action: "message", content: "Reading file. Please wait..."})
 
-      @log_file = Onlylogs::File.new(file_path, last_position: cursor_position)
+      # Start from LIVE_TAIL_BYTES from the end, or from the beginning if file is smaller
+      starting_position = [::File.size(file_path) - LIVE_TAIL_BYTES, 0].max
+      @log_file = Onlylogs::File.new(file_path, last_position: starting_position)
 
       transmit({action: "message", content: ""})
 
@@ -168,7 +173,7 @@ module Onlylogs
         @batch_sender.stop
 
         # Send completion message
-        if line_count >= Onlylogs.max_line_matches
+        if Onlylogs.max_line_matches && line_count >= Onlylogs.max_line_matches
           transmit({action: "finish", content: "Search finished. Search results limit reached."})
         else
           transmit({action: "finish", content: "Search finished."})

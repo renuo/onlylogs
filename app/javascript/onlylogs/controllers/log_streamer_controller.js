@@ -4,7 +4,6 @@ import { createConsumer } from "@rails/actioncable";
 export default class LogStreamerController extends Controller {
   static values = {
     filePath: { type: String },
-    cursorPosition: { type: Number, default: 0 },
     autoScroll: { type: Boolean, default: true },
     autoStart: { type: Boolean, default: true },
     filter: { type: String, default: '' },
@@ -177,19 +176,19 @@ export default class LogStreamerController extends Controller {
   }
 
   clearFilter() {
-    // Clear the filter input
+    // Clear filter to go back to pure live mode
     this.filterInputTarget.value = '';
-
-    // Re-enable live mode
-    this.liveModeTarget.checked = true;
     this.modeValue = 'live';
+
+    // Re-enable live mode checkbox
+    this.liveModeTarget.checked = true;
 
     // Update visual state
     this.updateLiveModeState();
     this.updateStopButtonVisibility();
 
     // Update URL with cleared filter
-    this.#updateUrlParam('filter');
+    this.#updateUrlParam('filter', null);
 
     // Reconnect with cleared filter and live mode
     this.reconnectWithNewMode();
@@ -261,7 +260,6 @@ export default class LogStreamerController extends Controller {
    */
   #handleConnected() {
     this.subscription.perform('initialize_watcher', {
-      cursor_position: this.cursorPositionValue,
       file_path: this.filePathValue,
       filter: this.filterInputTarget.value,
       mode: this.modeValue,
@@ -379,7 +377,6 @@ export default class LogStreamerController extends Controller {
     return {
       isRunning: this.isRunning,
       filePath: this.filePathValue,
-      cursorPosition: this.cursorPositionValue,
       lineCount: this.clusterize.getRowsAmount(),
       connected: this.subscription && this.subscription.identifier
     };
