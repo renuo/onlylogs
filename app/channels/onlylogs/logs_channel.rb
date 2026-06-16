@@ -168,37 +168,53 @@ module Onlylogs
 
       begin
         last_line = nil
+        last_byte_offset = nil
         line_count = 0
 
+        # Adjust start position to beginning of next complete line
+        adjusted_start = start_position > 0 ? next_line_boundary(file_path, start_position) : 0
+        adjusted_end = end_position ? next_line_boundary(file_path, end_position) : nil
+
         Rails.logger.silence(Logger::ERROR) do
-          skip_first = start_position > 0
-          reader = ->(log_line) do
-            break if @batch_sender.nil? || @log_watcher_running == false
-
-            # Skip first line if start_position > 0 (line is cut off at byte boundary)
-            if skip_first
-              skip_first = false
-              next
-            end
-
-            # Buffer previous line and skip it to avoid cut-off lines at boundaries
-            if last_line
-              @batch_sender.add_line(render_log_line(last_line))
-              line_count += 1
-            end
-            last_line = log_line
-          end
-
           if filter.present?
-            @log_file.grep(filter, regexp_mode: regexp_mode, start_position: start_position, end_position: end_position, &reader)
+            # Use grep for filtered search
+            @log_file.grep(filter, regexp_mode: regexp_mode, start_position: start_position, end_position: end_position) do |result|
+              break if @batch_sender.nil? || @log_watcher_running == false
+
+              # Result is a hash with {byte_offset, content}
+              byte_offset = result[:byte_offset]
+              log_line = result[:content]
+
+              # Skip first and last lines to avoid cut-off lines at boundaries
+              if last_line
+                @batch_sender.add_line(render_log_line(last_line, byte_offset: last_byte_offset, show_expand_button: true))
+                line_count += 1
+              end
+              last_line = log_line
+              last_byte_offset = byte_offset
+            end
           else
-            read_byte_range(file_path, start_position, end_position, &reader)
+            # No filter - read all lines directly (skip grep)
+            current_byte_offset = start_position
+            read_byte_range(file_path, start_position, end_position) do |log_line|
+              break if @batch_sender.nil? || @log_watcher_running == false
+
+              # Skip first and last lines to avoid cut-off lines at boundaries
+              if last_line
+                @batch_sender.add_line(render_log_line(last_line, byte_offset: last_byte_offset))
+                line_count += 1
+              end
+              last_line = log_line
+              last_byte_offset = current_byte_offset
+              # Account for line content plus newline character (2 bytes for \r\n or 1 for \n)
+              current_byte_offset += log_line.bytesize + 1
+            end
           end
         end
 
         # Send last line only if no end_position (avoid cut-off line at byte boundary)
         if last_line && !end_position
-          @batch_sender.add_line(render_log_line(last_line))
+          @batch_sender.add_line(render_log_line(last_line, byte_offset: last_byte_offset))
           line_count += 1
         end
 
@@ -234,6 +250,21 @@ module Onlylogs
 
     def render_log_line(log_line)
       "<pre>#{FilePathParser.parse(AnsiColorParser.parse(ERB::Util.html_escape(log_line)))}</pre>"
+    end
+
+    def next_line_boundary(file_path, position, max_scan: 64 * 1024)
+      file_size = ::File.size(file_path)
+      position = [[position.to_i, 0].max, file_size].min
+
+      return position if position.zero? || position >= file_size
+
+      ::File.open(file_path, "rb") do |file|
+        file.seek(position)
+        chunk = file.read(max_scan)
+
+        newline_index = chunk&.index("\n")
+        newline_index ? position + newline_index + 1 : position
+      end
     end
   end
 end
