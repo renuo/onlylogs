@@ -4,7 +4,6 @@ import { createConsumer } from "@rails/actioncable";
 export default class LogStreamerController extends Controller {
   static values = {
     filePath: { type: String },
-    cursorPosition: { type: Number, default: 0 },
     autoScroll: { type: Boolean, default: true },
     autoStart: { type: Boolean, default: true },
     filter: { type: String, default: '' },
@@ -100,7 +99,7 @@ export default class LogStreamerController extends Controller {
 
     if (this.isLiveMode()) {
       this.liveModeTarget.checked = false;
-      this.modeValue = 'search';
+      this.modeValue = 'static';
       this.updateLiveModeState();
       this.stop();
     }
@@ -132,12 +131,11 @@ export default class LogStreamerController extends Controller {
   applyFilter() {
     const filterValue = this.filterInputTarget.value;
 
-    // If filter is applied, disable live mode
+    // A filter switches to static mode; an empty filter goes back to live.
     if (filterValue && filterValue.trim() !== '') {
       this.liveModeTarget.checked = false;
-      this.modeValue = 'search';
+      this.modeValue = 'static';
     } else {
-      // If no filter, enable live mode
       this.liveModeTarget.checked = true;
       this.modeValue = 'live';
     }
@@ -178,19 +176,19 @@ export default class LogStreamerController extends Controller {
   }
 
   clearFilter() {
-    // Clear the filter input
+    // Clear filter to go back to pure live mode
     this.filterInputTarget.value = '';
-
-    // Re-enable live mode
-    this.liveModeTarget.checked = true;
     this.modeValue = 'live';
+
+    // Re-enable live mode checkbox
+    this.liveModeTarget.checked = true;
 
     // Update visual state
     this.updateLiveModeState();
     this.updateStopButtonVisibility();
 
     // Update URL with cleared filter
-    this.#updateUrlParam('filter');
+    this.#updateUrlParam('filter', null);
 
     // Reconnect with cleared filter and live mode
     this.reconnectWithNewMode();
@@ -220,7 +218,7 @@ export default class LogStreamerController extends Controller {
   }
 
   updateStopButtonVisibility() {
-    const shouldShow = !this.isLiveMode() && this.subscription && this.isRunning && !this.isSearchFinished;
+    const shouldShow = this.modeValue === 'static' && this.subscription && this.isRunning && !this.isSearchFinished;
     this.stopButtonTarget.style.display = shouldShow ? 'inline-block' : 'none';
   }
 
@@ -262,7 +260,6 @@ export default class LogStreamerController extends Controller {
    */
   #handleConnected() {
     this.subscription.perform('initialize_watcher', {
-      cursor_position: this.cursorPositionValue,
       file_path: this.filePathValue,
       filter: this.filterInputTarget.value,
       mode: this.modeValue,
@@ -380,7 +377,6 @@ export default class LogStreamerController extends Controller {
     return {
       isRunning: this.isRunning,
       filePath: this.filePathValue,
-      cursorPosition: this.cursorPositionValue,
       lineCount: this.clusterize.getRowsAmount(),
       connected: this.subscription && this.subscription.identifier
     };
