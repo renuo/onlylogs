@@ -22,20 +22,25 @@ export default class LogStreamerController extends Controller {
     this.reconnectTimeout = null;
     this.isSearchFinished = true;
 
-    // Range slider state
-    this.startPosition = 0;
-    this.endPosition = this.fileSizeValue;
-    this.rangeDebounceTimeout = null;
-
     // Initialize clusterize
     this.clusterize = null;
     this.#initializeClusterize();
 
     this.#updateWebsocketStatus('disconnected');
 
+    // Find the range-slider element and listen for updates
+    this.rangeSliderElement = this.element.querySelector('[data-controller~="range-slider"]');
+    if (this.rangeSliderElement) {
+      this.rangeSliderElement.addEventListener('range:update', (e) => {
+        this.#handleRangeUpdate(e);
+      });
+    }
+
+    // Restore range from URL params if present
+    this.#restoreRangeFromUrl();
+
     this.start();
     this.updateLiveModeState();
-    this.updateRangeSliderVisibility();
     this.scroll();
   }
 
@@ -124,14 +129,18 @@ export default class LogStreamerController extends Controller {
   toggleLiveMode() {
     // this condition looks revered, but the value here has been changed already. so the live mode has been enabled.
     if (this.isLiveMode()) {
+      // User checked - stop search immediately and switch to live mode
+      this.stop();
+      this.clear();
+      this.#reinitializeClusterize();
+
       this.modeValue = 'live';
+      this.#setRange(0, this.fileSizeValue);
+      this.#updateUrlParam('start_position', null);
+      this.#updateUrlParam('end_position', null);
       this.updateLiveModeState();
-      if (!this.isRunning) {
-        this.start();
-      }
-    } else {
-      // Prevent unchecking - live mode can only be disabled by applying a filter
-      this.liveModeTarget.checked = true;
+
+      this.start();
     }
   }
 
@@ -150,7 +159,6 @@ export default class LogStreamerController extends Controller {
     // Update visual state
     this.updateLiveModeState();
     this.updateStopButtonVisibility();
-    this.updateRangeSliderVisibility();
     this.#updateUrlParam('filter', filterValue || null);
 
     // Use the global debounced reconnection (300ms delay)
@@ -194,7 +202,6 @@ export default class LogStreamerController extends Controller {
     // Update visual state
     this.updateLiveModeState();
     this.updateStopButtonVisibility();
-    this.updateRangeSliderVisibility();
 
     // Update URL with cleared filter
     this.#updateUrlParam('filter', null);
@@ -231,92 +238,63 @@ export default class LogStreamerController extends Controller {
     this.stopButtonTarget.style.display = shouldShow ? 'inline-block' : 'none';
   }
 
-  updateRangeSliderVisibility() {
-    // Show range slider only when filter is applied (search mode)
-    const shouldShow = !this.isLiveMode() && this.filterInputTarget.value && this.filterInputTarget.value.trim() !== '';
-    this.rangeSliderContainerTarget.style.display = shouldShow ? 'block' : 'none';
+  #setRange(start, end) {
+    this.startSliderTarget.value = start;
+    this.endSliderTarget.value = end;
+
+    // Update range-slider visual state
+    if (this.rangeSliderElement) {
+      const min = Number(this.startSliderTarget.min);
+      const max = Number(this.startSliderTarget.max);
+      const startPercent = ((start - min) / (max - min)) * 100;
+      const endPercent = ((end - min) / (max - min)) * 100;
+
+      this.rangeSliderElement.style.setProperty('--range-start-percent', `${startPercent}%`);
+      this.rangeSliderElement.style.setProperty('--range-end-percent', `${endPercent}%`);
+
+      // Update output displays
+      const outputs = this.rangeSliderElement.querySelectorAll('[data-range-slider-target="startOutput"], [data-range-slider-target="endOutput"]');
+      outputs.forEach(output => {
+        if (output.dataset.rangeSliderTarget === 'startOutput') output.textContent = start;
+        if (output.dataset.rangeSliderTarget === 'endOutput') output.textContent = end;
+      });
+    }
   }
 
-  updateRangeFromSliders() {
-    // Get slider values
-    let startValue = parseInt(this.startSliderTarget.value);
-    let endValue = parseInt(this.endSliderTarget.value);
+  #handleRangeUpdate() {
+    const start = parseInt(this.startSliderTarget.value);
+    const end = parseInt(this.endSliderTarget.value);
+    const isDefaultRange = start === 0 && end === this.fileSizeValue;
 
-    // Ensure start is not greater than end
-    if (startValue > endValue) {
-      const temp = startValue;
-      startValue = endValue;
-      endValue = temp;
-      this.startSliderTarget.value = startValue;
-      this.endSliderTarget.value = endValue;
+    if (isDefaultRange) {
+      // Range is at defaults, go back to live mode
+      this.liveModeTarget.checked = true;
+      this.modeValue = 'live';
+      this.#updateUrlParam('start_position', null);
+      this.#updateUrlParam('end_position', null);
+    } else {
+      // Range is adjusted, switch to static mode
+      this.liveModeTarget.checked = false;
+      this.modeValue = 'static';
+      this.#updateUrlParam('start_position', start);
+      this.#updateUrlParam('end_position', end);
     }
 
-    // Update input fields
-    this.startPositionInputTarget.value = startValue;
-    this.endPositionInputTarget.value = endValue;
-
-    // Store values
-    this.startPosition = startValue;
-    this.endPosition = endValue;
-
-    // Disable live mode
-    this.liveModeTarget.checked = false;
-    this.modeValue = 'search';
     this.updateLiveModeState();
-
-    // Debounce reconnection to avoid too many rapid searches
-    this.#debouncedReconnect();
-  }
-
-  updateRangeFromInputs() {
-    // Get input values
-    let startValue = parseInt(this.startPositionInputTarget.value) || 0;
-    let endValue = parseInt(this.endPositionInputTarget.value) || this.fileSizeValue;
-
-    // Ensure values are within bounds
-    startValue = Math.max(0, Math.min(startValue, this.fileSizeValue));
-    endValue = Math.max(0, Math.min(endValue, this.fileSizeValue));
-
-    // Ensure start is not greater than end
-    if (startValue > endValue) {
-      const temp = startValue;
-      startValue = endValue;
-      endValue = temp;
-    }
-
-    // Update sliders
-    this.startSliderTarget.value = startValue;
-    this.endSliderTarget.value = endValue;
-
-    // Update input fields (in case they were corrected)
-    this.startPositionInputTarget.value = startValue;
-    this.endPositionInputTarget.value = endValue;
-
-    // Store values
-    this.startPosition = startValue;
-    this.endPosition = endValue;
-
-    // Disable live mode
-    this.liveModeTarget.checked = false;
-    this.modeValue = 'search';
-    this.updateLiveModeState();
-
-    // Debounce reconnection to avoid too many rapid searches
     this.#debouncedReconnect();
   }
 
   resetRange() {
-    // Reset to full file range
-    this.startPosition = 0;
-    this.endPosition = this.fileSizeValue;
+    this.#setRange(0, this.fileSizeValue);
 
-    // Update UI
-    this.startSliderTarget.value = 0;
-    this.endSliderTarget.value = this.fileSizeValue;
-    this.startPositionInputTarget.value = 0;
-    this.endPositionInputTarget.value = this.fileSizeValue;
+    // Reset to live mode
+    this.liveModeTarget.checked = true;
+    this.modeValue = 'live';
+    this.#updateUrlParam('start_position', null);
+    this.#updateUrlParam('end_position', null);
+    this.updateLiveModeState();
 
-    // Reconnect with full range
+    // Reconnect with updated mode/range
     this.reconnectWithNewMode();
   }
 
@@ -334,6 +312,27 @@ export default class LogStreamerController extends Controller {
       this.start();
       this.rangeDebounceTimeout = null;
     }, 800);
+  }
+
+  #restoreRangeFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    const startParam = params.get('start_position');
+    const endParam = params.get('end_position');
+
+    if (startParam !== null || endParam !== null) {
+      const start = startParam ? parseInt(startParam) : 0;
+      const end = endParam ? parseInt(endParam) : this.fileSizeValue;
+
+      // Set the range without triggering the update event
+      this.#setRange(start, end);
+
+      // Update mode based on whether range is at defaults
+      const isDefaultRange = start === 0 && end === this.fileSizeValue;
+      if (!isDefaultRange) {
+        this.liveModeTarget.checked = false;
+        this.modeValue = 'static';
+      }
+    }
   }
 
 
@@ -380,10 +379,10 @@ export default class LogStreamerController extends Controller {
       regexp_mode: this.regexpModeValue
     };
 
-    // Add range parameters if we're in static mode and have custom range
-    if (this.modeValue === 'static' && (this.startPosition > 0 || this.endPosition < this.fileSizeValue)) {
-      params.start_position = this.startPosition;
-      params.end_position = this.endPosition;
+    // Always send range parameters in static mode
+    if (this.modeValue === 'static') {
+      params.start_position = parseInt(this.startSliderTarget.value);
+      params.end_position = parseInt(this.endSliderTarget.value);
     }
 
     this.subscription.perform('initialize_watcher', params);
