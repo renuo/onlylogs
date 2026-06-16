@@ -5,9 +5,6 @@ export LC_ALL=C
 max_matches=""
 start_position=""
 end_position=""
-# Block size for dd operations. Performance testing shows no significant
-# difference across block sizes (4K-8M) on typical log files. 1M balances
-# memory usage and I/O efficiency.
 block_size="${BLOCK_SIZE:-1M}"
 
 while [[ $# -gt 0 ]]; do
