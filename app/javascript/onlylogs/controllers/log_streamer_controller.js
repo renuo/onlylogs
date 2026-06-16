@@ -146,16 +146,7 @@ export default class LogStreamerController extends Controller {
       this.#updateUrlParam('end_position', null);
       this.updateLiveModeState();
 
-      if (!this.isRunning) {
-        // Wait for backend to fully stop the current search, then reconnect
-        setTimeout(() => {
-          this.clear();
-          this.#reinitializeClusterize();
-          this.start();
-        }, 1000);
-      }
-
-
+      this.start();
     } else {
       // User unchecked - disable live mode and pause
       this.modeValue = 'static';
