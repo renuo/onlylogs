@@ -19,7 +19,7 @@ BLOCK_SIZES = [
   "8M"       # 8 MB
 ].freeze
 
-ULTRA_BIG_LOG = File.expand_path("../fixtures/files/ultra_big.log", __dir__)
+ULTRA_BIG_LOG = File.expand_path("../fixtures/files/big.log", __dir__)
 SEARCH_PATTERN = "GET"  # Common pattern in log files
 NUM_ITERATIONS = 3  # Multiple iterations for better average
 
