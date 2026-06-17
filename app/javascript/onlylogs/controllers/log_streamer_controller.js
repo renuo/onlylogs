@@ -152,7 +152,7 @@ export default class LogStreamerController extends Controller {
           this.clear();
           this.#reinitializeClusterize();
           this.start();
-      }, 1000);
+        }, 1000);
       }
 
 
