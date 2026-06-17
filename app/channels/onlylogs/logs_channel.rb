@@ -103,7 +103,7 @@ module Onlylogs
 
       @log_watcher_thread = Thread.new do
         Rails.logger.silence(Logger::ERROR) do
-          current_byte_offset = cursor_position
+          current_byte_offset = starting_position
           @log_file.watch do |new_lines|
             break unless @log_watcher_running
 
@@ -169,34 +169,6 @@ module Onlylogs
 
       begin
         last_line = nil
-<<<<<<< HEAD
-        line_count = 0
-
-        Rails.logger.silence(Logger::ERROR) do
-          is_first_line = true
-          reader = ->(log_line) do
-            break if @batch_sender.nil? || @log_watcher_running == false
-
-            # Skip first line if start_position > 0 (line is cut off at byte boundary)
-            if is_first_line && start_position > 0
-              is_first_line = false
-              next
-            end
-            is_first_line = false
-
-            # Buffer previous line and skip it to avoid cut-off lines at boundaries
-            if last_line
-              @batch_sender.add_line(render_log_line(last_line))
-              line_count += 1
-            end
-            last_line = log_line
-          end
-
-          if filter.present?
-            @log_file.grep(filter, regexp_mode: regexp_mode, start_position: start_position, end_position: end_position, &reader)
-          else
-            read_byte_range(file_path, start_position, end_position, &reader)
-=======
         last_byte_offset = nil
         line_count = 0
 
@@ -234,17 +206,12 @@ module Onlylogs
               # Account for line content plus newline character (2 bytes for \r\n or 1 for \n)
               current_byte_offset += log_line.bytesize + 1
             end
->>>>>>> d562515 (Add explore mode to view logs around a specific byte offset)
           end
         end
 
         # Send last line only if no end_position (avoid cut-off line at byte boundary)
         if last_line && !end_position
-<<<<<<< HEAD
-          @batch_sender.add_line(render_log_line(last_line))
-=======
           @batch_sender.add_line(render_log_line(last_line, byte_offset: last_byte_offset, show_expand_button: filter.present?))
->>>>>>> d562515 (Add explore mode to view logs around a specific byte offset)
           line_count += 1
         end
 
@@ -278,10 +245,6 @@ module Onlylogs
       Rails.logger.error "Error reading byte range: #{e.message}"
     end
 
-<<<<<<< HEAD
-    def render_log_line(log_line)
-      "<pre>#{FilePathParser.parse(AnsiColorParser.parse(ERB::Util.html_escape(log_line)))}</pre>"
-=======
     def render_log_line(log_line, byte_offset: nil, show_expand_button: false)
       parsed = FilePathParser.parse(AnsiColorParser.parse(ERB::Util.html_escape(log_line)))
 
@@ -290,7 +253,6 @@ module Onlylogs
         byte_offset: byte_offset,
         show_expand_button: show_expand_button
       }
->>>>>>> d562515 (Add explore mode to view logs around a specific byte offset)
     end
   end
 end
