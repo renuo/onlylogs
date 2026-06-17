@@ -254,10 +254,8 @@ export default class LogStreamerController extends Controller {
     this.startSliderTarget.value = start;
     this.endSliderTarget.value = end;
 
-    // Trigger range-slider controller to update visuals
-    if (this.hasRangeSliderContainerTarget) {
-      this.rangeSliderContainerTarget.dispatchEvent(new Event('input', { bubbles: true }));
-    }
+    // Update visuals immediately
+    this.updateRangeVisuals();
   }
 
   #handleRangeUpdate() {
