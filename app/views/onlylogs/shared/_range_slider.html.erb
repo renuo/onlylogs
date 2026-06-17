@@ -27,7 +27,7 @@
                value="<%= start_value %>"
                data-range-slider-target="startInput"
                data-log-streamer-target="startSlider"
-               data-action="input->range-slider#update">
+               data-action="input->range-slider#updateVisuals change->range-slider#updateVisuals">
 
         <input class="range-slider__input range-slider__input--end"
                type="range"
@@ -38,7 +38,7 @@
                value="<%= end_value %>"
                data-range-slider-target="endInput"
                data-log-streamer-target="endSlider"
-               data-action="input->range-slider#update">
+               data-action="input->range-slider#updateVisuals change->range-slider#updateVisuals">
       </div>
 
       <div class="range-slider__values">
