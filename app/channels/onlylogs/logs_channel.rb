@@ -159,30 +159,43 @@ module Onlylogs
       @log_watcher_running = true
       @log_file = Onlylogs::File.new(file_path, last_position: 0)
 
-      transmit({action: "message", content: "Searching..."})
+      transmit({action: "message", content: filter.present? ? "Searching..." : "Loading..."})
 
       @batch_sender = BatchSender.new(self)
       @batch_sender.start
 
       begin
-        search_pattern = filter.present? ? filter : ".+"
-        search_regexp_mode = filter.present? ? regexp_mode : true
         last_line = nil
         line_count = 0
 
         Rails.logger.silence(Logger::ERROR) do
-          @log_file.grep(search_pattern, regexp_mode: search_regexp_mode, start_position: start_position, end_position: end_position) do |log_line|
+          is_first_line = true
+          reader = ->(log_line) do
             break if @batch_sender.nil? || @log_watcher_running == false
 
+            # Skip first line if start_position > 0 (line is cut off at byte boundary)
+            if is_first_line && start_position > 0
+              is_first_line = false
+              next
+            end
+            is_first_line = false
+
+            # Buffer previous line and skip it to avoid cut-off lines at boundaries
             if last_line
               @batch_sender.add_line(render_log_line(last_line))
               line_count += 1
             end
             last_line = log_line
           end
+
+          if filter.present?
+            @log_file.grep(filter, regexp_mode: regexp_mode, start_position: start_position, end_position: end_position, &reader)
+          else
+            read_byte_range(file_path, start_position, end_position, &reader)
+          end
         end
 
-        # Send last line only if no end_position
+        # Send last line only if no end_position (avoid cut-off line at byte boundary)
         if last_line && !end_position
           @batch_sender.add_line(render_log_line(last_line))
           line_count += 1
@@ -203,6 +216,19 @@ module Onlylogs
         @log_file = nil
         @log_watcher_running = false
       end
+    end
+
+    def read_byte_range(file_path, start_position, end_position)
+      file_size = ::File.size(file_path)
+      range_size = (end_position || file_size) - start_position
+
+      return if start_position < 0 || range_size <= 0 || start_position >= file_size
+
+      ::File.read(file_path, range_size, start_position).each_line do |line|
+        yield line.chomp
+      end
+    rescue => e
+      Rails.logger.error "Error reading byte range: #{e.message}"
     end
 
     def render_log_line(log_line)
