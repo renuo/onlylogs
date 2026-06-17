@@ -100,7 +100,7 @@ grep_results = []
 
 BLOCK_SIZES.each do |block_size|
   print "Testing block size #{block_size.ljust(6)}... "
-  STDOUT.flush
+  $stdout.flush
 
   result = benchmark_block_size(block_size, file_size, SEARCH_PATTERN, use_ripgrep: false)
   grep_results << result
@@ -115,7 +115,7 @@ ripgrep_results = []
 
 BLOCK_SIZES.each do |block_size|
   print "Testing block size #{block_size.ljust(6)}... "
-  STDOUT.flush
+  $stdout.flush
 
   result = benchmark_block_size(block_size, file_size, SEARCH_PATTERN, use_ripgrep: true)
   ripgrep_results << result
