@@ -259,8 +259,8 @@ export default class LogStreamerController extends Controller {
     if (!byteOffset) return;
 
     const offset = parseInt(byteOffset);
-    const start = Math.max(0, offset - 30000);
-    const end = Math.min(this.fileSizeValue, offset + 30000);
+    const start = Math.max(0, offset - 10000);
+    const end = Math.min(this.fileSizeValue, offset + 10000);
 
     // Clear filter from UI and state
     this.filterInputTarget.value = '';

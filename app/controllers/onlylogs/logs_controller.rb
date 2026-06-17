@@ -39,8 +39,8 @@ module Onlylogs
       byte_offset = params[:byte_offset]&.to_i
       return unless byte_offset.present?
 
-      @start_position = [byte_offset - 30000, 0].max
-      @end_position = byte_offset + 30000
+      @start_position = [byte_offset - 10000, 0].max
+      @end_position = byte_offset + 10000
       @filter = nil
       @mode = "static"
       @autoscroll = false
