@@ -14,7 +14,7 @@ export default class LogStreamerController extends Controller {
     endPosition: { type: Number, default: 0 }
   };
 
-  static targets = ["logLines", "filterInput", "results", "liveMode", "message", "regexpMode", "websocketStatus", "stopButton", "clearButton", "autoscroll", "rangeSliderContainer", "startSlider", "endSlider", "startOutput", "endOutput", "byteOffsetInput"];
+  static targets = ["logLines", "filterInput", "results", "liveMode", "message", "regexpMode", "websocketStatus", "stopButton", "clearButton", "autoscroll", "rangeSliderContainer", "startSlider", "endSlider", "startOutput", "endOutput"];
 
   connect() {
     this.consumer = createConsumer();
@@ -258,26 +258,6 @@ export default class LogStreamerController extends Controller {
     this.subscription.perform('stop_watcher');
   }
 
-  BASE_OFFSET = 10000
-
-  jumpToByteOffset(e) {
-    if (e.type === 'keydown' && e.key !== 'Enter') {
-      return;
-    }
-
-    e.preventDefault();
-    const input = this.element.querySelector('[data-log-streamer-target="byteOffsetInput"]');
-    const byteOffset = input?.value?.trim();
-
-    if (byteOffset && byteOffset !== '') {
-      const offset = parseInt(byteOffset);
-      const start = Math.max(0, offset - BASE_OFFSET);
-      const end = Math.min(this.fileSizeValue, offset + BASE_OFFSET);
-
-      this.#setRange(start, end);
-      this.#handleRangeUpdate();
-    }
-  }
 
   handleExpandClick(e) {
     const btn = e.target.closest('.onlylogs-expand-btn');
@@ -287,8 +267,8 @@ export default class LogStreamerController extends Controller {
     if (!byteOffset) return;
 
     const offset = parseInt(byteOffset);
-    const start = Math.max(0, offset - BASE_OFFSET);
-    const end = Math.min(this.fileSizeValue, offset + BASE_OFFSET);
+    const start = Math.max(0, offset - 30000);
+    const end = Math.min(this.fileSizeValue, offset + 30000);
 
     // Clear filter from UI and state
     this.filterInputTarget.value = '';
