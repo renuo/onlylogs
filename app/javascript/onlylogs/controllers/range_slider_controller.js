@@ -4,37 +4,37 @@ export default class extends Controller {
   static targets = ["startInput", "endInput", "startOutput", "endOutput"]
 
   connect() {
-    this.update()
+    this.updateVisuals()
   }
 
-  update(event) {
+  updateVisuals(event) {
     let start = Number(this.startInputTarget.value)
     let end = Number(this.endInputTarget.value)
 
+    // Enforce start <= end
     if (start > end) {
       if (event?.target === this.startInputTarget) {
-        end = start
-        this.endInputTarget.value = end
+        this.endInputTarget.value = start
       } else {
-        start = end
-        this.startInputTarget.value = start
+        this.startInputTarget.value = end
       }
     }
 
-    const min = Number(this.startInputTarget.min)
-    const max = Number(this.startInputTarget.max)
-    const startPercent = ((start - min) / (max - min)) * 100
-    const endPercent = ((end - min) / (max - min)) * 100
+    // Update visuals and dispatch event on change
+    this.#updateDisplay(Math.min(start, end), Math.max(start, end))
+    if (event?.type === 'change') {
+      this.element.dispatchEvent(new CustomEvent("range:update", { detail: { start, end } }))
+    }
+  }
 
-    this.element.style.setProperty("--range-start-percent", `${startPercent}%`)
-    this.element.style.setProperty("--range-end-percent", `${endPercent}%`)
+  #updateDisplay(start, end) {
+    const min = Number(this.startInputTarget.min)
+    const range = Number(this.startInputTarget.max) - min
+
+    this.element.style.setProperty("--range-start-percent", `${((start - min) / range) * 100}%`)
+    this.element.style.setProperty("--range-end-percent", `${((end - min) / range) * 100}%`)
 
     this.startOutputTarget.textContent = start
     this.endOutputTarget.textContent = end
-
-    // Only dispatch event when user actually changes the input (not on initial connect)
-    if (event) {
-      this.element.dispatchEvent(new CustomEvent("range:update", { detail: { start, end } }))
-    }
   }
 }

@@ -24,7 +24,7 @@
                step="<%= step %>"
                value="<%= start_value %>"
                data-log-streamer-target="startSlider"
-               data-action="input->log-streamer#updateRangeVisuals change->log-streamer#updateRangeVisuals">
+               data-action="input->log-streamer#updateRangeVisuals input->range-slider#updateVisuals change->log-streamer#updateRangeVisuals change->range-slider#updateVisuals">
 
         <input class="range-slider__input range-slider__input--end"
                type="range"
@@ -34,7 +34,7 @@
                step="<%= step %>"
                value="<%= end_value %>"
                data-log-streamer-target="endSlider"
-               data-action="input->log-streamer#updateRangeVisuals change->log-streamer#updateRangeVisuals">
+               data-action="input->log-streamer#updateRangeVisuals input->range-slider#updateVisuals change->log-streamer#updateRangeVisuals change->range-slider#updateVisuals">
       </div>
 
       <div class="range-slider__values">
