@@ -168,20 +168,12 @@ module Onlylogs
         search_pattern = filter.present? ? filter : ".+"
         search_regexp_mode = filter.present? ? regexp_mode : true
         last_line = nil
-        is_first = true
         line_count = 0
 
         Rails.logger.silence(Logger::ERROR) do
           @log_file.grep(search_pattern, regexp_mode: search_regexp_mode, start_position: start_position, end_position: end_position) do |log_line|
             break if @batch_sender.nil? || @log_watcher_running == false
 
-            # Skip first line if start_position > 0
-            if is_first
-              is_first = false
-              next if start_position > 0
-            end
-
-            # Send previous line when we get a new one
             if last_line
               @batch_sender.add_line(render_log_line(last_line))
               line_count += 1
