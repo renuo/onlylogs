@@ -21,6 +21,7 @@ export default class LogStreamerController extends Controller {
     this.isRunning = false;
     this.reconnectTimeout = null;
     this.isSearchFinished = true;
+    this.lastRangeStep = null;
 
     // Initialize clusterize
     this.clusterize = null;
@@ -508,31 +509,47 @@ export default class LogStreamerController extends Controller {
 
     // Enforce start <= end
     if (start > end) {
-      if (event?.target === this.startSliderTarget) {
-        this.endSliderTarget.value = start;
-      } else {
-        this.startSliderTarget.value = end;
-      }
+      [start, end] = [end, start];
+      this.startSliderTarget.value = start;
+      this.endSliderTarget.value = end;
     }
 
-    // Update visuals and dispatch event on change
-    this.#updateRangeDisplay(Math.min(start, end), Math.max(start, end));
+    this.#updateRangeDisplay(start, end);
+
     if (event?.type === 'change') {
+      const step = this.#stepForRange(start, end);
+      if (step !== this.lastRangeStep) {
+        this.lastRangeStep = step;
+        this.startSliderTarget.step = step;
+        this.endSliderTarget.step = step;
+      }
+
       this.rangeSliderContainerTarget.dispatchEvent(new CustomEvent("range:update", { detail: { start, end } }));
     }
   }
 
+#stepForRange(start, end) {
+  const selectedBytes = Math.max(end - start, 1);
+  const step = 10 ** Math.ceil(Math.log10(selectedBytes / 200));
+
+  return Math.max(1, step);
+}
+
   #updateRangeDisplay(start, end) {
-    const min = Number(this.startSliderTarget.min);
-    const range = Number(this.startSliderTarget.max) - min;
+    const sliderMax = Number(this.startSliderTarget.max);
 
-    this.rangeSliderContainerTarget.style.setProperty("--range-start-percent", `${((start - min) / range) * 100}%`);
-    this.rangeSliderContainerTarget.style.setProperty("--range-end-percent", `${((end - min) / range) * 100}%`);
+    this.rangeSliderContainerTarget.style.setProperty("--range-start-percent", `${(start / sliderMax) * 100}%`);
+    this.rangeSliderContainerTarget.style.setProperty("--range-end-percent", `${(end / sliderMax) * 100}%`);
 
-    // Display as percentages but send byte values to backend
-    const startPercent = Math.round((start / this.fileSizeValue) * 100);
-    const endPercent = Math.round((end / this.fileSizeValue) * 100);
-    this.startOutputTarget.textContent = startPercent + '%';
-    this.endOutputTarget.textContent = endPercent + '%';
+    this.startOutputTarget.textContent = `${this.#formatPercent(start)}%`;
+    this.endOutputTarget.textContent = `${this.#formatPercent(end)}%`;
+  }
+
+  #formatPercent(value) {
+    // Show 100% if within 1% of file size
+    if (value >= this.fileSizeValue * 0.99) return '100.0';
+    if (value <= 0) return '0.0';
+    const percent = (value / this.fileSizeValue) * 100;
+    return percent.toFixed(1);
   }
 }
