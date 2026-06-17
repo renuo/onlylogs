@@ -134,11 +134,18 @@ export default class LogStreamerController extends Controller {
       // Stop current operation and wait for backend to fully stop
       this.stop();
 
+      // Clear highlighting
+      this.contextLineHighlighted = false;
+      this.logLinesTarget.querySelectorAll('.highlighted-context-line').forEach(el => {
+        el.classList.remove('highlighted-context-line');
+      });
+
       // Update state immediately
       this.modeValue = 'live';
       this.#setRange(0, this.fileSizeValue);
       this.#updateUrlParam('start_position', null);
       this.#updateUrlParam('end_position', null);
+      this.#updateUrlParam('byte_offset', null);
       this.updateLiveModeState();
 
       if (!this.isRunning) {
@@ -243,6 +250,8 @@ export default class LogStreamerController extends Controller {
     this.subscription.perform('stop_watcher');
   }
 
+  BASE_OFFSET = 10000
+
   jumpToByteOffset(e) {
     if (e.type === 'keydown' && e.key !== 'Enter') {
       return;
@@ -252,12 +261,14 @@ export default class LogStreamerController extends Controller {
     const input = this.element.querySelector('[data-log-streamer-target="byteOffsetInput"]');
     const byteOffset = input?.value?.trim();
 
-    const params = new URLSearchParams(window.location.search);
     if (byteOffset && byteOffset !== '') {
-      params.set('byte_offset', byteOffset);
+      const offset = parseInt(byteOffset);
+      const start = Math.max(0, offset - BASE_OFFSET);
+      const end = Math.min(this.fileSizeValue, offset + BASE_OFFSET);
+
+      this.#setRange(start, end);
+      this.#handleRangeUpdate();
     }
-    params.delete('filter');
-    window.location.href = `${window.location.pathname}?${params.toString()}`;
   }
 
   handleExpandClick(e) {
@@ -267,13 +278,21 @@ export default class LogStreamerController extends Controller {
     const byteOffset = btn.getAttribute('data-byte-offset');
     if (!byteOffset) return;
 
-    const params = new URLSearchParams(window.location.search);
-    params.set('byte_offset', byteOffset);
-    params.delete('filter');
-    params.set('autoscroll', 'false');
-    params.delete('regexp_mode');
+    const offset = parseInt(byteOffset);
+    const start = Math.max(0, offset - BASE_OFFSET);
+    const end = Math.min(this.fileSizeValue, offset + BASE_OFFSET);
 
-    window.location.href = `${window.location.pathname}?${params.toString()}`;
+    // Clear filter from UI and state
+    this.filterInputTarget.value = '';
+    this.modeValue = 'static';
+
+    // Update URL with byte offset and remove filter
+    this.#updateUrlParam('byte_offset', byteOffset);
+    this.#updateUrlParam('filter', null);
+
+    this.updateLiveModeState();
+    this.#setRange(start, end);
+    this.#handleRangeUpdate();
   }
 
   clearLogs() {
