@@ -259,11 +259,10 @@ export default class LogStreamerController extends Controller {
     if (this.rangeSliderElement) {
       const min = Number(this.startSliderTarget.min);
       const max = Number(this.startSliderTarget.max);
-      const startPercent = ((start - min) / (max - min)) * 100;
-      const endPercent = ((end - min) / (max - min)) * 100;
+      const range = max - min;
 
-      this.rangeSliderElement.style.setProperty('--range-start-percent', `${startPercent}%`);
-      this.rangeSliderElement.style.setProperty('--range-end-percent', `${endPercent}%`);
+      this.rangeSliderElement.style.setProperty('--range-start-percent', `${((start - min) / range) * 100}%`);
+      this.rangeSliderElement.style.setProperty('--range-end-percent', `${((end - min) / range) * 100}%`);
 
       // Update output displays
       const outputs = this.rangeSliderElement.querySelectorAll('[data-range-slider-target="startOutput"], [data-range-slider-target="endOutput"]');
