@@ -117,7 +117,7 @@ module Onlylogs
     end
 
     test "index handles byte_offset param and sets search mode with byteoffset type" do
-      get "/onlylogs", params: {byte_offset: "50000"}
+      get "/onlylogs", params: {byte_offset: "10000"}
       assert_response :success
       # Should be in search mode with byteoffset search type
       assert_select "[data-log-streamer-mode-value='search']"
@@ -127,16 +127,16 @@ module Onlylogs
     end
 
     test "index calculates cursor_position from byte_offset" do
-      get "/onlylogs", params: {byte_offset: "50000"}
+      get "/onlylogs", params: {byte_offset: "10000"}
       assert_response :success
-      # cursor_position should be byte_offset - 30000 = 20000
-      assert_select "[data-log-streamer-cursor-position-value='20000']"
+      # cursor_position should be byte_offset - 10000 = 40000
+      assert_select "[data-log-streamer-cursor-position-value='40000']"
     end
 
     test "index sets end_position from byte_offset" do
-      get "/onlylogs", params: {byte_offset: "50000"}
+      get "/onlylogs", params: {byte_offset: "10000"}
       assert_response :success
-      # end_position should be byte_offset + 30000 = 80000
+      # end_position should be byte_offset + 10000 = 60000
       assert_select "[data-log-streamer-end-position-value='60000']"
     end
 
@@ -157,7 +157,7 @@ module Onlylogs
     test "index byte_offset with cursor_position boundary at 0" do
       get "/onlylogs", params: {byte_offset: "5000"}
       assert_response :success
-      # cursor_position should be max(5000 - 30000, 0) = 0
+      # cursor_position should be max(5000 - 10000, 0) = 0
       assert_select "[data-log-streamer-cursor-position-value='0']"
     end
   end
