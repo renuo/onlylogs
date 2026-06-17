@@ -17,7 +17,7 @@ class Onlylogs::GrepTest < ActiveSupport::TestCase
 
   def self.test_both_engine_modes(test_name, &block)
     test test_name do
-      [ false, true ].each do |ripgrep_enabled|
+      [false, true].each do |ripgrep_enabled|
         Onlylogs.configuration.ripgrep_enabled = ripgrep_enabled
         engine_name = ripgrep_enabled ? "ripgrep" : "grep"
         instance_exec(engine_name, &block)

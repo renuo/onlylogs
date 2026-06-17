@@ -168,14 +168,13 @@ module Onlylogs
 
       begin
         # Adjust start position to beginning of next complete line
-        adjusted_start = start_position > 0 ? next_line_boundary(file_path, start_position) : 0
+        adjusted_start = (start_position > 0) ? next_line_boundary(file_path, start_position) : 0
         adjusted_end = end_position ? next_line_boundary(file_path, end_position) : nil
 
         Rails.logger.silence(Logger::ERROR) do
-
           # Use grep for both filtered searches and byte range reads
           # If no filter, use a pattern that matches all non-empty lines
-          search_pattern = filter.present? ? filter : '.+'
+          search_pattern = filter.present? ? filter : ".+"
           search_regexp_mode = filter.present? ? regexp_mode : true
 
           @log_file.grep(search_pattern, regexp_mode: search_regexp_mode, start_position: adjusted_start, end_position: adjusted_end) do |log_line|
