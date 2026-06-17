@@ -36,5 +36,5 @@
       <% end %>
     <% end %>
   </div>
-  <%= render partial: "onlylogs/shared/log_container", locals: { log_file_path: @log_file_path, tail: @max_lines, filter: @filter, autoscroll: @autoscroll, regexp_mode: @regexp_mode, mode: @mode } %>
+  <%= render partial: "onlylogs/shared/log_container", locals: { log_file_path: @log_file_path, tail: @max_lines, filter: @filter, autoscroll: @autoscroll, regexp_mode: @regexp_mode, start_position: @start_position, end_position: @end_position, mode: @mode } %>
 </div>

@@ -59,7 +59,7 @@ actual_color_regex='\x1b\[[0-9;]*m'
 query_regex="${query_regex//$placeholder/$actual_color_regex}"
 
 # Build ripgrep command
-rg_cmd="rg --color=never --no-filename"
+rg_cmd="rg --color=never --no-filename --byte-offset"
 [ -n "$max_matches" ] && rg_cmd="$rg_cmd --max-count=$max_matches"
 
 # Handle byte range if specified
