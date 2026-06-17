@@ -108,28 +108,6 @@
           </button>
         </div>
         <div data-log-streamer-target="message"></div>
-        <% if Onlylogs.ripgrep_enabled? %>
-          <div>
-            <label class="toolbar-label">
-              Byte Offset:
-              <div style="display: inline-flex; align-items: center; position: relative;">
-                <input type="number"
-                       name="byte_offset"
-                       placeholder="0"
-                       value="<%= byte_offset %>"
-                       data-log-streamer-target="byteOffsetInput"
-                       data-action="keydown->log-streamer#jumpToByteOffset"
-                       style="width: 100px; padding-right: 0.5rem;">
-                <button type="button"
-                        data-action="click->log-streamer#jumpToByteOffset"
-                        class="jump-button"
-                        title="Jump to byte offset">
-                  Apply
-                </button>
-              </div>
-            </label>
-          </div>
-        <% end %>
         <div class="file-size" title="File size: <%= number_to_human_size(File.size(log_file_path)) %>">
           <%= number_to_human_size(File.size(log_file_path)) %>
         </div>
