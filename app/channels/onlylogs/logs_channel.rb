@@ -59,7 +59,7 @@ module Onlylogs
         read_static(file_path, filter, regexp_mode, start_position, end_position)
       else
         # Follow the tail of the file indefinitely
-        start_log_watcher(file_path, live_tail_position(file_path), filter, regexp_mode)
+        start_log_watcher(file_path, filter, regexp_mode)
       end
     end
 
@@ -87,11 +87,8 @@ module Onlylogs
     # an explicit cursor (matches the default whole-file live-mode page load).
     LIVE_TAIL_BYTES = 10_000
 
-    def live_tail_position(file_path)
-      [::File.size(file_path) - LIVE_TAIL_BYTES, 0].max
-    end
 
-    def start_log_watcher(file_path, cursor_position, filter = nil, regexp_mode = false)
+    def start_log_watcher(file_path, filter = nil, regexp_mode = false)
       return if @log_watcher_running
 
       @log_watcher_running = true
@@ -100,7 +97,9 @@ module Onlylogs
 
       transmit({action: "message", content: "Reading file. Please wait..."})
 
-      @log_file = Onlylogs::File.new(file_path, last_position: cursor_position)
+      # Start from LIVE_TAIL_BYTES from the end, or from the beginning if file is smaller
+      starting_position = [::File.size(file_path) - LIVE_TAIL_BYTES, 0].max
+      @log_file = Onlylogs::File.new(file_path, last_position: starting_position)
 
       transmit({action: "message", content: ""})
 
