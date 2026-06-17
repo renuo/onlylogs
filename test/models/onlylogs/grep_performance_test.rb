@@ -1,4 +1,4 @@
-# Performance test using big.log - runs on CI when fixture is available
+# This test is a performance test and can be run locally with the use of the downloaded big file but will not be run on the CI
 require "test_helper"
 
 class Onlylogs::GrepPerformanceTest < ActiveSupport::TestCase
@@ -6,6 +6,7 @@ class Onlylogs::GrepPerformanceTest < ActiveSupport::TestCase
     @fixture_path = ::File.expand_path("../../fixtures/files/log_file_100_lines.txt", __dir__)
     @large_fixture_path = ::File.expand_path("../../fixtures/files/big.log", __dir__)
 
+    skip "Performance test: not run on CI" if ENV["CI"]
     skip "Performance test: big.log not found at #{@large_fixture_path}" unless ::File.exist?(@large_fixture_path)
   end
 
