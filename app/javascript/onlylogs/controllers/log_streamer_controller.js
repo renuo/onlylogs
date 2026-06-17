@@ -127,20 +127,28 @@ export default class LogStreamerController extends Controller {
   }
 
   toggleLiveMode() {
-    // this condition looks revered, but the value here has been changed already. so the live mode has been enabled.
     if (this.isLiveMode()) {
-      // User checked - stop search immediately and switch to live mode
+      // User checked - enable live mode
+      // Stop current operation and wait for backend to fully stop
       this.stop();
-      this.clear();
-      this.#reinitializeClusterize();
 
+      // Update state immediately
       this.modeValue = 'live';
       this.#setRange(0, this.fileSizeValue);
       this.#updateUrlParam('start_position', null);
       this.#updateUrlParam('end_position', null);
       this.updateLiveModeState();
 
-      this.start();
+      if (!this.isRunning) {
+        // Wait for backend to fully stop the current search, then reconnect
+        setTimeout(() => {
+          this.clear();
+          this.#reinitializeClusterize();
+          this.start();
+      }, 1000);
+      }
+
+
     } else {
       // User unchecked - disable live mode and pause
       this.modeValue = 'static';
