@@ -28,10 +28,9 @@ export default class LogStreamerController extends Controller {
 
     this.#updateWebsocketStatus('disconnected');
 
-    // Find the range-slider element and listen for updates
-    this.rangeSliderElement = this.element.querySelector('[data-controller~="range-slider"]');
-    if (this.rangeSliderElement) {
-      this.rangeSliderElement.addEventListener('range:update', (e) => {
+    // Listen for range-slider updates
+    if (this.hasRangeSliderContainerTarget) {
+      this.rangeSliderContainerTarget.addEventListener('range:update', (e) => {
         this.#handleRangeUpdate(e);
       });
     }
@@ -255,21 +254,9 @@ export default class LogStreamerController extends Controller {
     this.startSliderTarget.value = start;
     this.endSliderTarget.value = end;
 
-    // Update range-slider visual state
-    if (this.rangeSliderElement) {
-      const min = Number(this.startSliderTarget.min);
-      const max = Number(this.startSliderTarget.max);
-      const range = max - min;
-
-      this.rangeSliderElement.style.setProperty('--range-start-percent', `${((start - min) / range) * 100}%`);
-      this.rangeSliderElement.style.setProperty('--range-end-percent', `${((end - min) / range) * 100}%`);
-
-      // Update output displays
-      const outputs = this.rangeSliderElement.querySelectorAll('[data-range-slider-target="startOutput"], [data-range-slider-target="endOutput"]');
-      outputs.forEach(output => {
-        if (output.dataset.rangeSliderTarget === 'startOutput') output.textContent = start;
-        if (output.dataset.rangeSliderTarget === 'endOutput') output.textContent = end;
-      });
+    // Trigger range-slider controller to update visuals
+    if (this.hasRangeSliderContainerTarget) {
+      this.rangeSliderContainerTarget.dispatchEvent(new Event('input', { bubbles: true }));
     }
   }
 
