@@ -598,23 +598,23 @@ export default class LogStreamerController extends Controller {
     this.#updateRangeDisplay(start, end);
 
     if (event?.type === 'change') {
-      const step = this.#stepForRange(start, end);
-      if (step !== this.lastRangeStep) {
-        this.lastRangeStep = step;
-        this.startSliderTarget.step = step;
-        this.endSliderTarget.step = step;
+      const newStep = this.#stepForRange(start, end);
+      if (newStep !== this.lastRangeStep) {
+        this.lastRangeStep = newStep;
+        this.startSliderTarget.step = newStep;
+        this.endSliderTarget.step = newStep;
       }
 
       this.rangeSliderContainerTarget.dispatchEvent(new CustomEvent("range:update", { detail: { start, end } }));
     }
   }
 
-#stepForRange(start, end) {
-  const selectedBytes = Math.max(end - start, 1);
-  const step = 10 ** Math.ceil(Math.log10(selectedBytes / 200));
+  #stepForRange(start, end) {
+    const selectedBytes = Math.max(end - start, 1);
+    const step = 10 ** Math.ceil(Math.log10(selectedBytes / 200));
 
-  return Math.max(1, step);
-}
+    return Math.max(1, step);
+  }
 
   #updateRangeDisplay(start, end) {
     const sliderMax = Number(this.startSliderTarget.max);
