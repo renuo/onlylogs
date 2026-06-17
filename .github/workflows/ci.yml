@@ -43,10 +43,18 @@ jobs:
           ruby-version: 3.4.1
           bundler-cache: true
 
+      - name: Download big.log for performance tests
+        run: |
+          mkdir -p test/fixtures/files
+          curl -o test/fixtures/files/big.log https://onlylogs-files.s3.eu-central-1.amazonaws.com/big.log --progress-bar
+
       - name: Run tests
         env:
           RAILS_ENV: test
         run: bin/check
+
+      - name: Run grep block size benchmark
+        run: ruby test/performance/grep_block_size_benchmark.rb
 
       - name: Keep screenshots from failed system tests
         uses: actions/upload-artifact@v4
