@@ -346,20 +346,14 @@ export default class LogStreamerController extends Controller {
    * Handle successful connection
    */
   #handleConnected() {
-    const params = {
+    this.subscription.perform('initialize_watcher', {
       file_path: this.filePathValue,
       filter: this.filterInputTarget.value,
       mode: this.modeValue,
-      regexp_mode: this.regexpModeValue
-    };
-
-    // Always send range parameters in static mode
-    if (this.modeValue === 'static') {
-      params.start_position = parseInt(this.startSliderTarget.value);
-      params.end_position = parseInt(this.endSliderTarget.value);
-    }
-
-    this.subscription.perform('initialize_watcher', params);
+      regexp_mode: this.regexpModeValue,
+      start_position: parseInt(this.startSliderTarget.value),
+      end_position: parseInt(this.endSliderTarget.value)
+    });
 
     this.element.classList.add("log-streamer--connected");
     this.element.classList.remove("log-streamer--disconnected", "log-streamer--rejected");
