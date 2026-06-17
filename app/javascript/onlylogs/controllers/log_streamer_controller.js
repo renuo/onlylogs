@@ -12,7 +12,7 @@ export default class LogStreamerController extends Controller {
     fileSize: { type: Number, default: 0 }
   };
 
-  static targets = ["logLines", "filterInput", "results", "liveMode", "message", "regexpMode", "websocketStatus", "stopButton", "clearButton", "autoscroll", "rangeSliderContainer", "startSlider", "endSlider", "startPositionInput", "endPositionInput"];
+  static targets = ["logLines", "filterInput", "results", "liveMode", "message", "regexpMode", "websocketStatus", "stopButton", "clearButton", "autoscroll", "rangeSliderContainer", "startSlider", "endSlider", "startOutput", "endOutput"];
 
   connect() {
     this.consumer = createConsumer();
@@ -501,5 +501,37 @@ export default class LogStreamerController extends Controller {
 
     const newUrl = `${window.location.pathname}?${params.toString()}`;
     window.history.replaceState(null, '', newUrl);
+  }
+
+  // Range slider methods
+  updateRangeVisuals(event) {
+    let start = Number(this.startSliderTarget.value);
+    let end = Number(this.endSliderTarget.value);
+
+    // Enforce start <= end
+    if (start > end) {
+      if (event?.target === this.startSliderTarget) {
+        this.endSliderTarget.value = start;
+      } else {
+        this.startSliderTarget.value = end;
+      }
+    }
+
+    // Update visuals and dispatch event on change
+    this.#updateRangeDisplay(Math.min(start, end), Math.max(start, end));
+    if (event?.type === 'change') {
+      this.rangeSliderContainerTarget.dispatchEvent(new CustomEvent("range:update", { detail: { start, end } }));
+    }
+  }
+
+  #updateRangeDisplay(start, end) {
+    const min = Number(this.startSliderTarget.min);
+    const range = Number(this.startSliderTarget.max) - min;
+
+    this.rangeSliderContainerTarget.style.setProperty("--range-start-percent", `${((start - min) / range) * 100}%`);
+    this.rangeSliderContainerTarget.style.setProperty("--range-end-percent", `${((end - min) / range) * 100}%`);
+
+    this.startOutputTarget.textContent = start;
+    this.endOutputTarget.textContent = end;
   }
 }

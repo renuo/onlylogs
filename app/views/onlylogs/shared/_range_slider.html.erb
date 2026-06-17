@@ -2,7 +2,7 @@
 <%# locals: (start_name:, end_name:, start_value:, end_value:, min: 0, max: 100, step: 1, label: nil, show_reset: false) %>
 
 <div class="range-slider range-slider--double"
-     data-controller="range-slider"
+     data-log-streamer-target="rangeSliderContainer"
      style="--range-min: <%= min %>;
             --range-max: <%= max %>;
             --range-start: <%= start_value %>;
@@ -25,9 +25,8 @@
                max="<%= max %>"
                step="<%= step %>"
                value="<%= start_value %>"
-               data-range-slider-target="startInput"
                data-log-streamer-target="startSlider"
-               data-action="input->range-slider#updateVisuals change->range-slider#updateVisuals">
+               data-action="input->log-streamer#updateRangeVisuals change->log-streamer#updateRangeVisuals">
 
         <input class="range-slider__input range-slider__input--end"
                type="range"
@@ -36,15 +35,14 @@
                max="<%= max %>"
                step="<%= step %>"
                value="<%= end_value %>"
-               data-range-slider-target="endInput"
                data-log-streamer-target="endSlider"
-               data-action="input->range-slider#updateVisuals change->range-slider#updateVisuals">
+               data-action="input->log-streamer#updateRangeVisuals change->log-streamer#updateRangeVisuals">
       </div>
 
       <div class="range-slider__values">
-        <output data-range-slider-target="startOutput"><%= start_value %></output>
+        <output data-log-streamer-target="startOutput"><%= start_value %></output>
         <span>–</span>
-        <output data-range-slider-target="endOutput"><%= end_value %></output>
+        <output data-log-streamer-target="endOutput"><%= end_value %></output>
       </div>
     </div>
   </div>
