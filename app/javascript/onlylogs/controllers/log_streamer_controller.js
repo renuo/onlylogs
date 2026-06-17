@@ -44,7 +44,6 @@ export default class LogStreamerController extends Controller {
     this.start();
     this.updateLiveModeState();
     this.scroll();
-    this.#highlightContextLine();
   }
 
   disconnect() {
@@ -288,23 +287,29 @@ export default class LogStreamerController extends Controller {
 
     this.#applyContextLineHighlight(target);
 
-    // Only scroll on initial highlight
-    if (!this.contextLineHighlighted) {
-      const closestPre = [...this.logLinesTarget.querySelectorAll('pre[data-byte-offset]')]
-        .find(pre => Number(pre.dataset.byteOffset) === target ||
-          Math.abs(Number(pre.dataset.byteOffset) - target) < 1000);
-      if (closestPre) {
-        this.#scrollVerticallyToCenter(closestPre);
-      }
+    // Find and scroll to the closest pre element
+    const closestPre = [...this.logLinesTarget.querySelectorAll('pre[data-byte-offset]')]
+      .reduce((closest, pre) => {
+        const distance = Math.abs(Number(pre.dataset.byteOffset) - target);
+        return !closest || distance < closest.distance ? { pre, distance } : closest;
+      }, null)?.pre;
+
+    if (closestPre) {
+      this.#scrollVerticallyToCenter(closestPre);
     }
   }
 
   #scrollVerticallyToCenter(element) {
-    const container = this.logLinesTarget;
-    const containerRect = container.getBoundingClientRect();
-    const elementRect = element.getBoundingClientRect();
-    const delta = (elementRect.top - containerRect.top) - (container.clientHeight / 2) + (elementRect.height / 2);
-    container.scrollBy({ top: delta, behavior: 'smooth' });
+    // Find the row wrapper that's a direct child of clusterize-content
+    let row = element;
+    while (row.parentElement && !row.parentElement.classList.contains('clusterize-content')) {
+      row = row.parentElement;
+    }
+
+    if (!row) return;
+
+    // Scroll into view first to ensure element is rendered
+    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 
   #applyContextLineHighlight(target) {
@@ -480,9 +485,20 @@ export default class LogStreamerController extends Controller {
     try {
       // Append new lines to clusterize
       if (lines.length > 0) {
-        this.clusterize.append(lines);
+        // Render JSON log lines into HTML strings
+        const renderedLines = lines.map(line => this.#renderLogLineHtml(line));
+        this.clusterize.append(renderedLines);
         this.#updateResultsDisplay();
         this.scroll();
+
+        // Highlight context line around byte offset if present
+        const params = new URLSearchParams(window.location.search);
+        if (params.has('byte_offset') && !this.contextLineHighlighted) {
+          setTimeout(() => {
+            this.#highlightContextLine();
+            this.contextLineHighlighted = true;
+          }, 100);
+        }
       }
 
       // Update stop button visibility after processing lines
@@ -490,6 +506,19 @@ export default class LogStreamerController extends Controller {
 
     } catch (error) {
       console.error('Error handling log lines:', error);
+    }
+  }
+
+  #renderLogLineHtml(logLine) {
+    // logLine is a JSON object: {content, byte_offset, show_expand_button}
+    const { content, byte_offset, show_expand_button } = logLine;
+
+    if (byte_offset && show_expand_button) {
+      return `<div style="display: flex; align-items: center;"><button class="onlylogs-expand-btn" data-byte-offset="${byte_offset}" data-action="click->log-streamer#handleExpandClick">+</button><pre data-byte-offset="${byte_offset}">${content}</pre></div>`;
+    } else if (byte_offset) {
+      return `<pre data-byte-offset="${byte_offset}">${content}</pre>`;
+    } else {
+      return `<pre>${content}</pre>`;
     }
   }
 
@@ -591,11 +620,14 @@ export default class LogStreamerController extends Controller {
         clusterChanged: () => {
           // Re-apply highlighting when cluster changes (for virtual scrolling).
           // The byte_offset URL param is the highlight anchor for an explore window.
-          const params = new URLSearchParams(window.location.search);
-          if (params.has('byte_offset')) {
-            const target = Number(params.get('byte_offset'));
-            if (!Number.isNaN(target)) {
-              this.#applyContextLineHighlight(target);
+          // Only re-highlight if we've already done initial highlight.
+          if (this.contextLineHighlighted) {
+            const params = new URLSearchParams(window.location.search);
+            if (params.has('byte_offset')) {
+              const target = Number(params.get('byte_offset'));
+              if (!Number.isNaN(target)) {
+                this.#applyContextLineHighlight(target);
+              }
             }
           }
         },
