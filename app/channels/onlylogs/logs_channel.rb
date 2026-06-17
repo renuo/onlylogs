@@ -211,7 +211,7 @@ module Onlylogs
 
     def next_line_boundary(file_path, position, max_scan: 64 * 1024)
       file_size = ::File.size(file_path)
-      position = [[position.to_i, 0].max, file_size].min
+      position = position.to_i.clamp(0, file_size)
 
       return position if position.zero? || position >= file_size
 
