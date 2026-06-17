@@ -164,30 +164,38 @@ module Onlylogs
       @batch_sender = BatchSender.new(self)
       @batch_sender.start
 
-      line_count = 0
-
       begin
-        # Adjust start position to beginning of next complete line
-        adjusted_start = (start_position > 0) ? next_line_boundary(file_path, start_position) : 0
-        adjusted_end = end_position ? next_line_boundary(file_path, end_position) : nil
+        search_pattern = filter.present? ? filter : ".+"
+        search_regexp_mode = filter.present? ? regexp_mode : true
+        last_line = nil
+        is_first = true
+        line_count = 0
 
         Rails.logger.silence(Logger::ERROR) do
-          # Use grep for both filtered searches and byte range reads
-          # If no filter, use a pattern that matches all non-empty lines
-          search_pattern = filter.present? ? filter : ".+"
-          search_regexp_mode = filter.present? ? regexp_mode : true
+          @log_file.grep(search_pattern, regexp_mode: search_regexp_mode, start_position: start_position, end_position: end_position) do |log_line|
+            break if @batch_sender.nil? || @log_watcher_running == false
 
-          @log_file.grep(search_pattern, regexp_mode: search_regexp_mode, start_position: adjusted_start, end_position: adjusted_end) do |log_line|
-            break if @batch_sender.nil?
+            # Skip first line if start_position > 0
+            if is_first
+              is_first = false
+              next if start_position > 0
+            end
 
-            # Add to batch buffer (sender thread will handle sending)
-            @batch_sender.add_line(render_log_line(log_line))
-
-            line_count += 1
+            # Send previous line when we get a new one
+            if last_line
+              @batch_sender.add_line(render_log_line(last_line))
+              line_count += 1
+            end
+            last_line = log_line
           end
         end
 
-        # Stop batch sender and flush any remaining lines
+        # Send last line only if no end_position
+        if last_line && !end_position
+          @batch_sender.add_line(render_log_line(last_line))
+          line_count += 1
+        end
+
         @batch_sender.stop
 
         # Send completion message
@@ -207,21 +215,6 @@ module Onlylogs
 
     def render_log_line(log_line)
       "<pre>#{FilePathParser.parse(AnsiColorParser.parse(ERB::Util.html_escape(log_line)))}</pre>"
-    end
-
-    def next_line_boundary(file_path, position, max_scan: 64 * 1024)
-      file_size = ::File.size(file_path)
-      position = position.to_i.clamp(0, file_size)
-
-      return position if position.zero? || position >= file_size
-
-      ::File.open(file_path, "rb") do |file|
-        file.seek(position)
-        chunk = file.read(max_scan)
-
-        newline_index = chunk&.index("\n")
-        newline_index ? position + newline_index + 1 : position
-      end
     end
   end
 end
