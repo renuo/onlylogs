@@ -278,52 +278,18 @@ export default class LogStreamerController extends Controller {
     const end = parseInt(this.endSliderTarget.value);
     const isDefaultRange = start === 0 && end === this.fileSizeValue;
 
-    if (isDefaultRange) {
-      // Range is at defaults, go back to live mode
-      this.liveModeTarget.checked = true;
-      this.modeValue = 'live';
-      this.#updateUrlParam('start_position', null);
-      this.#updateUrlParam('end_position', null);
-    } else {
-      // Range is adjusted, switch to static mode
-      this.liveModeTarget.checked = false;
-      this.modeValue = 'static';
-      this.#updateUrlParam('start_position', start);
-      this.#updateUrlParam('end_position', end);
-    }
+    this.liveModeTarget.checked = isDefaultRange;
+    this.modeValue = isDefaultRange ? 'live' : 'static';
+    this.#updateUrlParam('start_position', isDefaultRange ? null : start);
+    this.#updateUrlParam('end_position', isDefaultRange ? null : end);
 
     this.updateLiveModeState();
-    this.#debouncedReconnect();
+    this.reconnectWithNewMode();
   }
 
   resetRange() {
     this.#setRange(0, this.fileSizeValue);
-
-    // Reset to live mode
-    this.liveModeTarget.checked = true;
-    this.modeValue = 'live';
-    this.#updateUrlParam('start_position', null);
-    this.#updateUrlParam('end_position', null);
-    this.updateLiveModeState();
-
-    // Reconnect with updated mode/range
-    this.reconnectWithNewMode();
-  }
-
-  #debouncedReconnect() {
-    // Clear any existing timeout
-    if (this.rangeDebounceTimeout) {
-      clearTimeout(this.rangeDebounceTimeout);
-    }
-
-    // Debounce reconnection (800ms delay for sliders)
-    this.rangeDebounceTimeout = setTimeout(() => {
-      this.stop();
-      this.clear();
-      this.#reinitializeClusterize();
-      this.start();
-      this.rangeDebounceTimeout = null;
-    }, 800);
+    this.#handleRangeUpdate();
   }
 
   #restoreRangeFromUrl() {
@@ -331,16 +297,12 @@ export default class LogStreamerController extends Controller {
     const startParam = params.get('start_position');
     const endParam = params.get('end_position');
 
-    if (startParam !== null || endParam !== null) {
+    if (startParam || endParam) {
       const start = startParam ? parseInt(startParam) : 0;
       const end = endParam ? parseInt(endParam) : this.fileSizeValue;
-
-      // Set the range without triggering the update event
       this.#setRange(start, end);
 
-      // Update mode based on whether range is at defaults
-      const isDefaultRange = start === 0 && end === this.fileSizeValue;
-      if (!isDefaultRange) {
+      if (start !== 0 || end !== this.fileSizeValue) {
         this.liveModeTarget.checked = false;
         this.modeValue = 'static';
       }
