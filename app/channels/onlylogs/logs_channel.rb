@@ -169,16 +169,15 @@ module Onlylogs
         line_count = 0
 
         Rails.logger.silence(Logger::ERROR) do
-          is_first_line = true
+          skip_first = start_position > 0
           reader = ->(log_line) do
             break if @batch_sender.nil? || @log_watcher_running == false
 
             # Skip first line if start_position > 0 (line is cut off at byte boundary)
-            if is_first_line && start_position > 0
-              is_first_line = false
+            if skip_first
+              skip_first = false
               next
             end
-            is_first_line = false
 
             # Buffer previous line and skip it to avoid cut-off lines at boundaries
             if last_line
