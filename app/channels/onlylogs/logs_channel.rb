@@ -251,20 +251,5 @@ module Onlylogs
     def render_log_line(log_line)
       "<pre>#{FilePathParser.parse(AnsiColorParser.parse(ERB::Util.html_escape(log_line)))}</pre>"
     end
-
-    def next_line_boundary(file_path, position, max_scan: 64 * 1024)
-      file_size = ::File.size(file_path)
-      position = position.to_i.clamp(0, file_size)
-
-      return position if position.zero? || position >= file_size
-
-      ::File.open(file_path, "rb") do |file|
-        file.seek(position)
-        chunk = file.read(max_scan)
-
-        newline_index = chunk&.index("\n")
-        newline_index ? position + newline_index + 1 : position
-      end
-    end
   end
 end
