@@ -221,6 +221,7 @@ module Onlylogs
             end
           else
             # No filter - read all lines directly (skip grep)
+            current_byte_offset = start_position
             read_byte_range(file_path, start_position, end_position) do |log_line|
               break if @batch_sender.nil? || @log_watcher_running == false
 
@@ -230,7 +231,9 @@ module Onlylogs
                 line_count += 1
               end
               last_line = log_line
-              last_byte_offset = nil
+              last_byte_offset = current_byte_offset
+              # Account for line content plus newline character (2 bytes for \r\n or 1 for \n)
+              current_byte_offset += log_line.bytesize + 1
             end
 >>>>>>> d562515 (Add explore mode to view logs around a specific byte offset)
           end
