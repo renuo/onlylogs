@@ -172,7 +172,7 @@ module Onlylogs
         line_count = 0
 
         # Adjust start position to beginning of next complete line
-        adjusted_start = start_position > 0 ? next_line_boundary(file_path, start_position) : 0
+        adjusted_start = (start_position > 0) ? next_line_boundary(file_path, start_position) : 0
         adjusted_end = end_position ? next_line_boundary(file_path, end_position) : nil
 
         Rails.logger.silence(Logger::ERROR) do
