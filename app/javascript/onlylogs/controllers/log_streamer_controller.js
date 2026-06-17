@@ -529,7 +529,10 @@ export default class LogStreamerController extends Controller {
     this.rangeSliderContainerTarget.style.setProperty("--range-start-percent", `${((start - min) / range) * 100}%`);
     this.rangeSliderContainerTarget.style.setProperty("--range-end-percent", `${((end - min) / range) * 100}%`);
 
-    this.startOutputTarget.textContent = start;
-    this.endOutputTarget.textContent = end;
+    // Display as percentages but send byte values to backend
+    const startPercent = Math.round((start / this.fileSizeValue) * 100);
+    const endPercent = Math.round((end / this.fileSizeValue) * 100);
+    this.startOutputTarget.textContent = startPercent + '%';
+    this.endOutputTarget.textContent = endPercent + '%';
   }
 }
