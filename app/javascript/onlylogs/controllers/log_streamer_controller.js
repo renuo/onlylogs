@@ -297,6 +297,7 @@ export default class LogStreamerController extends Controller {
     try {
       // Append new lines to clusterize and track them
       if (!lines || lines.length === 0) return;
+
       this.clusterize.append(lines);
       this.rows.push(...lines);
 
