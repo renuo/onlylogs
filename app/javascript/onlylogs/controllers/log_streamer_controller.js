@@ -21,6 +21,9 @@ export default class LogStreamerController extends Controller {
     this.reconnectTimeout = null;
     this.isSearchFinished = true;
 
+    // Track all rows for live mode culling (required by Clusterize API)
+    this.rows = [];
+
     // Initialize clusterize
     this.clusterize = null;
     this.#initializeClusterize();
@@ -80,6 +83,7 @@ export default class LogStreamerController extends Controller {
 
   clear() {
     this.clusterize.clear();
+    this.rows = [];
     this.#updateResultsDisplay();
   }
 
@@ -287,13 +291,24 @@ export default class LogStreamerController extends Controller {
   }
 
   #handleLogLines(lines) {
+    const MAX_ROWS_LIVE_MODE = 150_000;
+    const BATCH_REMOVE_SIZE = 50_000;
+
     try {
-      // Append new lines to clusterize
-      if (lines.length > 0) {
-        this.clusterize.append(lines);
-        this.#updateResultsDisplay();
-        this.scroll();
+      // Append new lines to clusterize and track them
+      if (!lines || lines.length === 0) return;
+      this.clusterize.append(lines);
+      this.rows.push(...lines);
+
+      // In live mode, prune old rows if we exceed the maximum
+      if (this.isLiveMode() && this.rows.length > MAX_ROWS_LIVE_MODE) {
+        const remainingRows = this.rows.slice(BATCH_REMOVE_SIZE);
+        this.rows = remainingRows;
+        this.clusterize.update(remainingRows);
       }
+
+      this.#updateResultsDisplay();
+      this.scroll();
 
       // Update stop button visibility after processing lines
       this.updateStopButtonVisibility();
@@ -411,6 +426,7 @@ export default class LogStreamerController extends Controller {
   #reinitializeClusterize() {
     this.clusterize.destroy();
     this.clusterize = null;
+    this.rows = [];
     this.#initializeClusterize();
   }
 
