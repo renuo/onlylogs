@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.4
+
+- Use `--no-mmap` option to reduce memory allocation.
+
 ## 0.5.3
 
 - Reuse Http connection.
