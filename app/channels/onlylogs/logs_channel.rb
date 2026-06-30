@@ -51,8 +51,8 @@ module Onlylogs
       regexp_mode = data["regexp_mode"] == true || data["regexp_mode"] == "true"
 
       file_size = ::File.size(file_path)
-      start_position = [[data["start_position"]&.to_i || 0, 0].max, file_size].min
-      end_position = [[data["end_position"]&.to_i, 0].max, file_size].min if data["end_position"]
+      start_position = (data["start_position"]&.to_i || 0).clamp(0, file_size)
+      end_position = data["end_position"]&.to_i&.clamp(0, file_size) if data["end_position"]
 
       if mode == "static"
         # Read the entire file with filter and send all matching lines
