@@ -9,7 +9,7 @@ module Onlylogs
     isolate_namespace Onlylogs
 
     initializer "onlylogs.assets" do |app|
-      %w[images stylesheets builds fonts].each do |subdir|
+      %w[images javascript stylesheets builds fonts].each do |subdir|
         path = root.join("app/assets", subdir)
         app.config.assets.paths << path if path.exist?
       end
