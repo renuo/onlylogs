@@ -128,6 +128,13 @@
     self.getRowsAmount = function() {
       return rows.length;
     }
+    self.prune = function(count) {
+      if(count <= 0 || rows.length <= count) return;
+      rows = rows.slice(count);
+      var scroll_top = self.scroll_elem.scrollTop;
+      self.insertToDOM(rows, cache);
+      self.scroll_elem.scrollTop = Math.max(0, scroll_top - (count * self.options.item_height));
+    }
     self.getScrollProgress = function() {
       return this.options.scroll_top / (rows.length * this.options.item_height) * 100 || 0;
     }
