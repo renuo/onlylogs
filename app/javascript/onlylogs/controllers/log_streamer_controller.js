@@ -8,10 +8,11 @@ export default class LogStreamerController extends Controller {
     autoStart: { type: Boolean, default: true },
     filter: { type: String, default: '' },
     mode: { type: String, default: 'live' },
-    regexpMode: { type: Boolean, default: false }
+    regexpMode: { type: Boolean, default: false },
+    fileSize: { type: Number, default: 0 }
   };
 
-  static targets = ["logLines", "filterInput", "results", "liveMode", "message", "regexpMode", "websocketStatus", "stopButton", "clearButton", "autoscroll"];
+  static targets = ["logLines", "filterInput", "results", "liveMode", "message", "regexpMode", "websocketStatus", "stopButton", "clearButton", "autoscroll", "rangeSliderContainer", "startSlider", "endSlider", "startOutput", "endOutput"];
 
   connect() {
     this.consumer = createConsumer();
@@ -20,12 +21,23 @@ export default class LogStreamerController extends Controller {
     this.isRunning = false;
     this.reconnectTimeout = null;
     this.isSearchFinished = true;
+    this.lastRangeStep = null;
 
     // Initialize clusterize
     this.clusterize = null;
     this.#initializeClusterize();
 
     this.#updateWebsocketStatus('disconnected');
+
+    // Listen for range-slider updates
+    if (this.hasRangeSliderContainerTarget) {
+      this.rangeSliderContainerTarget.addEventListener('range:update', (e) => {
+        this.#handleRangeUpdate(e);
+      });
+    }
+
+    // Restore range from URL params if present
+    this.#restoreRangeFromUrl();
 
     this.start();
     this.updateLiveModeState();
@@ -115,16 +127,33 @@ export default class LogStreamerController extends Controller {
   }
 
   toggleLiveMode() {
-    // this condition looks revered, but the value here has been changed already. so the live mode has been enabled.
     if (this.isLiveMode()) {
+      // User checked - enable live mode
+      // Stop current operation and wait for backend to fully stop
+      this.stop();
+
+      // Update state immediately
       this.modeValue = 'live';
+      this.#setRange(0, this.fileSizeValue);
+      this.#updateUrlParam('start_position', null);
+      this.#updateUrlParam('end_position', null);
       this.updateLiveModeState();
+
       if (!this.isRunning) {
-        this.start();
+        // Wait for backend to fully stop the current search, then reconnect
+        setTimeout(() => {
+          this.clear();
+          this.#reinitializeClusterize();
+          this.start();
+        }, 1000);
       }
+
+
     } else {
-      // Prevent unchecking - live mode can only be disabled by applying a filter
-      this.liveModeTarget.checked = true;
+      // User unchecked - disable live mode and pause
+      this.modeValue = 'static';
+      this.updateLiveModeState();
+      this.stop();
     }
   }
 
@@ -222,6 +251,50 @@ export default class LogStreamerController extends Controller {
     this.stopButtonTarget.style.display = shouldShow ? 'inline-block' : 'none';
   }
 
+  #setRange(start, end) {
+    this.startSliderTarget.value = start;
+    this.endSliderTarget.value = end;
+
+    // Update visuals immediately
+    this.updateRangeVisuals();
+  }
+
+  #handleRangeUpdate() {
+    const start = parseInt(this.startSliderTarget.value);
+    const end = parseInt(this.endSliderTarget.value);
+    const isDefaultRange = start === 0 && end === this.fileSizeValue;
+
+    this.liveModeTarget.checked = isDefaultRange;
+    this.modeValue = isDefaultRange ? 'live' : 'static';
+    this.#updateUrlParam('start_position', isDefaultRange ? null : start);
+    this.#updateUrlParam('end_position', isDefaultRange ? null : end);
+
+    this.updateLiveModeState();
+    this.reconnectWithNewMode();
+  }
+
+  resetRange() {
+    this.#setRange(0, this.fileSizeValue);
+    this.#handleRangeUpdate();
+  }
+
+  #restoreRangeFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    const startParam = params.get('start_position');
+    const endParam = params.get('end_position');
+
+    if (startParam || endParam) {
+      const start = startParam ? parseInt(startParam) : 0;
+      const end = endParam ? parseInt(endParam) : this.fileSizeValue;
+      this.#setRange(start, end);
+
+      if (start !== 0 || end !== this.fileSizeValue) {
+        this.liveModeTarget.checked = false;
+        this.modeValue = 'static';
+      }
+    }
+  }
+
 
   /**
    * Create ActionCable subscription
@@ -263,7 +336,9 @@ export default class LogStreamerController extends Controller {
       file_path: this.filePathValue,
       filter: this.filterInputTarget.value,
       mode: this.modeValue,
-      regexp_mode: this.regexpModeValue
+      regexp_mode: this.regexpModeValue,
+      start_position: parseInt(this.startSliderTarget.value),
+      end_position: parseInt(this.endSliderTarget.value)
     });
 
     this.element.classList.add("log-streamer--connected");
@@ -425,5 +500,69 @@ export default class LogStreamerController extends Controller {
 
     const newUrl = `${window.location.pathname}?${params.toString()}`;
     window.history.replaceState(null, '', newUrl);
+  }
+
+  // Range slider methods
+  updateRangeVisuals(event) {
+    let start = Number(this.startSliderTarget.value);
+    let end = Number(this.endSliderTarget.value);
+    const sliderMax = Number(this.startSliderTarget.max);
+    const step = Number(this.startSliderTarget.step);
+
+    // Snap to 100% if close to max (within 2% or one step)
+    const threshold = Math.max(sliderMax * 0.02, step);
+    if (end > sliderMax - threshold) {
+      end = sliderMax;
+      this.endSliderTarget.value = end;
+    }
+    if (start > sliderMax - threshold) {
+      start = sliderMax;
+      this.startSliderTarget.value = start;
+    }
+
+    // Enforce start <= end
+    if (start > end) {
+      [start, end] = [end, start];
+      this.startSliderTarget.value = start;
+      this.endSliderTarget.value = end;
+    }
+
+    this.#updateRangeDisplay(start, end);
+
+    if (event?.type === 'change') {
+      const step = this.#stepForRange(start, end);
+      if (step !== this.lastRangeStep) {
+        this.lastRangeStep = step;
+        this.startSliderTarget.step = step;
+        this.endSliderTarget.step = step;
+      }
+
+      this.rangeSliderContainerTarget.dispatchEvent(new CustomEvent("range:update", { detail: { start, end } }));
+    }
+  }
+
+#stepForRange(start, end) {
+  const selectedBytes = Math.max(end - start, 1);
+  const step = 10 ** Math.ceil(Math.log10(selectedBytes / 200));
+
+  return Math.max(1, step);
+}
+
+  #updateRangeDisplay(start, end) {
+    const sliderMax = Number(this.startSliderTarget.max);
+
+    this.rangeSliderContainerTarget.style.setProperty("--range-start-percent", `${(start / sliderMax) * 100}%`);
+    this.rangeSliderContainerTarget.style.setProperty("--range-end-percent", `${(end / sliderMax) * 100}%`);
+
+    this.startOutputTarget.textContent = `${this.#formatPercent(start)}%`;
+    this.endOutputTarget.textContent = `${this.#formatPercent(end)}%`;
+  }
+
+  #formatPercent(value) {
+    // Show 100% if within 1% of file size
+    if (value >= this.fileSizeValue * 0.99) return '100.0';
+    if (value <= 0) return '0.0';
+    const percent = (value / this.fileSizeValue) * 100;
+    return percent.toFixed(1);
   }
 }

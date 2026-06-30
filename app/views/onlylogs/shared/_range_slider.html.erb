@@ -1,0 +1,47 @@
+<%# app/views/onlylogs/shared/_range_slider.html.erb %>
+<%# locals: (start_name:, end_name:, start_value:, end_value:, min: 0, max: 100, step: 1, label: nil, show_reset: false) %>
+
+<div class="range-slider range-slider--double"
+     data-log-streamer-target="rangeSliderContainer"
+     style="--range-min: <%= min %>; --range-max: <%= max %>; --range-start: <%= start_value %>; --range-end: <%= end_value %>;">
+
+  <div class="range-slider__container">
+    <% if label.present? %>
+      <label class="range-slider__label">
+        <%= label %>
+      </label>
+    <% end %>
+
+    <div class="range-slider__slider">
+      <div class="range-slider__track">
+        <div class="range-slider__selected"></div>
+
+        <input class="range-slider__input range-slider__input--start"
+               type="range"
+               name="<%= start_name %>"
+               min="<%= min %>"
+               max="<%= max %>"
+               step="<%= step %>"
+               value="<%= start_value %>"
+               data-log-streamer-target="startSlider"
+               data-action="input->log-streamer#updateRangeVisuals change->log-streamer#updateRangeVisuals">
+
+        <input class="range-slider__input range-slider__input--end"
+               type="range"
+               name="<%= end_name %>"
+               min="<%= min %>"
+               max="<%= max %>"
+               step="<%= step %>"
+               value="<%= end_value %>"
+               data-log-streamer-target="endSlider"
+               data-action="input->log-streamer#updateRangeVisuals change->log-streamer#updateRangeVisuals">
+      </div>
+
+      <div class="range-slider__values">
+        <output data-log-streamer-target="startOutput"><%= start_value %></output>
+        <span>–</span>
+        <output data-log-streamer-target="endOutput"><%= end_value %></output>
+      </div>
+    </div>
+  </div>
+</div>
