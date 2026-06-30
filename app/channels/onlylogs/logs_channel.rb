@@ -49,8 +49,10 @@ module Onlylogs
       filter = data["filter"].presence
       mode = data["mode"] || "live"
       regexp_mode = data["regexp_mode"] == true || data["regexp_mode"] == "true"
-      start_position = data["start_position"]&.to_i || 0
-      end_position = data["end_position"]&.to_i
+
+      file_size = ::File.size(file_path)
+      start_position = [[data["start_position"]&.to_i || 0, 0].max, file_size].min
+      end_position = [[data["end_position"]&.to_i, 0].max, file_size].min if data["end_position"]
 
       if mode == "static"
         # Read the entire file with filter and send all matching lines
