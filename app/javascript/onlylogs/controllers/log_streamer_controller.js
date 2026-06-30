@@ -362,13 +362,22 @@ export default class LogStreamerController extends Controller {
   }
 
   #handleLogLines(lines) {
+    const MAX_ROWS_LIVE_MODE = 150_000;
+    const BATCH_REMOVE_SIZE = 50_000;
+
     try {
       // Append new lines to clusterize
-      if (lines.length > 0) {
-        this.clusterize.append(lines);
-        this.#updateResultsDisplay();
-        this.scroll();
+      if (!lines || lines.length === 0) return;
+
+      this.clusterize.append(lines);
+
+      // In live mode, prune old rows if we exceed the maximum
+      if (this.isLiveMode() && this.clusterize.getRowsAmount() > MAX_ROWS_LIVE_MODE) {
+        this.clusterize.prune(BATCH_REMOVE_SIZE);
       }
+
+      this.#updateResultsDisplay();
+      this.scroll();
 
       // Update stop button visibility after processing lines
       this.updateStopButtonVisibility();
