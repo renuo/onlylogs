@@ -263,20 +263,23 @@ export default class LogStreamerController extends Controller {
     const btn = e.target.closest('.onlylogs-expand-btn');
     if (!btn) return;
 
-    const byteOffset = btn.getAttribute('data-byte-offset');
+    const byteOffset = parseInt(btn.getAttribute('data-byte-offset'));
     if (!byteOffset) return;
 
-    const offset = parseInt(byteOffset);
-    const start = Math.max(0, offset - 10000);
-    const end = Math.min(this.fileSizeValue, offset + 10000);
+    const contextBytes = 10000;
+    const start = Math.max(0, byteOffset - contextBytes);
+    const end = Math.min(this.fileSizeValue, byteOffset + contextBytes);
 
-    // Clear filter from UI and state
+    // Clear filter and switch to static mode
     this.filterInputTarget.value = '';
     this.modeValue = 'static';
+    this.liveModeTarget.checked = false;
 
-    // Update URL with byte offset and remove filter
+    // Update URL with byte_offset and range
     this.#updateUrlParam('byte_offset', byteOffset);
     this.#updateUrlParam('filter', null);
+    this.#updateUrlParam('start_position', start);
+    this.#updateUrlParam('end_position', end);
 
     this.updateLiveModeState();
     this.#setRange(start, end);
@@ -329,10 +332,32 @@ export default class LogStreamerController extends Controller {
     if (!closestPre) return;
 
     const row = this.#rowElement(closestPre);
-    [row.previousElementSibling, row, row.nextElementSibling]
-      .filter(Boolean)
-      .forEach(line => line.classList.add('highlighted-context-line'));
 
+    // Highlight target line ± 3 lines (7 lines total)
+    const linesToHighlight = [];
+    let current = row;
+
+    // Add 3 previous lines
+    for (let i = 0; i < 3; i++) {
+      if (current.previousElementSibling) {
+        current = current.previousElementSibling;
+        linesToHighlight.unshift(current);
+      }
+    }
+
+    // Add target line
+    linesToHighlight.push(row);
+
+    // Add 3 next lines
+    current = row;
+    for (let i = 0; i < 3; i++) {
+      if (current.nextElementSibling) {
+        current = current.nextElementSibling;
+        linesToHighlight.push(current);
+      }
+    }
+
+    linesToHighlight.forEach(line => line.classList.add('highlighted-context-line'));
     this.contextLineHighlighted = true;
   }
 
