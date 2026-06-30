@@ -506,6 +506,19 @@ export default class LogStreamerController extends Controller {
   updateRangeVisuals(event) {
     let start = Number(this.startSliderTarget.value);
     let end = Number(this.endSliderTarget.value);
+    const sliderMax = Number(this.startSliderTarget.max);
+    const step = Number(this.startSliderTarget.step);
+
+    // Snap to 100% if close to max (within 2% or one step)
+    const threshold = Math.max(sliderMax * 0.02, step);
+    if (end > sliderMax - threshold) {
+      end = sliderMax;
+      this.endSliderTarget.value = end;
+    }
+    if (start > sliderMax - threshold) {
+      start = sliderMax;
+      this.startSliderTarget.value = start;
+    }
 
     // Enforce start <= end
     if (start > end) {
