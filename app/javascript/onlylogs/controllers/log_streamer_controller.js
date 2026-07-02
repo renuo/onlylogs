@@ -187,6 +187,10 @@ export default class LogStreamerController extends Controller {
     this.startPositionValue = 0;
     this.endPositionValue = this.fileSizeValue;
 
+    // Clear byte_offset and highlighting when applying a new filter
+    this.#clearHighlighting();
+    this.#updateUrlParam('byte_offset', null);
+
     // Update visual state
     this.updateLiveModeState();
     this.updateStopButtonVisibility();
