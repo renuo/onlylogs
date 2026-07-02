@@ -87,7 +87,6 @@ module Onlylogs
     # an explicit cursor (matches the default whole-file live-mode page load).
     LIVE_TAIL_BYTES = 10_000
 
-
     def start_log_watcher(file_path, filter = nil, regexp_mode = false)
       return if @log_watcher_running
 
