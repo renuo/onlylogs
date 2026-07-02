@@ -143,10 +143,7 @@ export default class LogStreamerController extends Controller {
       this.stop();
 
       // Clear highlighting
-      this.contextLineHighlighted = false;
-      this.logLinesTarget.querySelectorAll('.highlighted-context-line').forEach(el => {
-        el.classList.remove('highlighted-context-line');
-      });
+      this.#clearHighlighting();
 
       // Update state immediately
       this.modeValue = 'live';
@@ -231,12 +228,9 @@ export default class LogStreamerController extends Controller {
     this.modeValue = 'live';
     this.startPositionValue = 0;
     this.endPositionValue = this.fileSizeValue;
-    this.contextLineHighlighted = false;
 
-    // Remove any highlighting
-    this.logLinesTarget.querySelectorAll('.highlighted-context-line').forEach(el => {
-      el.classList.remove('highlighted-context-line');
-    });
+    // Clear highlighting
+    this.#clearHighlighting();
 
     // Re-enable live mode checkbox
     this.liveModeTarget.checked = true;
@@ -320,6 +314,13 @@ export default class LogStreamerController extends Controller {
 
     // Scroll into view first to ensure element is rendered
     row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  #clearHighlighting() {
+    this.contextLineHighlighted = false;
+    this.logLinesTarget.querySelectorAll('.highlighted-context-line').forEach(el => {
+      el.classList.remove('highlighted-context-line');
+    });
   }
 
   #applyContextLineHighlight(target) {
@@ -414,6 +415,14 @@ export default class LogStreamerController extends Controller {
       start_position: isDefaultRange ? null : start,
       end_position: isDefaultRange ? null : end
     });
+
+    // Clear byte_offset and highlighting if it falls outside the new range
+    const params = new URLSearchParams(window.location.search);
+    const byteOffset = parseInt(params.get('byte_offset'));
+    if (!Number.isNaN(byteOffset) && (byteOffset < start || byteOffset > end)) {
+      this.#updateUrlParam('byte_offset', null);
+      this.#clearHighlighting();
+    }
 
     this.updateLiveModeState();
     this.reconnectWithNewMode();
