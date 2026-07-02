@@ -295,12 +295,7 @@ export default class LogStreamerController extends Controller {
 
     this.#applyContextLineHighlight(target);
 
-    // Find and scroll to the closest pre element
-    const closestPre = [...this.logLinesTarget.querySelectorAll('pre[data-byte-offset]')]
-      .reduce((closest, pre) => {
-        const distance = Math.abs(Number(pre.dataset.byteOffset) - target);
-        return !closest || distance < closest.distance ? { pre, distance } : closest;
-      }, null)?.pre;
+    const closestPre = this.#closestPreByByteOffset(target);
 
     if (closestPre) {
       this.#scrollVerticallyToCenter(closestPre);
@@ -327,12 +322,19 @@ export default class LogStreamerController extends Controller {
     });
   }
 
-  #applyContextLineHighlight(target) {
-    const closestPre = [...this.logLinesTarget.querySelectorAll('pre[data-byte-offset]')]
+  #closestPreByByteOffset(target) {
+    return [...this.logLinesTarget.querySelectorAll('pre[data-byte-offset]')]
       .reduce((closest, pre) => {
-        const distance = Math.abs(Number(pre.dataset.byteOffset) - target);
+        const byteOffset = Number(pre.dataset.byteOffset);
+        if (Number.isNaN(byteOffset)) return closest;
+
+        const distance = Math.abs(byteOffset - target);
         return !closest || distance < closest.distance ? { pre, distance } : closest;
       }, null)?.pre;
+  }
+
+  #applyContextLineHighlight(target) {
+    const closestPre = this.#closestPreByByteOffset(target);
 
     if (!closestPre) return;
 
