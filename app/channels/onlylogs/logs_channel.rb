@@ -105,7 +105,6 @@ module Onlylogs
 
       @log_watcher_thread = Thread.new do
         Rails.logger.silence(Logger::ERROR) do
-          current_byte_offset = starting_position
           @log_file.watch do |new_lines|
             break unless @log_watcher_running
 
@@ -118,8 +117,7 @@ module Onlylogs
               #   next
               # end
 
-              lines_to_send << render_log_line(log_line, byte_offset: current_byte_offset)
-              current_byte_offset += log_line.bytesize
+              lines_to_send << render_log_line(log_line)
             end
 
             if lines_to_send.any?
@@ -175,16 +173,24 @@ module Onlylogs
         line_count = 0
 
         Rails.logger.silence(Logger::ERROR) do
+          skip_first = start_position > 0
+
           if filter.present?
             # Use grep for filtered search
             @log_file.grep(filter, regexp_mode: regexp_mode, start_position: start_position, end_position: end_position) do |result|
               break if @batch_sender.nil? || @log_watcher_running == false
 
+              # Skip first line if start_position > 0 (line is cut off at byte boundary)
+              if skip_first
+                skip_first = false
+                next
+              end
+
               # Result is a hash with {byte_offset, content}
               byte_offset = result[:byte_offset]
               log_line = result[:content]
 
-              # Skip first and last lines to avoid cut-off lines at boundaries
+              # Buffer previous line and skip it to avoid cut-off lines at boundaries
               if last_line
                 @batch_sender.add_line(render_log_line(last_line, byte_offset: last_byte_offset, show_expand_button: true))
                 line_count += 1
@@ -194,11 +200,18 @@ module Onlylogs
             end
           else
             # No filter - read all lines directly (skip grep)
+            # Still need byte_offset for highlighting when expanding around a line
             current_byte_offset = start_position
             read_byte_range(file_path, start_position, end_position) do |log_line|
               break if @batch_sender.nil? || @log_watcher_running == false
 
-              # Skip first and last lines to avoid cut-off lines at boundaries
+              # Skip first line if start_position > 0 (line is cut off at byte boundary)
+              if skip_first
+                skip_first = false
+                next
+              end
+
+              # Buffer previous line and skip it to avoid cut-off lines at boundaries
               if last_line
                 @batch_sender.add_line(render_log_line(last_line, byte_offset: last_byte_offset))
                 line_count += 1

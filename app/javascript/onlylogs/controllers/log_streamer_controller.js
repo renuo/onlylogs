@@ -188,7 +188,7 @@ export default class LogStreamerController extends Controller {
 
     // Applying a filter searches the whole file, so drop any explore window.
     this.startPositionValue = 0;
-    this.endPositionValue = 0;
+    this.endPositionValue = this.fileSizeValue;
 
     // Update visual state
     this.updateLiveModeState();
@@ -230,7 +230,7 @@ export default class LogStreamerController extends Controller {
     this.filterInputTarget.value = '';
     this.modeValue = 'live';
     this.startPositionValue = 0;
-    this.endPositionValue = 0;
+    this.endPositionValue = this.fileSizeValue;
     this.contextLineHighlighted = false;
 
     // Remove any highlighting

@@ -24,17 +24,6 @@ module Onlylogs
 
     private
 
-    def handle_byte_offset
-      byte_offset = params[:byte_offset]&.to_i
-      return unless byte_offset.present?
-
-      @start_position = [byte_offset - 10000, 0].max
-      @end_position = byte_offset + 10000
-      @filter = nil
-      @mode = "static"
-      @autoscroll = false
-    end
-
     def selected_log_file_path
       return default_log_file_path if params[:log_file_path].blank?
       authorized_log_file_path(params[:log_file_path])
