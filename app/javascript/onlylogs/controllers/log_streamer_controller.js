@@ -36,8 +36,8 @@ export default class LogStreamerController extends Controller {
       });
     }
 
-    // Restore range from URL params if present
-    this.#restoreRangeFromUrl();
+    // Restore state from URL params if present
+    this.#restoreStateFromUrl();
 
     this.start();
     this.updateLiveModeState();
@@ -278,8 +278,30 @@ export default class LogStreamerController extends Controller {
     this.#handleRangeUpdate();
   }
 
-  #restoreRangeFromUrl() {
+  #restoreStateFromUrl() {
     const params = new URLSearchParams(window.location.search);
+
+    // Restore filter
+    const filter = params.get('filter');
+    if (filter) {
+      this.filterInputTarget.value = filter;
+    }
+
+    // Restore autoscroll
+    const autoscroll = params.get('autoscroll');
+    if (autoscroll === 'false') {
+      this.autoScrollValue = false;
+      this.autoscrollTarget.checked = false;
+    }
+
+    // Restore regexp mode
+    const regexpMode = params.get('regexp_mode');
+    if (regexpMode === 'true') {
+      this.regexpModeValue = true;
+      this.regexpModeTarget.checked = true;
+    }
+
+    // Restore range
     const startParam = params.get('start_position');
     const endParam = params.get('end_position');
 
@@ -292,6 +314,15 @@ export default class LogStreamerController extends Controller {
         this.liveModeTarget.checked = false;
         this.modeValue = 'static';
       }
+    }
+
+    // Calculate mode: static if filter or non-default range, otherwise live
+    if (this.filterInputTarget.value.trim() !== '' || (startParam || endParam)) {
+      this.modeValue = 'static';
+      this.liveModeTarget.checked = false;
+    } else {
+      this.modeValue = 'live';
+      this.liveModeTarget.checked = true;
     }
   }
 
