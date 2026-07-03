@@ -3,8 +3,6 @@
 module Onlylogs
   class LogsController < ApplicationController
     def index
-      @max_lines = (params[:max_lines] || 100).to_i
-
       @available_log_files = Onlylogs.available_log_files
       @log_file_path = selected_log_file_path
     end
