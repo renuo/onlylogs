@@ -22,6 +22,7 @@ export default class LogStreamerController extends Controller {
     this.reconnectTimeout = null;
     this.isSearchFinished = true;
     this.lastRangeStep = null;
+    this.historyUpdateTimeout = null;
 
     // Initialize clusterize
     this.clusterize = null;
@@ -38,6 +39,12 @@ export default class LogStreamerController extends Controller {
 
     // Restore state from URL params if present
     this.#restoreStateFromUrl();
+
+    // Listen for browser back/forward button clicks
+    window.addEventListener('popstate', () => {
+      this.#restoreStateFromUrl();
+      this.reconnectWithNewMode();
+    });
 
     this.start();
     this.updateLiveModeState();
@@ -266,8 +273,10 @@ export default class LogStreamerController extends Controller {
 
     this.liveModeTarget.checked = isDefaultRange;
     this.modeValue = isDefaultRange ? 'live' : 'static';
-    this.#updateUrlParam('start_position', isDefaultRange ? null : start);
-    this.#updateUrlParam('end_position', isDefaultRange ? null : end);
+    this.#updateUrlParams({
+      start_position: isDefaultRange ? null : start,
+      end_position: isDefaultRange ? null : end
+    });
 
     this.updateLiveModeState();
     this.reconnectWithNewMode();
@@ -281,17 +290,18 @@ export default class LogStreamerController extends Controller {
   #restoreStateFromUrl() {
     const params = new URLSearchParams(window.location.search);
 
-    // Restore filter
-    const filter = params.get('filter');
-    if (filter) {
-      this.filterInputTarget.value = filter;
-    }
+    // Restore filter (clear if not present in URL)
+    const filter = params.get('filter') || '';
+    this.filterInputTarget.value = filter;
 
     // Restore autoscroll
     const autoscroll = params.get('autoscroll');
     if (autoscroll === 'false') {
       this.autoScrollValue = false;
       this.autoscrollTarget.checked = false;
+    } else {
+      this.autoScrollValue = true;
+      this.autoscrollTarget.checked = true;
     }
 
     // Restore regexp mode
@@ -299,22 +309,18 @@ export default class LogStreamerController extends Controller {
     if (regexpMode === 'true') {
       this.regexpModeValue = true;
       this.regexpModeTarget.checked = true;
+    } else {
+      this.regexpModeValue = false;
+      this.regexpModeTarget.checked = false;
     }
 
     // Restore range
     const startParam = params.get('start_position');
     const endParam = params.get('end_position');
 
-    if (startParam || endParam) {
-      const start = startParam ? parseInt(startParam) : 0;
-      const end = endParam ? parseInt(endParam) : this.fileSizeValue;
-      this.#setRange(start, end);
-
-      if (start !== 0 || end !== this.fileSizeValue) {
-        this.liveModeTarget.checked = false;
-        this.modeValue = 'static';
-      }
-    }
+    const start = startParam ? parseInt(startParam) : 0;
+    const end = endParam ? parseInt(endParam) : this.fileSizeValue;
+    this.#setRange(start, end);
 
     // Calculate mode: static if filter or non-default range, otherwise live
     if (this.filterInputTarget.value.trim() !== '' || (startParam || endParam)) {
@@ -530,16 +536,33 @@ export default class LogStreamerController extends Controller {
   }
 
   #updateUrlParam(param, value = null) {
+    this.#updateUrlParams({ [param]: value });
+  }
+
+  #updateUrlParams(updates = {}) {
     const params = new URLSearchParams(window.location.search);
 
-    if (value != null) {
-      params.set(param, value);
-    } else {
-      params.delete(param);
-    }
+    // Update all params in one go
+    Object.entries(updates).forEach(([param, value]) => {
+      if (value != null) {
+        params.set(param, value);
+      } else {
+        params.delete(param);
+      }
+    });
 
     const newUrl = `${window.location.pathname}?${params.toString()}`;
-    window.history.replaceState(null, '', newUrl);
+
+    // Clear any pending history update
+    if (this.historyUpdateTimeout) {
+      clearTimeout(this.historyUpdateTimeout);
+    }
+
+    // Debounce history updates by 1000ms to avoid creating too many history entries
+    this.historyUpdateTimeout = setTimeout(() => {
+      window.history.pushState(null, '', newUrl);
+      this.historyUpdateTimeout = null;
+    }, 1000);
   }
 
   // Range slider methods
