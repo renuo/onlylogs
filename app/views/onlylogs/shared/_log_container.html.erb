@@ -1,7 +1,7 @@
 <%# locals: (log_file_path:, tail: 100, filter: "", autoscroll: true, regexp_mode: false, mode: nil) %>
 <script nonce="<%= request.content_security_policy_nonce %>"
-        src="<%= asset_path('clusterize.js') %>"></script>
-<link rel="stylesheet" href="<%= asset_path('clusterize.css') %>" />
+        src="<%= asset_path('onlylogs/clusterize.js') %>"></script>
+<link rel="stylesheet" href="<%= asset_path('onlylogs/clusterize.css') %>" />
 <%= render "onlylogs/shared/log_container_styles" %>
 
 <%
