@@ -7,11 +7,6 @@ module Onlylogs
 
       @available_log_files = Onlylogs.available_log_files
       @log_file_path = selected_log_file_path
-
-      @filter = params[:filter]
-      @autoscroll = params[:autoscroll] != "false"
-      @regexp_mode = params[:regexp_mode] == "true"
-      @mode = @filter.blank? ? (params[:mode] || "live") : "static" # "live" or "static"
     end
 
     def download

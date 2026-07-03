@@ -1,11 +1,14 @@
-<%# locals: (log_file_path:, tail: 100, filter: "", autoscroll: true, regexp_mode: false, mode: nil) %>
+<%# locals: (log_file_path:) %>
 <script nonce="<%= request.content_security_policy_nonce %>"
         src="<%= asset_path('onlylogs/clusterize.js') %>"></script>
 <link rel="stylesheet" href="<%= asset_path('onlylogs/clusterize.css') %>" />
 <%= render "onlylogs/shared/log_container_styles" %>
 
 <%
-    mode = local_assigns[:mode] || (filter.blank? ? "live" : "static")
+    autoscroll = local_assigns[:autoscroll] != false
+    filter = local_assigns[:filter] || ""
+    regexp_mode = local_assigns[:regexp_mode] == true
+    mode = local_assigns[:mode] || "live"
     file_size = File.size(log_file_path)
 
     raise SecurityError, "File path not allowed" unless Onlylogs.file_path_permitted?(log_file_path)
