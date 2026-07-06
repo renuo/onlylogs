@@ -50,7 +50,6 @@ export default class LogStreamerController extends Controller {
     });
 
     this.start();
-    this.updateLiveModeState();
     this.scroll();
   }
 
@@ -122,7 +121,6 @@ export default class LogStreamerController extends Controller {
     if (this.isLiveMode()) {
       this.liveModeTarget.checked = false;
       this.modeValue = 'static';
-      this.updateLiveModeState();
       this.stop();
     }
   }
@@ -138,63 +136,43 @@ export default class LogStreamerController extends Controller {
 
   toggleLiveMode() {
     if (this.isLiveMode()) {
-      // User checked - enable live mode
-      // Stop current operation and wait for backend to fully stop
-      this.stop();
-
-      // Clear highlighting
+      // User checked - enable live mode, keep filter and start fresh tail
       this.#clearHighlighting();
-
-      // Update state immediately
       this.modeValue = 'live';
+      this.clear();
       this.#setRange(0, this.fileSizeValue);
       this.#updateUrlParam('start_position', null);
       this.#updateUrlParam('end_position', null);
       this.#updateUrlParam('byte_offset', null);
-      this.updateLiveModeState();
-
-      if (!this.isRunning) {
-        // Wait for backend to fully stop the current search, then reconnect
-        setTimeout(() => {
-          this.clear();
-          this.#reinitializeClusterize();
-          this.start();
-        }, 1000);
-      }
-
-
+      this.#updateUrlParam('mode', null);
+      this.reconnectWithNewMode();
     } else {
-      // User unchecked - disable live mode and pause
+      // User unchecked - disable live mode
       this.modeValue = 'static';
-      this.updateLiveModeState();
-      this.stop();
+      this.#updateUrlParam('mode', 'static');
+
+      const hasFilter = this.filterInputTarget.value && this.filterInputTarget.value.trim() !== '';
+      if (hasFilter) {
+        // Search with the current filter in static mode
+        this.reconnectWithNewMode();
+      } else {
+        // No filter, just stop
+        this.stop();
+      }
     }
   }
 
   applyFilter() {
     const filterValue = this.filterInputTarget.value;
 
-    // A filter switches to static mode; an empty filter goes back to live.
-    if (filterValue && filterValue.trim() !== '') {
-      this.liveModeTarget.checked = false;
-      this.modeValue = 'static';
-    } else {
-      this.liveModeTarget.checked = true;
-      this.modeValue = 'live';
-    }
-
-    // Applying a filter searches the whole file, so drop any explore window.
-    this.startPositionValue = 0;
-    this.endPositionValue = this.fileSizeValue;
-
     // Clear byte_offset and highlighting when applying a new filter
     this.#clearHighlighting();
     this.#updateUrlParam('byte_offset', null);
 
     // Update visual state
-    this.updateLiveModeState();
     this.updateStopButtonVisibility();
     this.#updateUrlParam('filter', filterValue || null);
+    this.#updateUrlParam('mode', this.modeValue === 'live' ? null : 'static');
 
     // Use the global debounced reconnection (300ms delay)
     this.reconnectWithNewMode();
@@ -218,7 +196,13 @@ export default class LogStreamerController extends Controller {
 
     // Debounce reconnection to avoid multiple rapid reconnections
     this.reconnectTimeout = setTimeout(() => {
-      this.stop();
+      // Soft disconnect: unsubscribe without sending stop_watcher message.
+      // In live mode, we don't want "Search stopped" on every filter change.
+      if (this.subscription) {
+        this.subscription.unsubscribe();
+        this.subscription = null;
+      }
+      this.isRunning = false;
       this.clear();
       this.#reinitializeClusterize();
       this.start();
@@ -239,13 +223,18 @@ export default class LogStreamerController extends Controller {
     // Re-enable live mode checkbox
     this.liveModeTarget.checked = true;
 
+    // Reset range to default for live mode
+    this.#setRange(0, this.fileSizeValue);
+
     // Update visual state
-    this.updateLiveModeState();
     this.updateStopButtonVisibility();
 
     // Update URL with cleared filter
     this.#updateUrlParam('filter', null);
     this.#updateUrlParam('byte_offset', null);
+    this.#updateUrlParam('mode', null);
+    this.#updateUrlParam('start_position', null);
+    this.#updateUrlParam('end_position', null);
 
     // Reconnect with cleared filter and live mode
     this.reconnectWithNewMode();
@@ -280,7 +269,6 @@ export default class LogStreamerController extends Controller {
     this.#updateUrlParam('end_position', end);
 
     this.contextLineHighlighted = false;
-    this.updateLiveModeState();
     this.#setRange(start, end);
     this.reconnectWithNewMode();
   }
@@ -380,19 +368,6 @@ export default class LogStreamerController extends Controller {
     return node;
   }
 
-  updateLiveModeState() {
-    const liveModeLabel = this.liveModeTarget.closest('label');
-    const hasFilter = this.filterInputTarget.value && this.filterInputTarget.value.trim() !== '';
-
-    if (hasFilter) {
-      liveModeLabel.classList.add('live-mode-sticky');
-      this.liveModeTarget.disabled = true;
-    } else {
-      liveModeLabel.classList.remove('live-mode-sticky');
-      this.liveModeTarget.disabled = false;
-    }
-  }
-
   updateStopButtonVisibility() {
     const shouldShow = this.modeValue === 'static' && this.subscription && this.isRunning && !this.isSearchFinished;
     this.stopButtonTarget.style.display = shouldShow ? 'inline-block' : 'none';
@@ -420,7 +395,8 @@ export default class LogStreamerController extends Controller {
     this.modeValue = isDefaultRange ? 'live' : 'static';
     this.#updateUrlParams({
       start_position: isDefaultRange ? null : start,
-      end_position: isDefaultRange ? null : end
+      end_position: isDefaultRange ? null : end,
+      mode: isDefaultRange ? null : 'static'
     });
 
     // Clear byte_offset and highlighting if it falls outside the new range
@@ -431,7 +407,6 @@ export default class LogStreamerController extends Controller {
       this.#clearHighlighting();
     }
 
-    this.updateLiveModeState();
     this.reconnectWithNewMode();
   }
 
@@ -475,16 +450,17 @@ export default class LogStreamerController extends Controller {
     const end = endParam ? parseInt(endParam) : this.fileSizeValue;
     this.#setRange(start, end);
 
-    // Calculate mode: static if filter or non-default range, otherwise live
-    if (this.filterInputTarget.value.trim() !== '' || (startParam || endParam)) {
+    // Calculate mode: check mode param, default to live
+    const modeParam = params.get('mode');
+    if (modeParam === 'static') {
       this.modeValue = 'static';
       this.liveModeTarget.checked = false;
     } else {
+      // Default to live mode
       this.modeValue = 'live';
       this.liveModeTarget.checked = true;
     }
   }
-
 
   /**
    * Create ActionCable subscription
