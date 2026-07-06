@@ -279,9 +279,10 @@ export default class LogStreamerController extends Controller {
     this.#updateUrlParam('start_position', start);
     this.#updateUrlParam('end_position', end);
 
+    this.contextLineHighlighted = false;
     this.updateLiveModeState();
     this.#setRange(start, end);
-    this.#handleRangeUpdate();
+    this.reconnectWithNewMode();
   }
 
   clearLogs() {
@@ -753,12 +754,15 @@ export default class LogStreamerController extends Controller {
 
     const newUrl = `${window.location.pathname}?${params.toString()}`;
 
-    // Clear any pending history update
+    // Update URL immediately so subsequent #updateUrlParams calls read the latest state.
+    // Without this, each call reads the same stale window.location.search and params don't accumulate.
+    window.history.replaceState(null, '', newUrl);
+
+    // Debounce pushState to create a history entry (enables back button) without
+    // spamming history on rapid updates like slider drag.
     if (this.historyUpdateTimeout) {
       clearTimeout(this.historyUpdateTimeout);
     }
-
-    // Debounce history updates by 1000ms to avoid creating too many history entries
     this.historyUpdateTimeout = setTimeout(() => {
       window.history.pushState(null, '', newUrl);
       this.historyUpdateTimeout = null;
