@@ -109,10 +109,9 @@ module Onlylogs
             lines_to_send = []
 
             new_lines.each do |log_line|
-              # Filters in live mode are not yet implemented
-              # if @filter.present? && !Onlylogs::Grep.match_line?(log_line.text, @filter, regexp_mode: @regexp_mode)
-              #   next
-              # end
+              if @filter.present? && !Onlylogs::Grep.match_line?(log_line, @filter, regexp_mode: @regexp_mode)
+                next
+              end
 
               lines_to_send << render_log_line(log_line)
             end
