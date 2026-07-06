@@ -3,9 +3,7 @@
 module Onlylogs
   class LogsChannel < ActionCable::Channel::Base
     def subscribed
-      # Rails.logger.info "Client subscribed to Onlylogs::LogsChannel"
-      # Wait for the client to send the cursor position
-      # start_log_watcher will be called from the initialize_watcher method
+      @last_initialize_params = nil
     end
 
     def initialize_watcher(data)
