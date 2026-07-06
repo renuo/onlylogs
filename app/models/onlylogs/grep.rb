@@ -19,18 +19,29 @@ module Onlylogs
 
       results = []
 
-      begin
-        IO.popen(command_args, err: "/dev/null") do |io|
-          io.each_line do |line|
-            # Line numbers are no longer outputted by super_grep/super_ripgrep
-            # Use String.new to create a copy and prevent memory retention from IO buffers
-            content = String.new(line.chomp, encoding: Encoding::UTF_8).scrub
+      # Set up parsing logic based on whether ripgrep includes byte offsets
+      parse_line = if Onlylogs.ripgrep_enabled?
+        ->(line) {
+          parts = line.split(":", 2)
+          [parts[0].to_i, parts[1] || ""]
+        }
+      else
+        ->(line) { [nil, line] }
+      end
 
-            if block_given?
-              yield content
-            else
-              results << content
-            end
+      IO.popen(command_args, err: "/dev/null") do |io|
+        io.each_line do |line|
+          byte_offset, content = parse_line.call(line.chomp)
+
+          # Use String.new to create a copy and prevent memory retention from IO buffers
+          content = String.new(content, encoding: Encoding::UTF_8).scrub
+
+          result = {byte_offset: byte_offset, content: content}
+
+          if block_given?
+            yield result
+          else
+            results << result
           end
         end
       ensure
