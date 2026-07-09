@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-require 'sqlite3'
-require 'fileutils'
-require 'time'
+require "sqlite3"
+require "fileutils"
+require "time"
 
 module Onlylogs
   class Query
@@ -12,7 +12,7 @@ module Onlylogs
     class InvalidRegexpError < StandardError; end
     class NotFoundError < StandardError; end
 
-    def initialize(id: nil, name:, filter:, regexp_mode: false, created_at: nil, updated_at: nil)
+    def initialize(name:, filter:, id: nil, regexp_mode: false, created_at: nil, updated_at: nil)
       @id = id
       @name = name
       @filter = filter
@@ -26,7 +26,7 @@ module Onlylogs
       db = Database.for_file(log_file_path)
 
       row = db.execute(
-        'SELECT id, name, filter, regexp_mode, created_at, updated_at FROM queries WHERE id = ?',
+        "SELECT id, name, filter, regexp_mode, created_at, updated_at FROM queries WHERE id = ?",
         [id]
       ).first
 
@@ -38,7 +38,7 @@ module Onlylogs
       db = Database.for_file(log_file_path)
 
       rows = db.execute(
-        'SELECT id, name, filter, regexp_mode, created_at, updated_at FROM queries ORDER BY updated_at DESC'
+        "SELECT id, name, filter, regexp_mode, created_at, updated_at FROM queries ORDER BY updated_at DESC"
       )
 
       rows.map { |row| from_row(row) }
@@ -76,7 +76,7 @@ module Onlylogs
       db = Database.for_file(log_file_path)
 
       db.execute(
-        'DELETE FROM queries WHERE id = ?',
+        "DELETE FROM queries WHERE id = ?",
         [@id]
       )
 
@@ -101,8 +101,8 @@ module Onlylogs
     def self.validate_name!(name)
       normalized_name = name.to_s.strip
 
-      raise ArgumentError, 'Query name cannot be empty' if normalized_name.empty?
-      raise ArgumentError, 'Query name is too long (max 255 characters)' if normalized_name.length > 255
+      raise ArgumentError, "Query name cannot be empty" if normalized_name.empty?
+      raise ArgumentError, "Query name is too long (max 255 characters)" if normalized_name.length > 255
     end
 
     def self.validate_filter!(filter, regexp_mode)
@@ -212,7 +212,7 @@ module Onlylogs
         end
 
         def connect(log_file_path)
-          db_path = ::File.join(::File.dirname(log_file_path), Onlylogs.configuration.queries_database_dir, 'queries.db')
+          db_path = ::File.join(::File.dirname(log_file_path), Onlylogs.configuration.queries_database_dir, "queries.db")
           FileUtils.mkdir_p(::File.dirname(db_path))
 
           db = SQLite3::Database.new(db_path)
@@ -222,12 +222,11 @@ module Onlylogs
           db
         end
 
-
         def database_path(log_file_path)
           log_dir = ::File.dirname(log_file_path)
           queries_dir = ::File.join(log_dir, Onlylogs.configuration.queries_database_dir)
 
-          ::File.join(queries_dir, 'queries.db')
+          ::File.join(queries_dir, "queries.db")
         end
 
         def create_tables(db)

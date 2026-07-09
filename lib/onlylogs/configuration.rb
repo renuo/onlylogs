@@ -16,7 +16,7 @@ module Onlylogs
       @ripgrep_enabled = default_ripgrep_enabled
       @editor = nil
       @max_line_matches = 100000
-      @queries_database_dir = '.onlylogs'
+      @queries_database_dir = ".onlylogs"
     end
 
     def configure
