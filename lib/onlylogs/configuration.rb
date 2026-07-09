@@ -24,7 +24,7 @@ module Onlylogs
       @editor = nil
       @max_line_matches = 100000
       @search_timeout = DEFAULT_SEARCH_TIMEOUT
-      @queries_database_dir = '.onlylogs'
+      @queries_database_dir = ".onlylogs"
     end
 
     def configure
