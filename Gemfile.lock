@@ -130,9 +130,7 @@ GEM
     marcel (1.1.0)
     mini_mime (1.1.5)
     mini_portile2 (2.8.9)
-    minitest (6.0.6)
-      drb (~> 2.0)
-      prism (~> 1.5)
+    minitest (5.27.0)
     net-imap (0.5.12)
       date
       net-protocol
@@ -312,6 +310,7 @@ DEPENDENCIES
   faker
   importmap-rails
   lograge
+  minitest (~> 5.25)
   onlylogs!
   openssl (~> 3.3.1)
   propshaft
