@@ -255,14 +255,58 @@
             margin-bottom: 0;
           }
 
+          .queries-integrated-filter {
+            display: flex;
+            align-items: center;
+          }
+
           .filter-input-wrapper {
             display: inline-flex;
             align-items: center;
             position: relative;
+            border: 1px solid #d1d5db;
+            border-radius: 0.25rem;
+            padding-left: 0.5rem;
+          }
+
+          .filter-accordion-button {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #666;
+            transition: color 0.2s, transform 0.3s ease;
+            transform: rotate(0deg);
+
+            &:hover {
+              color: #374151;
+            }
+
+            &.open {
+              transform: rotate(180deg);
+            }
           }
 
           .filter-input-wrapper input {
-            padding-right: 1.5rem;
+            border: none;
+            padding: 0.4rem 0.8rem;
+            min-width: 200px;
+            background: transparent;
+
+            &:focus {
+              outline: none;
+            }
+
+            &::placeholder {
+              color: #d1d5db;
+            }
+          }
+
+          .save-query-button {
+            background-color: transparent;
+            border: none;
+            padding: 0.5rem;
+            border-radius: 0.25rem;
+            cursor: pointer;
           }
 
           .clear-button-wrapper {
@@ -396,6 +440,161 @@
             &:active {
               background-color: #e0e0e0;
             }
+          }
+
+          .queries-list {
+            display: none;
+            position: absolute;
+            bottom: 100%;
+            left: -0.5rem;
+            right: -0.5rem;
+            background: white;
+            border: 1px solid #d1d5db;
+            border-radius: 0.25rem;
+            box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1);
+            z-index: 1000;
+            max-height: 200px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            margin-bottom: 0.5rem;
+
+            &.open {
+              display: block;
+            }
+          }
+
+          .queries-list-item {
+            display: flex;
+            align-items: center;
+            padding: 0.5rem 0.75rem;
+            border-bottom: 1px solid #f3f4f6;
+            cursor: pointer;
+
+            &:last-child {
+              border-bottom: none;
+            }
+
+            &:hover {
+              background-color: #f9fafb;
+            }
+          }
+
+          .queries-list-name {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+          }
+
+          .queries-list-delete {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 0;
+            margin-left: 0.5rem;
+            line-height: 1;
+            transition: opacity 0.2s;
+
+            &:hover {
+              opacity: 0.7;
+            }
+          }
+
+          .queries-list-empty {
+            padding: 1rem;
+            text-align: center;
+            color: #9ca3af;
+          }
+
+          .save-query-modal {
+            position: fixed;
+            inset: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+
+            &.hidden {
+              display: none;
+            }
+          }
+
+          .save-query-modal-content {
+            background: white;
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            width: 90%;
+            max-width: 400px;
+
+            h3 {
+              margin-top: 0;
+              font-size: 1.1rem;
+            }
+          }
+
+          .save-query-input {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #d1d5db;
+            border-radius: 0.25rem;
+            margin-bottom: 1rem;
+            box-sizing: border-box;
+
+            &:focus {
+              outline: none;
+            }
+          }
+
+          .save-query-actions {
+            display: flex;
+            gap: 0.5rem;
+            justify-content: flex-end;
+          }
+
+          .save-query-submit,
+          .save-query-cancel {
+            padding: 0.5rem 1rem;
+            border-radius: 0.25rem;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+          }
+
+          .save-query-submit {
+            background-color: #2563eb;
+            color: white;
+
+            &:hover {
+              background-color: #1d4ed8;
+            }
+
+            &:active {
+              background-color: #1e40af;
+            }
+          }
+
+          .save-query-cancel {
+            background-color: #f3f4f6;
+            color: #374151;
+            border: 1px solid #d1d5db;
+
+            &:hover {
+              background-color: #e5e7eb;
+            }
+
+            &:active {
+              background-color: #d1d5db;
+            }
+          }
+
+          .success-message {
+            color: #059669;
+            font-weight: 600;
+            padding: 0.5rem;
+            background-color: rgba(5, 150, 105, 0.1);
+            border-radius: 0.25rem;
+            display: inline-block;
           }
         }
     }
