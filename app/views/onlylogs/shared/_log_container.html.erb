@@ -62,10 +62,19 @@
             <u>R</u>egexp Mode
           </label>
         </div>
-        <div>
+        <div data-controller="queries"
+             data-queries-log-file-path-value="<%= encrypted_log_file_path %>"
+             class="queries-integrated-filter">
           <label class="toolbar-label">
-            Filter:
             <div class="filter-input-wrapper">
+              <button type="button"
+                      data-queries-target="loadButton"
+                      class="filter-accordion-button"
+                      data-action="click->queries#toggleQueriesDropdown"
+                      title="Load a saved search">
+                ▲
+              </button>
+              <span class="filter-search-icon">🔍</span>
               <input type="text"
                      name="filter"
                      value="<%= filter %>"
@@ -79,8 +88,40 @@
                       title="Clear filter">
                 ×
               </button>
+              <div data-queries-target="queriesList" class="queries-list"></div>
             </div>
           </label>
+
+          <button type="button"
+                  data-queries-target="saveButton"
+                  class="save-query-button"
+                  data-action="click->queries#openSaveModal"
+                  title="Save current filter">
+            💾
+          </button>
+
+          <div data-queries-target="saveModal" class="save-query-modal hidden">
+            <div class="save-query-modal-content">
+              <h3>Save Search</h3>
+              <input type="text"
+                     data-queries-target="queryName"
+                     class="save-query-input"
+                     placeholder="Enter query name..."
+                     data-action="keydown.enter->queries#saveQuery">
+              <div class="save-query-actions">
+                <button type="button"
+                        class="save-query-submit"
+                        data-action="click->queries#saveQuery">
+                  Save
+                </button>
+                <button type="button"
+                        class="save-query-cancel"
+                        data-action="click->queries#closeSaveModal">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
         <div class="range-slider-wrapper">
           <%= render "onlylogs/shared/range_slider",
