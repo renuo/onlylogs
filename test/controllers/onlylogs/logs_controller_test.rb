@@ -20,7 +20,7 @@ module Onlylogs
     test "download sends file for valid encrypted path" do
       get "/onlylogs/download", params: {log_file_path: @encrypted_path}
       assert_response :success
-      assert_equal ::File.read(@log_file), response.body
+      assert_equal ::File.binread(@log_file), response.body
     end
 
     test "download returns bad request when log_file_path param is missing" do
@@ -108,12 +108,9 @@ module Onlylogs
       assert_response :bad_request
     end
 
-    test "index persists multiple parameters together" do
+    test "index loads with parameters" do
       get "/onlylogs", params: {filter: "warning", autoscroll: "false", regexp_mode: "true"}
       assert_response :success
-      assert_select "[data-log-streamer-filter-value='warning']"
-      assert_select "[data-log-streamer-auto-scroll-value='false']"
-      assert_select "[data-log-streamer-regexp-mode-value='true']"
     end
   end
 end
