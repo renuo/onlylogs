@@ -21,5 +21,4 @@ Gem::Specification.new do |spec|
   spec.executables = ["onlylogs_sidecar", "super_grep", "super_ripgrep"]
 
   spec.add_dependency "rails", "~> 8.0"
-
 end
