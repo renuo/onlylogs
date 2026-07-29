@@ -4,7 +4,7 @@ module Onlylogs
   class Configuration
     attr_accessor :log_file_patterns, :default_log_file_path, :basic_auth_user, :basic_auth_password,
       :parent_controller, :disable_basic_authentication, :ripgrep_enabled, :editor,
-      :max_line_matches
+      :max_line_matches, :queries_database_dir
 
     def initialize
       @log_file_patterns = default_log_file_patterns
@@ -16,6 +16,7 @@ module Onlylogs
       @ripgrep_enabled = default_ripgrep_enabled
       @editor = nil
       @max_line_matches = 100000
+      @queries_database_dir = ".onlylogs"
     end
 
     def configure
