@@ -1,73 +1,27 @@
 # frozen_string_literal: true
 
-require "socket"
+require_relative "socket_device"
+require_relative "multi_device"
 
-# This logger sends messages to onlylogs.io via a UNIX socket connected to the onlylogs sidecar process.
-# You need to have the onlylogs sidecar running for this to work.
-
+# Logs to $stdout (local fallback) and to onlylogs.io via a UNIX socket connected to the onlylogs
+# sidecar process. You need to have the onlylogs sidecar running for the socket sink to work.
+#
+# This is a plain Onlylogs::Logger whose log device is the sidecar socket teed with the local
+# fallback. It deliberately does NOT override #add: the stock Logger#add applies the level and
+# formats each line before writing, so a below-level line reaches neither sink.
 module Onlylogs
   class SocketLogger < Onlylogs::Logger
-    DEFAULT_SOCKET = "tmp/sockets/onlylogs-sidecar.sock"
+    attr_reader :device
 
-    def initialize(local_fallback: $stdout, socket_path: ENV.fetch("ONLYLOGS_SIDECAR_SOCKET", DEFAULT_SOCKET))
-      super(local_fallback)
-      @socket_path = socket_path
-      @socket_mutex = Mutex.new
-      @socket = nil
+    def initialize(local_fallback: $stdout, socket_path: ENV.fetch("ONLYLOGS_SIDECAR_SOCKET", SocketDevice::DEFAULT_SOCKET))
+      @device = SocketDevice.new(socket_path: socket_path)
+      super(MultiDevice.new(local_fallback, @device))
     end
 
-    def add(severity, message = nil, progname = nil, &block)
-      if message.nil?
-        if block_given?
-          message = block.call
-        else
-          message = progname
-          progname = nil
-        end
-      end
-
-      formatted = format_message(format_severity(severity), Time.now, progname, message.to_s)
-      send_to_socket(formatted)
-      super
-    end
-
-    private
-
-    def send_to_socket(payload)
-      return if payload.nil? || payload.empty?
-
-      socket = ensure_socket
-      socket&.puts(payload)
-    rescue Errno::EPIPE, Errno::ECONNREFUSED, Errno::ENOENT => e
-      $stderr.puts "Onlylogs::SocketLogger error: #{e.message}" # rubocop:disable Style/StderrPuts
-      reconnect_socket
-    rescue => e
-      $stderr.puts "Onlylogs::SocketLogger unexpected error: #{e.class}: #{e.message}" # rubocop:disable Style/StderrPuts
-      reconnect_socket
-    end
-
-    def ensure_socket
-      return @socket if @socket
-
-      @socket_mutex.synchronize do
-        @socket ||= UNIXSocket.new(@socket_path)
-      rescue => e
-        $stderr.puts "Unable to connect to Onlylogs sidecar (#{@socket_path}): #{e.message}" # rubocop:disable Style/StderrPuts
-        @socket = nil
-      end
-
-      @socket
-    end
-
-    def reconnect_socket
-      @socket_mutex.synchronize do
-        begin
-          @socket&.close
-        rescue
-          nil
-        end
-        @socket = nil
-      end
+    # Only the remote socket is ours to close; the local fallback ($stdout) belongs to the app, so
+    # we deliberately do not call super (which would close the whole log device, fallback included).
+    def close
+      @device.close
     end
   end
 end

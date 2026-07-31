@@ -96,7 +96,7 @@ module Onlylogs
       # A busy app firing far more lines than a down drain can ever absorb.
       5_000.times { |i| logger.add(Logger::INFO, "line #{i}") }
 
-      queue = logger.instance_variable_get(:@queue)
+      queue = logger.device.instance_variable_get(:@queue)
       assert_operator queue.size, :<=, 500,
         "queue grew past max_queue_size (#{queue.size}); a down drain would exhaust memory"
     end
@@ -135,10 +135,10 @@ module Onlylogs
         sleep 2
       end
 
-      # The user's line is logged locally; the logger's OWN error must not be (it goes to stderr).
+      # The user's line is logged locally; the device's OWN error must not be (it goes to stderr).
       assert_includes local.string, "one user line"
-      refute_includes local.string, "Onlylogs::HttpLogger",
-        "the logger logged its own failure through itself, re-entering #add"
+      refute_includes local.string, "Onlylogs::HttpDevice",
+        "the device logged its own failure through the logger, re-entering #add"
     end
 
     # A drain that is UP but answers a non-2xx status must be treated as a failed delivery.
@@ -150,7 +150,7 @@ module Onlylogs
 
       capture_stderr do
         5.times { |i| logger.add(Logger::INFO, "error response #{i}") }
-        opened = wait_until { logger.instance_variable_get(:@circuit_open_until) }
+        opened = wait_until { logger.device.instance_variable_get(:@circuit_open_until) }
         assert opened, "a 5xx drain response should count as a failure and open the circuit"
       end
     end
@@ -177,7 +177,7 @@ module Onlylogs
 
       capture_stderr do
         5.times { |i| logger.add(Logger::INFO, "open #{i}") }
-        open1 = wait_until { logger.instance_variable_get(:@circuit_open_until) }
+        open1 = wait_until { logger.device.instance_variable_get(:@circuit_open_until) }
         assert open1, "circuit should have opened on the initial failures"
 
         # Let the cooldown lapse, then hand the sender a fresh line to retry.
@@ -185,7 +185,7 @@ module Onlylogs
         logger.add(Logger::INFO, "retry while still down")
 
         open2 = wait_until do
-          later = logger.instance_variable_get(:@circuit_open_until)
+          later = logger.device.instance_variable_get(:@circuit_open_until)
           later if later && later > open1
         end
         assert open2, "circuit should reopen after the cooldown when the retry also fails"
@@ -204,7 +204,7 @@ module Onlylogs
 
         # Wait until the circuit has tripped: that guarantees all three sends failed and were
         # buffered, so the drain flip below cannot race with a still-in-flight batch.
-        assert wait_until { logger.instance_variable_get(:@circuit_open_until) },
+        assert wait_until { logger.device.instance_variable_get(:@circuit_open_until) },
           "the failing drain should buffer batches and trip the circuit"
         refute_empty ::Dir.glob(::File.join(dir, "*.batch")),
           "the failed batches should be on disk in the spool"
@@ -252,16 +252,33 @@ module Onlylogs
 
       default_logger = Onlylogs::HttpLogger.new(drain_url: drain.url)
       @loggers << default_logger
-      spool = default_logger.instance_variable_get(:@spool)
+      spool = default_logger.device.instance_variable_get(:@spool)
       assert spool, "the spool should be enabled by default"
 
       disabled = Onlylogs::HttpLogger.new(drain_url: drain.url, spool_dir: "")
       @loggers << disabled
-      assert_nil disabled.instance_variable_get(:@spool),
+      assert_nil disabled.device.instance_variable_get(:@spool),
         "an empty spool dir should opt out of buffering"
     ensure
       spool_dir = spool&.instance_variable_get(:@dir)
       ::FileUtils.remove_entry(spool_dir) if spool_dir && ::File.directory?(spool_dir)
+    end
+
+    # The logger's level must gate the remote drain, not only the local $stdout fallback.
+    # #add ships to the drain before delegating to super (which is where ::Logger#add checks
+    # the level), so without an explicit guard every DEBUG line reaches onlylogs.io even at
+    # level INFO — e.g. Sentry's `[Transport]`/`[Tracing]` debug chatter in a production app.
+    test "does not send lines below the configured level to the drain" do
+      drain = build_drain
+      logger = build_logger(drain, batch_size: 1, flush_interval: 0.01)
+      logger.level = Logger::INFO
+
+      logger.add(Logger::DEBUG, "debug below threshold")
+      logger.add(Logger::INFO, "info above threshold")
+
+      assert wait_until { drain.received.include?("info above threshold") }
+      refute_includes drain.received, "debug below threshold",
+        "a DEBUG line was shipped to the drain even though the level is INFO"
     end
 
     private
