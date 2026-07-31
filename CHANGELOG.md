@@ -1,9 +1,13 @@
 # Changelog
 
+## 0.7.0
+
+- Fix wrong level filtering.
+
 ## 0.6.0
 
 - Vendor clusterize.js.
-- Set a maximum number of lines displaayed in live mode.
+- Set a maximum number of lines displayed in live mode.
 - Introduce a Range slider.
 
 ## 0.5.4
