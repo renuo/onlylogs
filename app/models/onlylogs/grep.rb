@@ -1,12 +1,13 @@
 module Onlylogs
   class Grep
-    def self.grep(pattern, file_path, start_position: 0, end_position: nil, regexp_mode: false, &block)
+    def self.grep(pattern, file_path, start_position: 0, end_position: nil, regexp_mode: false,
+      max_matches: Onlylogs.max_line_matches, &block)
       # Use the appropriate script based on configuration
       script_name = Onlylogs.ripgrep_enabled? ? "super_ripgrep" : "super_grep"
       super_grep_path = ::File.expand_path("../../../bin/#{script_name}", __dir__)
 
       command_args = [super_grep_path]
-      command_args += ["--max-matches", Onlylogs.max_line_matches.to_s] if Onlylogs.max_line_matches.present?
+      command_args += ["--max-matches", max_matches.to_s] if max_matches.present?
       command_args << "--regexp" if regexp_mode
 
       # Add byte range parameters if specified
@@ -23,7 +24,7 @@ module Onlylogs
       parse_line = if Onlylogs.ripgrep_enabled?
         ->(line) {
           parts = line.split(":", 2)
-          [parts[0].to_i, parts[1] || ""]
+          [parts[0].to_i + start_position, parts[1] || ""]
         }
       else
         ->(line) { [nil, line] }
