@@ -78,7 +78,7 @@ module Onlylogs
     def write_line
       @counter += 1
       line = build_line
-      File.open(@path, "a") { |f| f.puts(line) }
+      ::File.open(@path, "a") { |f| f.puts(line) }
       @out.puts "✓ #{@counter}: #{line[0, 80]}..."
     end
   end

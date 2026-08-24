@@ -1,13 +1,21 @@
 # frozen_string_literal: true
 
 require "test_helper"
-require "minitest/mock"
 require "tempfile"
 require "onlylogs/continuous_log_writer"
 
 module Onlylogs
   class ContinuousLogWriterTest < ActiveSupport::TestCase
     LINE = /\A\[[0-9a-f-]{36}\] \[\S+\] \[[IWE]\] method=\S+ path=\S+ format=\S+ /
+
+    # `call` loops forever; interrupting the first sleep stops it after one batch.
+    class SingleBatchWriter < Onlylogs::ContinuousLogWriter
+      private
+
+      def sleep(_seconds)
+        raise Interrupt
+      end
+    end
 
     def setup
       @file = Tempfile.new(["continuous_log_writer", ".log"])
@@ -42,21 +50,21 @@ module Onlylogs
     end
 
     test "appends a batch to the file and counts it" do
-      writer = Onlylogs::ContinuousLogWriter.new(@path, logs_per_batch: 3, interval: 0, out: StringIO.new)
-      writer.stub(:sleep, ->(_) { raise Interrupt }) { writer.call }
+      writer = SingleBatchWriter.new(@path, logs_per_batch: 3, interval: 0, out: StringIO.new)
+      writer.call
 
       assert_equal 3, writer.counter
-      assert_equal 3, File.readlines(@path).size
-      assert File.readlines(@path).all? { |line| line.match?(LINE) }
+      assert_equal 3, ::File.readlines(@path).size
+      assert ::File.readlines(@path).all? { |line| line.match?(LINE) }
     end
 
     test "appends to an existing file instead of truncating it" do
-      File.write(@path, "already here\n")
-      writer = Onlylogs::ContinuousLogWriter.new(@path, interval: 0, out: StringIO.new)
-      writer.stub(:sleep, ->(_) { raise Interrupt }) { writer.call }
+      ::File.write(@path, "already here\n")
+      writer = SingleBatchWriter.new(@path, interval: 0, out: StringIO.new)
+      writer.call
 
-      assert_equal "already here\n", File.readlines(@path).first
-      assert_equal 2, File.readlines(@path).size
+      assert_equal "already here\n", ::File.readlines(@path).first
+      assert_equal 2, ::File.readlines(@path).size
     end
   end
 end
