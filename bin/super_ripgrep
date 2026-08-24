@@ -80,16 +80,7 @@ if [ -n "$start_position" ] || [ -n "$end_position" ]; then
 
   [ $range_end -gt $file_size ] && range_end=$file_size && range_size=$((range_end - range_start))
 
-  block_bytes=1048576
-  start_block=$((range_start / block_bytes))
-  start_offset=$((range_start % block_bytes))
-  count_blocks=$(((start_offset + range_size + block_bytes - 1) / block_bytes))
-
-  # tail and head trim the block-aligned read down to the exact window. `dd
-  # bs=1` did that with one read() and one write() per byte, which capped the
-  # whole search at 1.5 MB/s while pinning a core.
-  dd if="$file" bs=$block_bytes skip=$start_block count=$count_blocks 2>/dev/null | \
-    tail -c +$((start_offset + 1)) | head -c $range_size | \
+  tail -c +$((range_start + 1)) "$file" | head -c $range_size | \
     $rg_cmd -e "$query_regex"
 else
   # Search entire file

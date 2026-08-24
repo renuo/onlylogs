@@ -78,13 +78,7 @@ if [ -n "$start_position" ] || [ -n "$end_position" ]; then
 
   [ $range_end -gt $file_size ] && range_end=$file_size && range_size=$((range_end - range_start))
 
-  block_bytes=1048576
-  start_block=$((range_start / block_bytes))
-  start_offset=$((range_start % block_bytes))
-  count_blocks=$(((start_offset + range_size + block_bytes - 1) / block_bytes))
-
-  dd if="$file" bs=$block_bytes skip=$start_block count=$count_blocks 2>/dev/null | \
-    tail -c +$((start_offset + 1)) | head -c $range_size | \
+  tail -c +$((range_start + 1)) "$file" | head -c $range_size | \
     "${grep_cmd[@]}" "$query_regex"
 else
   # Search entire file
