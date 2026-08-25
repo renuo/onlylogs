@@ -1,4 +1,6 @@
 require "test_helper"
+require "timeout"
+require "tmpdir"
 
 class Onlylogs::GrepTest < ActiveSupport::TestCase
   def setup
@@ -6,6 +8,7 @@ class Onlylogs::GrepTest < ActiveSupport::TestCase
     @special_lines_path = File.expand_path("../../fixtures/files/log_special_lines.txt", __dir__)
     @original_ripgrep_enabled = Onlylogs.ripgrep_enabled?
     @original_max_line_matches = Onlylogs.max_line_matches
+    @tmpdir = Dir.mktmpdir("onlylogs-grep-test")
 
     Onlylogs.configuration.max_line_matches = nil
   end
@@ -13,6 +16,7 @@ class Onlylogs::GrepTest < ActiveSupport::TestCase
   def teardown
     Onlylogs.configuration.ripgrep_enabled = @original_ripgrep_enabled
     Onlylogs.configuration.max_line_matches = @original_max_line_matches
+    FileUtils.remove_entry(@tmpdir) if @tmpdir
   end
 
   def self.test_both_engine_modes(test_name, &block)
@@ -219,6 +223,45 @@ class Onlylogs::GrepTest < ActiveSupport::TestCase
     assert_equal [], lines, "Should return empty array when end < start, failed with #{engine_name}"
   end
 
+  # Fixed-width lines make every byte offset a known line, so a window can be
+  # asserted exactly instead of "fewer matches than the whole file".
+  LINE_WIDTH = 64
+  BLOCK_BYTES = 1048576
+
+  def write_fixed_width_log(bytes)
+    path = ::File.join(@tmpdir, "fixed_width.log")
+    ::File.open(path, "wb") do |file|
+      (bytes / LINE_WIDTH).times { |i| file.write(format("MARK %010d ", i).ljust(LINE_WIDTH - 1, ".") + "\n") }
+    end
+    path
+  end
+
+  def assert_window_returns_every_line(path, start_position, range_size, engine_name)
+    first_line = start_position / LINE_WIDTH
+    last_line = (start_position + range_size) / LINE_WIDTH - 1
+
+    lines = Onlylogs::Grep.grep("MARK", path, start_position: start_position,
+      end_position: start_position + range_size)
+
+    assert_equal last_line - first_line + 1, lines.length, "Short window with #{engine_name}"
+    assert_equal format("MARK %010d ", first_line), lines.first[:content][0, 16], "Wrong first line, #{engine_name}"
+    assert_equal format("MARK %010d ", last_line), lines.last[:content][0, 16], "Wrong last line, #{engine_name}"
+  end
+
+  # The window is read in whole blocks and then trimmed, so the read has to
+  # cover the range plus the slack in front of it. A range ending just short of
+  # a block boundary leaves only one line of slack, which is where a block count
+  # that ignores the offset silently hands back a short window.
+  test_both_engine_modes "it returns every line when the range all but fills its last block" do |engine_name|
+    path = write_fixed_width_log(4 * BLOCK_BYTES)
+    assert_window_returns_every_line(path, 499_968, 2 * BLOCK_BYTES - LINE_WIDTH, engine_name)
+  end
+
+  test_both_engine_modes "it returns every line when the range starts mid-block" do |engine_name|
+    path = write_fixed_width_log(3 * BLOCK_BYTES)
+    assert_window_returns_every_line(path, BLOCK_BYTES + 1024, BLOCK_BYTES + LINE_WIDTH, engine_name)
+  end
+
   test_both_engine_modes "it handles byte range searches correctly with regexp mode" do |engine_name|
     file_size = File.size(@fixture_path)
     start_pos = file_size / 4
@@ -227,5 +270,193 @@ class Onlylogs::GrepTest < ActiveSupport::TestCase
     # Test with regexp mode
     lines = Onlylogs::Grep.grep("Line \\d+", @fixture_path, start_position: start_pos, end_position: end_pos, regexp_mode: true)
     assert lines.length >= 0, "Should return results (even if empty) with regexp mode, failed with #{engine_name}"
+  end
+
+  test_both_engine_modes "it returns every match when a generous timeout is given" do |engine_name|
+    lines = Onlylogs::Grep.grep("[DEBUG]", @fixture_path, timeout: 30)
+    assert_equal 49, lines.length, "Failed with #{engine_name}"
+  end
+
+  test "an abandoned search does not outlive the caller's timeout" do
+    recorder = pid_recorder
+
+    elapsed = measure do
+      assert_raises(Timeout::Error) do
+        Timeout.timeout(1) do
+          with_search_command(stalling_command(recorder)) do
+            Onlylogs::Grep.grep("never matches", @fixture_path) { |result| result }
+          end
+        end
+      end
+    end
+
+    assert_operator elapsed, :<, 5, "the search kept running for #{elapsed.round(1)}s after a 1s timeout"
+    assert_search_processes_gone recorder
+  end
+
+  test "it enforces its own timeout without an async exception" do
+    recorder = pid_recorder
+
+    elapsed = measure do
+      assert_raises(Onlylogs::Grep::TimeoutError) do
+        with_search_command(stalling_command(recorder)) do
+          Onlylogs::Grep.grep("never matches", @fixture_path, timeout: 1) { |result| result }
+        end
+      end
+    end
+
+    assert_operator elapsed, :<, 3, "the search kept running for #{elapsed.round(1)}s after a 1s timeout"
+    assert_search_processes_gone recorder
+  end
+
+  test "breaking out of the block kills the search" do
+    Onlylogs.configuration.ripgrep_enabled = false
+    recorder = pid_recorder
+    lines = []
+
+    elapsed = measure do
+      with_search_command(stalling_command(recorder, emit: "MATCH")) do
+        Onlylogs::Grep.grep("anything", @fixture_path) do |result|
+          lines << result[:content]
+          break
+        end
+      end
+    end
+
+    assert_equal ["MATCH"], lines
+    assert_operator elapsed, :<, 5, "the search kept running for #{elapsed.round(1)}s after the caller broke out"
+    assert_search_processes_gone recorder
+  end
+
+  test "an exception raised by the block kills the search" do
+    Onlylogs.configuration.ripgrep_enabled = false
+    recorder = pid_recorder
+
+    elapsed = measure do
+      assert_raises(RuntimeError) do
+        with_search_command(stalling_command(recorder, emit: "MATCH")) do
+          Onlylogs::Grep.grep("anything", @fixture_path) { raise "consumer exploded" }
+        end
+      end
+    end
+
+    assert_operator elapsed, :<, 5, "the search kept running for #{elapsed.round(1)}s after the consumer raised"
+    assert_search_processes_gone recorder
+  end
+
+  test "killing the thread that runs the search kills the search" do
+    recorder = pid_recorder
+
+    thread = Thread.new do
+      with_search_command(stalling_command(recorder)) do
+        Onlylogs::Grep.grep("never matches", @fixture_path) { |result| result }
+      end
+    end
+
+    assert_equal 3, recorded_pids(recorder, 3).length, "the search did not start as expected"
+    thread.kill
+    assert thread.join(5), "the killed thread never unwound"
+
+    assert_search_processes_gone recorder
+  end
+
+  test "a search that completes normally yields every line and reaps its child" do
+    Onlylogs.configuration.ripgrep_enabled = false
+    recorder = pid_recorder
+    command = ["bash", "-c", "echo $$ > #{recorder}; echo one; echo two; printf 'no-trailing-newline'"]
+    lines = []
+
+    with_search_command(command) do
+      Onlylogs::Grep.grep("anything", @fixture_path) { |result| lines << result[:content] }
+    end
+
+    assert_equal ["one", "two", "no-trailing-newline"], lines
+    assert_search_processes_gone recorder, expected_pids: 1
+  end
+
+  private
+
+  STALL_SECONDS = 20
+
+  # A pipeline that records the pid of every one of its members and then stalls
+  # without writing anything, the way a search with no matches does: it never
+  # gets SIGPIPE, so only a signal can stop it.
+  def stalling_command(recorder, emit: nil)
+    # Each member records its own pid and then execs, so the recorded pids are
+    # the pids of the running pipeline and not of a wrapper shell.
+    stall = "sh -c 'echo $$ >> #{recorder}; #{"echo #{emit}; " if emit}exec sleep #{STALL_SECONDS}'"
+    forward = "sh -c 'echo $$ >> #{recorder}; exec cat'"
+
+    ["bash", "-c", "echo $$ > #{recorder}; #{stall} | #{forward}"]
+  end
+
+  def pid_recorder
+    ::File.join(@tmpdir, "pids-#{SecureRandom.hex(4)}")
+  end
+
+  def with_search_command(command)
+    singleton = Onlylogs::Grep.singleton_class
+    original = Onlylogs::Grep.method(:search_command)
+    singleton.define_method(:search_command) { |*, **| command }
+
+    yield
+  ensure
+    singleton.define_method(:search_command, original)
+  end
+
+  def assert_search_processes_gone(recorder, expected_pids: 3)
+    pids = recorded_pids(recorder, expected_pids)
+    assert_equal expected_pids, pids.length, "the search did not start as expected"
+
+    survivors = pids.reject { |pid| wait_until_dead(pid) }
+    assert_empty survivors, "search processes survived: #{survivors.inspect}"
+    refute process_group_alive?(pids.first), "the search's process group survived"
+  end
+
+  def recorded_pids(recorder, expected)
+    within(2) do
+      pids = ::File.exist?(recorder) ? ::File.read(recorder).split.map(&:to_i) : []
+      pids if pids.length >= expected
+    end || []
+  end
+
+  def wait_until_dead(pid)
+    within(5) { !process_alive?(pid) } || false
+  end
+
+  def within(seconds)
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + seconds
+
+    loop do
+      result = yield
+      return result if result
+      return nil if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+
+      sleep 0.02
+    end
+  end
+
+  def process_alive?(pid)
+    Process.kill(0, pid)
+    true
+  rescue Errno::ESRCH
+    false
+  rescue Errno::EPERM
+    true
+  end
+
+  def process_group_alive?(pgid)
+    Process.kill(0, -pgid)
+    true
+  rescue Errno::ESRCH
+    false
+  rescue Errno::EPERM
+    true
+  end
+
+  def measure
+    started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    yield
+    Process.clock_gettime(Process::CLOCK_MONOTONIC) - started_at
   end
 end
