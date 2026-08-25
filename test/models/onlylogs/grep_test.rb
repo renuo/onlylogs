@@ -480,6 +480,10 @@ class Onlylogs::GrepTest < ActiveSupport::TestCase
     assert_equal true, event.payload[:timed_out]
   end
 
+  test "the search runs at a lower priority than the application serving requests" do
+    assert_equal ["nice", "-n", "19"], Onlylogs::Grep.deprioritised(["rg", "x"]).first(3)
+  end
+
   def capture_search_event
     event = nil
     subscriber = ActiveSupport::Notifications.subscribe("search.onlylogs") do |*args|
