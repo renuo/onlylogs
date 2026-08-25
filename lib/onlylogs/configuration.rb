@@ -4,7 +4,14 @@ module Onlylogs
   class Configuration
     attr_accessor :log_file_patterns, :default_log_file_path, :basic_auth_user, :basic_auth_password,
       :parent_controller, :disable_basic_authentication, :ripgrep_enabled, :editor,
-      :max_line_matches
+      :max_line_matches, :search_timeout
+
+    # Seconds a viewer search may run before it is stopped. Bounded by default:
+    # a search holds a CPU for as long as it runs, and an unbounded one over a
+    # multi-GB file can starve everything else the host is doing. Generous
+    # enough for a full scan of a large file - set it to nil to remove the
+    # ceiling entirely.
+    DEFAULT_SEARCH_TIMEOUT = 120
 
     def initialize
       @log_file_patterns = default_log_file_patterns
@@ -16,6 +23,7 @@ module Onlylogs
       @ripgrep_enabled = default_ripgrep_enabled
       @editor = nil
       @max_line_matches = 100000
+      @search_timeout = DEFAULT_SEARCH_TIMEOUT
     end
 
     def configure
@@ -145,6 +153,10 @@ module Onlylogs
 
   def self.max_line_matches
     configuration.max_line_matches
+  end
+
+  def self.search_timeout
+    configuration.search_timeout
   end
 
   def self.allowed_file_patterns_for(pattern)

@@ -454,6 +454,53 @@ class Onlylogs::GrepTest < ActiveSupport::TestCase
     true
   end
 
+  test_both_engine_modes "it instruments each search with what was scanned and what came back" do |engine_name|
+    event = capture_search_event { Onlylogs::Grep.grep("[DEBUG]", @fixture_path) }
+
+    assert_equal @fixture_path, event.payload[:file_path], "Failed with #{engine_name}"
+    assert_equal "[DEBUG]", event.payload[:query], "Failed with #{engine_name}"
+    assert_equal 49, event.payload[:matches], "Failed with #{engine_name}"
+    assert_equal false, event.payload[:timed_out], "Failed with #{engine_name}"
+    assert_operator event.duration, :>, 0, "Failed with #{engine_name}"
+  end
+
+  test "it does not write to the log itself, so searching a log cannot append to it" do
+    logged = capture_log { Onlylogs::Grep.grep("[DEBUG]", @fixture_path) }
+
+    assert_equal "", logged
+  end
+
+  test "a search stopped by its timeout is instrumented as timed out" do
+    event = capture_search_event do
+      with_search_command(["sh", "-c", "sleep 30"]) do
+        assert_raises(Onlylogs::Grep::TimeoutError) { Onlylogs::Grep.grep("anything", @fixture_path, timeout: 1) }
+      end
+    end
+
+    assert_equal true, event.payload[:timed_out]
+  end
+
+  def capture_search_event
+    event = nil
+    subscriber = ActiveSupport::Notifications.subscribe("search.onlylogs") do |*args|
+      event = ActiveSupport::Notifications::Event.new(*args)
+    end
+    yield
+    event
+  ensure
+    ActiveSupport::Notifications.unsubscribe(subscriber)
+  end
+
+  def capture_log
+    original = Rails.logger
+    io = StringIO.new
+    Rails.logger = ActiveSupport::Logger.new(io)
+    yield
+    io.string
+  ensure
+    Rails.logger = original
+  end
+
   def measure
     started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     yield

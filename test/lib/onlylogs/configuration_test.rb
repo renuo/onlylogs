@@ -270,5 +270,16 @@ module Onlylogs
 
       assert_equal true, Onlylogs.disable_basic_authentication?
     end
+
+    test "search_timeout defaults to a bounded value" do
+      assert_equal Onlylogs::Configuration::DEFAULT_SEARCH_TIMEOUT, Onlylogs.search_timeout
+      assert_operator Onlylogs.search_timeout, :>, 0
+    end
+
+    test "search_timeout can be removed entirely" do
+      Onlylogs.configure { |config| config.search_timeout = nil }
+
+      assert_nil Onlylogs.search_timeout
+    end
   end
 end

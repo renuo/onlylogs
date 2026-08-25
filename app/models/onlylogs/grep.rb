@@ -29,7 +29,11 @@ module Onlylogs
         ->(line) { [nil, line] }
       end
 
-      begin
+      matches = 0
+
+      ActiveSupport::Notifications.instrument("search.onlylogs", file_path: file_path,
+        query: pattern, regexp: regexp_mode, start_position: start_position,
+        end_position: end_position, max_matches: max_matches) do |payload|
         each_output_line(command_args, timeout: timeout) do |line|
           byte_offset, content = parse_line.call(line.chomp)
 
@@ -37,6 +41,7 @@ module Onlylogs
           content = String.new(content, encoding: Encoding::UTF_8).scrub
 
           result = {byte_offset: byte_offset, content: content}
+          matches += 1
 
           if block_given?
             yield result
@@ -44,7 +49,12 @@ module Onlylogs
             results << result
           end
         end
+      rescue TimeoutError
+        payload[:timed_out] = true
+        raise
       ensure
+        payload[:matches] = matches
+        payload[:timed_out] ||= false
         drop_page_cache(file_path)
       end
 

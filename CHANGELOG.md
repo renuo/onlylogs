@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.9.0
+
+- **Every search is instrumented** as `search.onlylogs`. 
+  Subscribe to record whatever your application wants recorded.
+- **Viewer searches are now bounded.** A filtered search from the log viewer ran with no ceiling at
+  all. It now stops at `config.search_timeout`, in seconds, default is 120.
 
 ## 0.8.0
 

@@ -173,7 +173,8 @@ module Onlylogs
 
           if filter.present?
             # Use grep for filtered search
-            @log_file.grep(filter, regexp_mode: regexp_mode, start_position: start_position, end_position: end_position) do |result|
+            @log_file.grep(filter, regexp_mode: regexp_mode, start_position: start_position,
+              end_position: end_position, timeout: Onlylogs.search_timeout) do |result|
               break if @batch_sender.nil? || @log_watcher_running == false
 
               # Skip first line if start_position > 0 (line is cut off at byte boundary)
@@ -234,6 +235,11 @@ module Onlylogs
         else
           transmit({action: "finish", content: "Search finished."})
         end
+      rescue Onlylogs::Grep::TimeoutError
+        @batch_sender&.stop
+        transmit({action: "finish",
+                  content: "Search stopped after #{Onlylogs.search_timeout} seconds and did not reach " \
+                           "the end of the file. Narrow the range or the filter and search again."})
       ensure
         # Always cleanup even if interrupted or error occurs
         @batch_sender&.stop
