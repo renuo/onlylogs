@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.1
+
+- **Searches now run at a lower priority.**
+
 ## 0.9.0
 
 - **Every search is instrumented** as `search.onlylogs`. 
