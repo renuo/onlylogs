@@ -94,7 +94,8 @@ module Onlylogs
       reader, writer = IO.pipe
 
       begin
-        pid = Process.spawn(*bounded(command_args, timeout), out: writer, err: ::File::NULL, pgroup: true)
+        pid = Process.spawn(*deprioritised(bounded(command_args, timeout)),
+          out: writer, err: ::File::NULL, pgroup: true)
       rescue
         reader.close
         raise
@@ -115,6 +116,12 @@ module Onlylogs
     # timeout(1) exits with this when it had to stop the command.
     TIMED_OUT_EXIT_STATUS = 124
     KILL_GRACE_PERIOD = 0.5
+
+    SEARCH_NICENESS = 19
+
+    def self.deprioritised(command_args)
+      ["nice", "-n", SEARCH_NICENESS.to_s, *command_args]
+    end
 
     def self.bounded(command_args, timeout)
       return command_args unless timeout && timeout_command_available?
