@@ -58,7 +58,7 @@ module Onlylogs
       db = (rand * 60).round(2)
       view = (rand * 30).round(2)
       duration = (db + view + rand * 10).round(2)
-      params = format == "json" ? "{}" : %({"context_id" => "#{SecureRandom.uuid}"})
+      params = (format == "json") ? "{}" : %({"context_id" => "#{SecureRandom.uuid}"})
 
       "[#{SecureRandom.uuid}] [#{Time.now.iso8601}] [#{severity}] " \
         "method=#{method} path=#{path} format=#{format} controller=#{controller} action=#{action} " \
