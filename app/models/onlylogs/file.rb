@@ -55,10 +55,12 @@ module Onlylogs
       true
     end
 
+    # +timeout+ is in seconds and defaults to nil, meaning unbounded. See
+    # Grep.grep.
     def grep(filter, regexp_mode: false, start_position: 0, end_position: nil,
-      max_matches: Onlylogs.max_line_matches, &block)
+      max_matches: Onlylogs.max_line_matches, timeout: nil, &block)
       Grep.grep(filter, path, regexp_mode: regexp_mode, start_position: start_position,
-        end_position: end_position, max_matches: max_matches) do |content|
+        end_position: end_position, max_matches: max_matches, timeout: timeout) do |content|
         yield content
       end
     end

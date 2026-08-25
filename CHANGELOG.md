@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Kill the search subprocess and its whole pipeline when a search is abandoned. A timeout, a `break`
+  out of the block or an exception now stops the work instead of blocking on `close` until the child
+  finished scanning the file.
+- `Onlylogs::Grep.grep` accepts a `timeout:` in seconds and raises `Onlylogs::Grep::TimeoutError`
+  (a `Timeout::Error`) when a search runs past it.
+
 ## 0.7.0
 
 - Fix wrong level filtering.
