@@ -97,6 +97,30 @@ module Onlylogs
 
     private
 
+    test "a filtered search that outruns the configured timeout finishes saying so" do
+      Onlylogs.configuration.search_timeout = 1
+
+      with_search_command(["sh", "-c", "sleep 30"]) do
+        subscribe
+        perform :initialize_watcher, initialize_data(filter: "anything")
+      end
+
+      assert_equal "finish", transmissions.last["action"]
+      assert_match(/did not reach the end of the file/, transmissions.last["content"])
+    end
+
+    # Replaces the search with a command that never finishes, so the ceiling is
+    # what ends it rather than the size of the fixture.
+    def with_search_command(command)
+      singleton = Onlylogs::Grep.singleton_class
+      original = Onlylogs::Grep.method(:search_command)
+      singleton.define_method(:search_command) { |*, **| command }
+
+      yield
+    ensure
+      singleton.define_method(:search_command, original)
+    end
+
     def initialize_data(overrides = {})
       {file_path: @encrypted_path, mode: "static", start_position: 0, end_position: nil}.merge(overrides)
     end

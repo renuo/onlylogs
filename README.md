@@ -272,6 +272,22 @@ Onlylogs.configure do |config|
 end
 ```
 
+#### Bounding How Long a Viewer Search Can Run
+
+Searches started from the log viewer stop after `search_timeout` seconds, keeping whatever they
+found and reporting that they did not reach the end of the file. The default is 120 seconds:
+
+```ruby
+# config/initializers/onlylogs.rb
+Onlylogs.configure do |config|
+  config.search_timeout = 300
+
+  # Or remove the ceiling entirely (a search then holds a CPU until it reaches
+  # the end of the file, however large it is)
+  config.search_timeout = nil
+end
+```
+
 ### Filtering Log Lines with a Denylist
 
 The `Onlylogs::Formatter` supports a denylist: an array of regular expressions that prevents matching lines from being logged. This is useful for filtering out noisy or irrelevant entries like health checks or asset requests.
