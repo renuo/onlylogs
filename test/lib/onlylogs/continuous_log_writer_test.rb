@@ -45,11 +45,14 @@ module Onlylogs
         status = line[/status=(\d+)/, 1].to_i
         severity = line[/\] \[([IWE])\] /, 1]
 
-        assert_equal if (status >= 500)
-"E"
-else
-((status >= 400) ? "W" : "I")
-end, severity, line
+        expected = if status >= 500
+          "E"
+        elsif status >= 400
+          "W"
+        else
+          "I"
+        end
+        assert_equal expected, severity, line
       end
     end
 
