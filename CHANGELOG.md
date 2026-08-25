@@ -2,11 +2,21 @@
 
 ## Unreleased
 
+## 0.8.0
+
+- **Searching a byte range is now faster.**
+- **Fixed windowed searches silently returning fewer matches than the file held.** The block count
+  ignored the offset the read started from, so a window ending shortly before a block boundary came
+  up short with no error and no indication of truncation. A 32,767 line window returned 24,956 lines.
 - Kill the search subprocess and its whole pipeline when a search is abandoned. A timeout, a `break`
   out of the block or an exception now stops the work instead of blocking on `close` until the child
   finished scanning the file.
-- `Onlylogs::Grep.grep` accepts a `timeout:` in seconds and raises `Onlylogs::Grep::TimeoutError`
-  (a `Timeout::Error`) when a search runs past it.
+- `Onlylogs::Grep.grep` and `Onlylogs::File#grep` accept a `timeout:` in seconds and raise
+  `Onlylogs::Grep::TimeoutError` (a `Timeout::Error`) when a search runs past it. It defaults to
+  `nil`, meaning no deadline. The deadline is enforced by `timeout(1)`; without GNU coreutils the
+  argument is ignored and only the caller's own deadline applies.
+- Reject non-numeric `--start-position`/`--end-position` in the search scripts before they reach
+  shell arithmetic expansion, which evaluates its contents as an expression.
 
 ## 0.7.0
 
