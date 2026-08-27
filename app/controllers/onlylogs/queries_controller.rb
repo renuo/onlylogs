@@ -2,144 +2,67 @@
 
 module Onlylogs
   class QueriesController < ApplicationController
-    before_action :authorize_log_file!
+    before_action :set_log_file
 
-    rescue_from Query::InvalidRegexpError, with: :render_invalid_regexp
-    rescue_from Query::NotFoundError, with: :render_not_found
-    rescue_from ArgumentError, with: :render_bad_request
-    rescue_from SQLite3::ConstraintException, with: :render_conflict
+    rescue_from(ActiveRecord::RecordInvalid) { |e| render_invalid(e.record) }
+    rescue_from(ActiveRecord::RecordNotFound) { |e| render_error(e.message, :not_found) }
+    rescue_from(ForbiddenPathError) { |e| render_error(e.message, :forbidden) }
+    rescue_from(SecureFilePath::SecurityError) { |e| render_error(e.message, :bad_request) }
+    # Onlylogs::File raises when the log file is gone; its message carries the
+    # absolute server path, so it is not passed on to the client.
+    rescue_from(Onlylogs::Error) { render_error("Log file not found", :not_found) }
 
     def index
-      queries = Query.all(@log_file_path)
-
-      render json: {
-        queries: queries.map(&:to_h)
-      }
-    rescue => e
-      render_internal_error("Failed to fetch queries", e)
+      render json: {queries: @log_file.queries}
     end
 
     def show
-      query = find_query!
-
-      render json: query.to_h
-    rescue => e
-      render_internal_error("Failed to fetch query", e)
+      render json: query
     end
 
     def create
-      query = Query.create(
-        @log_file_path,
-        name: required_param(:name),
-        filter: required_param(:filter),
-        regexp_mode: boolean_param(:regexp_mode)
-      )
-
-      render json: query.to_h, status: :created
-    rescue Query::InvalidRegexpError,
-      ArgumentError,
-      SQLite3::ConstraintException
-      raise
-    rescue => e
-      render_internal_error("Failed to create query", e)
+      render json: @log_file.queries.create!(query_params), status: :created
     end
 
     def update
-      query = find_query!
+      query.update!(query_params)
 
-      query.name = params[:name] if params.key?(:name)
-      query.filter = params[:filter] if params.key?(:filter)
-      query.regexp_mode = boolean_param(:regexp_mode) if params.key?(:regexp_mode)
-
-      query.save(@log_file_path)
-
-      render json: query.to_h
-    rescue Query::InvalidRegexpError,
-      Query::NotFoundError,
-      ArgumentError,
-      SQLite3::ConstraintException
-      raise
-    rescue => e
-      render_internal_error("Failed to update query", e)
+      render json: query
     end
 
     def destroy
-      query = find_query!
-      query.delete(@log_file_path)
+      query.destroy!
 
-      render json: {success: true}
-    rescue Query::NotFoundError
-      raise
-    rescue => e
-      render_internal_error("Failed to delete query", e)
+      head :no_content
     end
 
     private
 
-    def find_query!
-      query = Query.find(@log_file_path, query_id)
-
-      raise Query::NotFoundError, "Query not found" unless query
-
-      query
+    def query
+      @query ||= @log_file.queries.find(params[:id])
     end
 
-    def query_id
-      Integer(params[:id])
-    rescue ArgumentError, TypeError
-      raise ArgumentError, "Invalid query id"
+    def query_params
+      params.permit(:name, :filter, :regexp_mode)
     end
 
-    def required_param(key)
-      value = params[key]
+    def set_log_file
+      path = SecureFilePath.decrypt(params.require(:log_file_path))
 
-      raise ArgumentError, "#{key.to_s.humanize} is required" if value.nil?
+      raise ForbiddenPathError, "Access denied to this log file" unless Onlylogs.file_path_permitted?(path)
 
-      value
+      @log_file = File.new(path)
     end
 
-    def boolean_param(key)
-      ActiveModel::Type::Boolean.new.cast(params[key])
-    end
-
-    def authorize_log_file!
-      encrypted_path = params[:log_file_path]
-
-      if encrypted_path.blank?
-        return render json: {error: "Log file path is required"}, status: :bad_request
-      end
-
-      @log_file_path = SecureFilePath.decrypt(encrypted_path)
-
-      unless Onlylogs.file_path_permitted?(@log_file_path)
-        render json: {error: "Access denied to this log file"}, status: :forbidden
-      end
-    rescue SecureFilePath::SecurityError
-      render json: {error: "Invalid log file path token"}, status: :bad_request
-    end
-
-    def render_invalid_regexp(error)
-      render json: {error: error.message}, status: :unprocessable_entity
-    end
-
-    def render_not_found(error)
-      render json: {error: error.message}, status: :not_found
-    end
-
-    def render_bad_request(error)
-      render json: {error: error.message}, status: :bad_request
-    end
-
-    def render_conflict(_error)
-      render json: {error: "A query with that name already exists"}, status: :conflict
-    end
-
-    def render_internal_error(message, error)
-      Rails.logger.error("[Onlylogs] #{message}: #{error.class} - #{error.message}")
-
+    def render_invalid(record)
       render json: {
-        error: message
-      }, status: :internal_server_error
+        error: record.errors.full_messages.to_sentence,
+        errors: record.errors.to_hash
+      }, status: :unprocessable_entity
+    end
+
+    def render_error(message, status)
+      render json: {error: message}, status: status
     end
   end
 end
