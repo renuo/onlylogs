@@ -235,7 +235,7 @@ end
 
 Onlylogs automatically detects file paths in log messages and converts them into clickable links that open in your preferred code editor.
 
-For a complete list of supported editors, see [lib/onlylogs/editor_detector.rb](lib/onlylogs/editor_detector.rb).
+For a complete list of supported editors, see [app/models/onlylogs/file_path_parser.rb](app/models/onlylogs/file_path_parser.rb).
 
 ```bash
 # env variables
