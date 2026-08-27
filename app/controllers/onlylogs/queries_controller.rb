@@ -8,9 +8,6 @@ module Onlylogs
     rescue_from(ActiveRecord::RecordNotFound) { |e| render_error(e.message, :not_found) }
     rescue_from(ForbiddenPathError) { |e| render_error(e.message, :forbidden) }
     rescue_from(SecureFilePath::SecurityError) { |e| render_error(e.message, :bad_request) }
-    # Onlylogs::File raises when the log file is gone; its message carries the
-    # absolute server path, so it is not passed on to the client.
-    rescue_from(Onlylogs::Error) { render_error("Log file not found", :not_found) }
 
     def index
       render json: {queries: @log_file.queries}
