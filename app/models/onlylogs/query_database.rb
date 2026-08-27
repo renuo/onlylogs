@@ -26,10 +26,13 @@ module Onlylogs
         @mutex.synchronize { @models[path] ||= build_model(path) }
       end
 
-      # Useful in tests and during cleanup.
+      # Useful in tests and during cleanup. Removes the pools rather than only
+      # disconnecting them: a pool left registered with ActiveRecord is still
+      # picked up by transactional tests, which then reopen a database file
+      # that may already be gone.
       def clear_connections
         @mutex.synchronize do
-          @models.each_value { |model| model.connection_pool.disconnect! }
+          @models.each_value(&:remove_connection)
           @models.clear
         end
       end
@@ -50,8 +53,13 @@ module Onlylogs
 
           # Anonymous classes have no name, which ActiveModel needs for error
           # messages and I18n lookups.
-          def self.name = "Onlylogs::Query"
+          def self.model_name = ActiveModel::Name.new(self, nil, "Onlylogs::Query")
         end
+
+        # ActiveRecord keys connection pools by class name, so every database
+        # needs a distinct one or they all end up sharing a single pool.
+        connection_name = "Onlylogs::Query(#{database_path})"
+        model.define_singleton_method(:name) { connection_name }
 
         model.establish_connection(adapter: "sqlite3", database: database_path, timeout: CONNECTION_TIMEOUT)
         create_table(model)
