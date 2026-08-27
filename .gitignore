@@ -9,6 +9,9 @@
 /test/dummy/log/*.log.*
 /test/dummy/storage/
 /test/dummy/tmp/
+/test/fixtures/files/big.log
+/test/fixtures/files/very_big.log
+/test/fixtures/files/ultra_big.log
 
 # SimpleCov
 /coverage/
