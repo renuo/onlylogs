@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "onlylogs-dummy",
+      "runtimeExecutable": "bin/rails",
+      "runtimeArgs": ["server"],
+      "port": 3000,
+      "url": "http://onlylogs.localhost:3000"
+    }
+  ]
+}
