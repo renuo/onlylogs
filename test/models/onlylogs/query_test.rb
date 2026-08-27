@@ -3,6 +3,11 @@ require "fileutils"
 require "tmpdir"
 
 class Onlylogs::QueryTest < ActiveSupport::TestCase
+  # Each test works against a throwaway SQLite database in a temp directory that
+  # teardown deletes. Transactional fixtures would reconnect to those pools
+  # afterwards to roll back, by which point the files are gone.
+  self.use_transactional_tests = false
+
   setup do
     @temp_dir = Dir.mktmpdir
     @log_file_path = File.join(@temp_dir, "test.log")
@@ -83,6 +88,21 @@ class Onlylogs::QueryTest < ActiveSupport::TestCase
     @log_file.queries.create(name: "Shared", filter: "ERROR")
 
     assert_equal ["Shared"], Onlylogs::File.new(sibling_path).queries.pluck(:name)
+  end
+
+  test "log files in different directories keep separate queries" do
+    other_dir = Dir.mktmpdir
+    other_log_path = File.join(other_dir, "other.log")
+    File.write(other_log_path, "other log content")
+
+    @log_file.queries.create!(name: "Mine", filter: "ERROR")
+    other_log_file = Onlylogs::File.new(other_log_path)
+    other_log_file.queries.create!(name: "Theirs", filter: "WARN")
+
+    assert_equal ["Mine"], @log_file.queries.pluck(:name)
+    assert_equal ["Theirs"], other_log_file.queries.pluck(:name)
+  ensure
+    FileUtils.remove_entry(other_dir) if other_dir && File.directory?(other_dir)
   end
 
   test "update a query" do
