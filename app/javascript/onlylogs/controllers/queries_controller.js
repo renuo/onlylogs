@@ -2,7 +2,12 @@ import { Controller } from "@hotwired/stimulus";
 
 export default class QueriesController extends Controller {
   static targets = ["saveButton", "loadButton", "saveModal", "queryName", "queriesList"];
-  static values = { logFilePath: String };
+  // The engine can be mounted anywhere, so the endpoint comes from the view's
+  // route helper rather than a hardcoded path.
+  static values = {
+    logFilePath: String,
+    endpoint: { type: String, default: "/onlylogs/queries" },
+  };
 
   connect() {
     this.queries = [];
@@ -88,7 +93,7 @@ export default class QueriesController extends Controller {
     const regexpMode = this.logStreamerController?.regexpModeValue || false;
 
     try {
-      const response = await fetch(`/onlylogs/queries`, {
+      const response = await fetch(this.endpointValue, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -147,7 +152,7 @@ export default class QueriesController extends Controller {
 
     try {
       const response = await fetch(
-        `/onlylogs/queries/${queryId}?log_file_path=${encodeURIComponent(
+        `${this.endpointValue}/${queryId}?log_file_path=${encodeURIComponent(
           this.logFilePathValue
         )}`,
         {
@@ -176,7 +181,7 @@ export default class QueriesController extends Controller {
   async loadQueries() {
     try {
       const response = await fetch(
-        `/onlylogs/queries?log_file_path=${encodeURIComponent(
+        `${this.endpointValue}?log_file_path=${encodeURIComponent(
           this.logFilePathValue
         )}`,
         {
@@ -261,13 +266,18 @@ export default class QueriesController extends Controller {
   #showMessage(message, type) {
     // Find message element from log streamer if available
     const messageEl = this.logStreamerController?.messageTarget;
-    if (messageEl) {
-      const className = type === "error" ? "error-message" : "success-message";
-      messageEl.innerHTML = `<span class="${className}">${message}</span>`;
-      setTimeout(() => {
-        messageEl.innerHTML = "";
-      }, 3000);
-    }
+    if (!messageEl) return;
+
+    // textContent, not innerHTML: the message can carry a saved query name or a
+    // server validation string, both of which contain user input.
+    const span = document.createElement("span");
+    span.className = type === "error" ? "error-message" : "success-message";
+    span.textContent = message;
+    messageEl.replaceChildren(span);
+
+    setTimeout(() => {
+      if (span.isConnected) messageEl.replaceChildren();
+    }, 3000);
   }
 
   #csrfToken() {
