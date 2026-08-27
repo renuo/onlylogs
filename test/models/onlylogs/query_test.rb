@@ -9,23 +9,24 @@ class Onlylogs::QueryTest < ActiveSupport::TestCase
     File.write(@log_file_path, "test log content")
 
     # Clear any existing connections
-    Onlylogs::Query::Database.clear_connections
+    Onlylogs::QueryDatabase.clear_connections
+
+    @log_file = Onlylogs::File.new(@log_file_path)
   end
 
   teardown do
-    Onlylogs::Query::Database.clear_connections
+    Onlylogs::QueryDatabase.clear_connections
     FileUtils.remove_entry(@temp_dir) if File.directory?(@temp_dir)
   end
 
   test "create a new query" do
-    query = Onlylogs::Query.create(
-      @log_file_path,
+    query = @log_file.queries.create(
       name: "Test Query",
       filter: "ERROR",
       regexp_mode: false
     )
 
-    assert_not_nil query.id
+    assert_predicate query, :persisted?
     assert_equal "Test Query", query.name
     assert_equal "ERROR", query.filter
     assert_equal false, query.regexp_mode
@@ -34,98 +35,150 @@ class Onlylogs::QueryTest < ActiveSupport::TestCase
   end
 
   test "retrieve a query by id" do
-    created_query = Onlylogs::Query.create(
-      @log_file_path,
+    created_query = @log_file.queries.create(
       name: "Find Me",
       filter: "WARN",
       regexp_mode: true
     )
 
-    found_query = Onlylogs::Query.find(@log_file_path, created_query.id)
+    found_query = @log_file.queries.find(created_query.id)
 
-    assert_not_nil found_query
     assert_equal created_query.id, found_query.id
     assert_equal "Find Me", found_query.name
     assert_equal "WARN", found_query.filter
     assert_equal true, found_query.regexp_mode
   end
 
-  test "list all queries for a log file" do
-    Onlylogs::Query.create(@log_file_path, name: "Query 1", filter: "ERROR")
-    Onlylogs::Query.create(@log_file_path, name: "Query 2", filter: "WARN")
-    Onlylogs::Query.create(@log_file_path, name: "Query 3", filter: "INFO")
-
-    queries = Onlylogs::Query.all(@log_file_path)
-
-    assert_equal 3, queries.length
-    assert_equal ["Query 1", "Query 2", "Query 3"], queries.map(&:name).sort
+  test "find raises when the query does not exist" do
+    assert_raises ActiveRecord::RecordNotFound do
+      @log_file.queries.find(123_456)
+    end
   end
 
-  test "delete a query" do
-    query = Onlylogs::Query.create(@log_file_path, name: "To Delete", filter: "DEBUG")
+  test "find_by returns nil when the query does not exist" do
+    assert_nil @log_file.queries.find_by(id: 123_456)
+  end
 
-    query.delete(@log_file_path)
+  test "list all queries for a log file" do
+    @log_file.queries.create(name: "Query 1", filter: "ERROR")
+    @log_file.queries.create(name: "Query 2", filter: "WARN")
+    @log_file.queries.create(name: "Query 3", filter: "INFO")
 
-    found = Onlylogs::Query.find(@log_file_path, query.id)
-    assert_nil found
+    assert_equal ["Query 1", "Query 2", "Query 3"], @log_file.queries.pluck(:name).sort
+  end
+
+  test "list the most recently updated queries first" do
+    oldest = @log_file.queries.create(name: "Oldest", filter: "ERROR")
+    newest = @log_file.queries.create(name: "Newest", filter: "WARN")
+
+    oldest.touch
+
+    assert_equal [oldest.id, newest.id], @log_file.queries.ids
+  end
+
+  test "log files in the same directory share their queries" do
+    sibling_path = File.join(@temp_dir, "sidekiq.log")
+    File.write(sibling_path, "other log content")
+
+    @log_file.queries.create(name: "Shared", filter: "ERROR")
+
+    assert_equal ["Shared"], Onlylogs::File.new(sibling_path).queries.pluck(:name)
+  end
+
+  test "update a query" do
+    query = @log_file.queries.create(name: "Before", filter: "ERROR")
+
+    assert query.update(name: "After", filter: "WARN", regexp_mode: true)
+
+    reloaded = @log_file.queries.find(query.id)
+    assert_equal "After", reloaded.name
+    assert_equal "WARN", reloaded.filter
+    assert_equal true, reloaded.regexp_mode
+  end
+
+  test "cast regexp_mode from a string" do
+    query = @log_file.queries.create(name: "Casting", filter: "ERROR", regexp_mode: true)
+
+    query.update(regexp_mode: "false")
+
+    assert_equal false, @log_file.queries.find(query.id).regexp_mode
+  end
+
+  test "destroy a query" do
+    query = @log_file.queries.create(name: "To Delete", filter: "DEBUG")
+
+    query.destroy
+
+    assert_predicate query, :destroyed?
+    assert_nil @log_file.queries.find_by(id: query.id)
   end
 
   test "validate query name is required" do
-    assert_raises ArgumentError, "Query name cannot be empty" do
-      Onlylogs::Query.create(@log_file_path, name: "", filter: "ERROR")
-    end
+    query = @log_file.queries.create(name: "", filter: "ERROR")
+
+    assert_not_predicate query, :persisted?
+    assert_includes query.errors[:name], "can't be blank"
   end
 
   test "validate query name length" do
-    long_name = "a" * 256
-    assert_raises ArgumentError, "Query name is too long" do
-      Onlylogs::Query.create(@log_file_path, name: long_name, filter: "ERROR")
-    end
+    query = @log_file.queries.create(name: "a" * 256, filter: "ERROR")
+
+    assert_not_predicate query, :persisted?
+    assert_includes query.errors[:name], "is too long (maximum is 255 characters)"
   end
 
   test "validate regexp syntax" do
-    assert_raises Onlylogs::Query::InvalidRegexpError do
-      Onlylogs::Query.create(
-        @log_file_path,
-        name: "Bad Regex",
-        filter: "[invalid",
-        regexp_mode: true
-      )
-    end
+    query = @log_file.queries.create(name: "Bad Regex", filter: "[invalid", regexp_mode: true)
+
+    assert_not_predicate query, :persisted?
+    assert_predicate query.errors[:filter], :any?
+  end
+
+  test "reject a duplicate query name regardless of case" do
+    @log_file.queries.create(name: "Duplicate", filter: "ERROR")
+
+    query = @log_file.queries.create(name: "duplicate", filter: "WARN")
+
+    assert_not_predicate query, :persisted?
+    assert_includes query.errors[:name], "has already been taken"
+  end
+
+  test "strip whitespace around the name" do
+    query = @log_file.queries.create(name: "  Padded  ", filter: "ERROR")
+
+    assert_equal "Padded", query.name
   end
 
   test "allow empty filter with regexp mode off" do
-    query = Onlylogs::Query.create(
-      @log_file_path,
+    query = @log_file.queries.create(
       name: "Empty Filter",
       filter: "",
       regexp_mode: false
     )
 
+    assert_predicate query, :persisted?
     assert_equal "", query.filter
   end
 
-  test "convert query to hash" do
-    query = Onlylogs::Query.create(
-      @log_file_path,
+  test "serialize a query as json" do
+    query = @log_file.queries.create(
       name: "Hash Test",
       filter: "ERROR",
       regexp_mode: true
     )
 
-    hash = query.to_h
+    json = query.as_json
 
-    assert hash.is_a?(Hash)
-    assert_equal query.id, hash[:id]
-    assert_equal "Hash Test", hash[:name]
-    assert_equal "ERROR", hash[:filter]
-    assert_equal true, hash[:regexp_mode]
-    assert_not_nil hash[:created_at]
-    assert_not_nil hash[:updated_at]
+    assert_equal query.id, json["id"]
+    assert_equal "Hash Test", json["name"]
+    assert_equal "ERROR", json["filter"]
+    assert_equal true, json["regexp_mode"]
+    assert_not_nil json["created_at"]
+    assert_not_nil json["updated_at"]
   end
 
   test "database is created in correct directory" do
-    Onlylogs::Query.create(@log_file_path, name: "Test", filter: "ERROR")
+    @log_file.queries.create(name: "Test", filter: "ERROR")
 
     queries_dir = File.join(@temp_dir, ".onlylogs")
     db_file = File.join(queries_dir, "queries.db")

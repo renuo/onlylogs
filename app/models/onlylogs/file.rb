@@ -10,6 +10,10 @@ module Onlylogs
       validate!
     end
 
+    def queries
+      QueryDatabase.model_for(path).order(updated_at: :desc)
+    end
+
     def go_to_position(position)
       return if position < 0
 
