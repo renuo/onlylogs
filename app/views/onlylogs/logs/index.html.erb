@@ -1,22 +1,42 @@
 <style>
     .grid {
         display: grid;
-        grid-template-rows: 32px 1fr;
+        grid-template-rows: 38px 1fr;
         height: 100vh;
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+        font-size: 0.8rem;
     }
 
     .grid-header {
         display: flex;
         align-items: center;
-        border-bottom: 1px solid lightgray;
+        gap: 0.5rem;
+        padding: 0 0.65rem;
+        background-color: #f3f5f9;
+        border-bottom: 1px solid #dde3ec;
+        color: #58626f;
     }
 
-    .log-file-dropdown {
-        margin-left: 0.5rem;
+    .log-file-dropdown select {
+        font: inherit;
+        padding: 0.2rem 0.4rem;
+        border: 1px solid #b9c4d3;
+        border-radius: 3px;
+        background-color: #fff;
+        color: #12171f;
     }
 
     .download-link {
-        margin-left: 0.5rem;
+        color: #1a4fc4;
+        text-decoration: none;
+        padding: 0.2rem 0.45rem;
+        border: 1px solid #9dbcf7;
+        border-radius: 3px;
+        background-color: #e8f0fe;
+    }
+
+    .download-link:hover {
+        background-color: #d7e5fd;
     }
 </style>
 <div class="grid">

@@ -5,7 +5,6 @@ export default class LogStreamerController extends Controller {
   static values = {
     filePath: { type: String },
     autoScroll: { type: Boolean, default: true },
-    autoStart: { type: Boolean, default: true },
     filter: { type: String, default: '' },
     mode: { type: String, default: 'live' },
     regexpMode: { type: Boolean, default: false },
@@ -14,7 +13,10 @@ export default class LogStreamerController extends Controller {
     endPosition: { type: Number, default: 0 }
   };
 
-  static targets = ["logLines", "filterInput", "results", "liveMode", "message", "regexpMode", "websocketStatus", "stopButton", "clearButton", "autoscroll", "rangeSliderContainer", "startSlider", "endSlider", "startOutput", "endOutput"];
+  static targets = ["logLines", "filterInput", "results", "liveButton", "searchButton", "searchWholeFileButton", "message", "regexpMode", "websocketStatus", "stopButton", "clearButton", "autoscroll", "rangeSliderContainer", "startSlider", "endSlider", "searchPlaceholder"];
+
+  // When the current live query started, so "0 matches" can say since when.
+  #liveFilterStartedAt = null;
 
   connect() {
     this.consumer = createConsumer();
@@ -23,7 +25,6 @@ export default class LogStreamerController extends Controller {
     this.isRunning = false;
     this.reconnectTimeout = null;
     this.isSearchFinished = true;
-    this.lastRangeStep = null;
     this.historyUpdateTimeout = null;
     this.contextLineHighlighted = false;
 
@@ -32,13 +33,6 @@ export default class LogStreamerController extends Controller {
     this.#initializeClusterize();
 
     this.#updateWebsocketStatus('disconnected');
-
-    // Listen for range-slider updates
-    if (this.hasRangeSliderContainerTarget) {
-      this.rangeSliderContainerTarget.addEventListener('range:update', (e) => {
-        this.#handleRangeUpdate(e);
-      });
-    }
 
     // Restore state from URL params if present
     this.#restoreStateFromUrl();
@@ -111,17 +105,13 @@ export default class LogStreamerController extends Controller {
   }
 
   pauseForSelection() {
-    // Triggered by TextSelectionController#handleMouseDown via text-selection:start event
-    // Enter "highlighting mode" - disable both autoscroll and live mode
+    // Triggered by TextSelectionController#handleMouseDown via text-selection:start event.
+    // Stopping autoscroll is enough to keep the text still under the cursor; the mode
+    // is the user's to change, so selecting text must never switch it.
     if (this.autoScrollValue) {
       this.autoScrollValue = false;
       this.autoscrollTarget.checked = false;
-    }
-
-    if (this.isLiveMode()) {
-      this.liveModeTarget.checked = false;
-      this.modeValue = 'static';
-      this.stop();
+      this.#updateUrlParam('autoscroll', 'false');
     }
   }
 
@@ -134,32 +124,34 @@ export default class LogStreamerController extends Controller {
     }
   }
 
-  toggleLiveMode() {
-    if (this.isLiveMode()) {
-      // User checked - enable live mode, keep filter and start fresh tail
-      this.#clearHighlighting();
-      this.modeValue = 'live';
-      this.clear();
-      this.#setRange(0, this.fileSizeValue);
-      this.#updateUrlParam('start_position', null);
-      this.#updateUrlParam('end_position', null);
-      this.#updateUrlParam('byte_offset', null);
-      this.#updateUrlParam('mode', null);
-      this.reconnectWithNewMode();
-    } else {
-      // User unchecked - disable live mode
-      this.modeValue = 'static';
-      this.#updateUrlParam('mode', 'static');
+  switchToLive() {
+    if (this.isLiveMode()) return;
 
-      const hasFilter = this.filterInputTarget.value && this.filterInputTarget.value.trim() !== '';
-      if (hasFilter) {
-        // Search with the current filter in static mode
-        this.reconnectWithNewMode();
-      } else {
-        // No filter, just stop
-        this.stop();
-      }
-    }
+    this.#clearHighlighting();
+    this.#setMode('live');
+    this.clear();
+    this.#setRange(0, this.fileSizeValue);
+    this.#updateUrlParams({ start_position: null, end_position: null, byte_offset: null });
+    this.reconnectWithNewMode();
+  }
+
+  switchToSearch() {
+    if (!this.isLiveMode()) return;
+
+    this.#setMode('static');
+    this.reconnectWithNewMode();
+  }
+
+  // Bound only to the "Search whole file" button, which is shown while tailing.
+  // Leaves live mode: runs what is already typed against the file instead of
+  // waiting for a matching line to arrive.
+  searchWholeFile() {
+    this.#clearHighlighting();
+    this.#setMode('static');
+    this.#setRange(0, this.fileSizeValue);
+    this.#updateUrlParams({ start_position: null, end_position: null, byte_offset: null });
+    this.reconnectWithNewMode();
+    this.filterInputTarget.focus();
   }
 
   applyFilter() {
@@ -172,14 +164,39 @@ export default class LogStreamerController extends Controller {
     // Update visual state
     this.updateStopButtonVisibility();
     this.#updateUrlParam('filter', filterValue || null);
-    this.#updateUrlParam('mode', this.modeValue === 'live' ? null : 'static');
+    this.#liveFilterStartedAt = this.isLiveMode() ? new Date() : null;
+    this.#updateResultsDisplay();
 
     // Use the global debounced reconnection (300ms delay)
     this.reconnectWithNewMode();
   }
 
   isLiveMode() {
-    return this.liveModeTarget.checked;
+    return this.modeValue === 'live';
+  }
+
+  // The only writer of modeValue. Everything that changes the mode goes through
+  // here so the switch, the URL and the toolbar layout can never disagree.
+  #setMode(mode) {
+    this.modeValue = mode;
+    this.#updateUrlParam('mode', mode === 'live' ? null : 'static');
+    this.#liveFilterStartedAt = mode === 'live' ? new Date() : null;
+    this.#syncModeControls();
+  }
+
+  #syncModeControls() {
+    const live = this.isLiveMode();
+    this.#syncSearchPlaceholder();
+
+    if (this.hasLiveButtonTarget) {
+      this.liveButtonTarget.setAttribute('aria-pressed', live);
+    }
+    if (this.hasSearchButtonTarget) {
+      this.searchButtonTarget.setAttribute('aria-pressed', !live);
+    }
+
+    this.filterInputTarget.placeholder = live ? 'follow lines matching…' : 'search the whole file…';
+    this.#updateResultsDisplay();
   }
 
   scroll() {
@@ -210,34 +227,16 @@ export default class LogStreamerController extends Controller {
     }, 600);
   }
 
+  // Clears the text only. The mode and the range belong to their own controls,
+  // so an × on a text field must not quietly reach over and change them.
   clearFilter() {
-    // Clear filter and explore window to go back to pure live mode
     this.filterInputTarget.value = '';
-    this.modeValue = 'live';
-    this.startPositionValue = 0;
-    this.endPositionValue = this.fileSizeValue;
-
-    // Clear highlighting
     this.#clearHighlighting();
-
-    // Re-enable live mode checkbox
-    this.liveModeTarget.checked = true;
-
-    // Reset range to default for live mode
-    this.#setRange(0, this.fileSizeValue);
-
-    // Update visual state
     this.updateStopButtonVisibility();
-
-    // Update URL with cleared filter
-    this.#updateUrlParam('filter', null);
-    this.#updateUrlParam('byte_offset', null);
-    this.#updateUrlParam('mode', null);
-    this.#updateUrlParam('start_position', null);
-    this.#updateUrlParam('end_position', null);
-
-    // Reconnect with cleared filter and live mode
+    this.#updateUrlParams({ filter: null, byte_offset: null });
+    this.#liveFilterStartedAt = this.isLiveMode() ? new Date() : null;
     this.reconnectWithNewMode();
+    this.filterInputTarget.focus();
   }
 
   stopSearch() {
@@ -257,10 +256,10 @@ export default class LogStreamerController extends Controller {
     const start = Math.max(0, byteOffset - contextBytes);
     const end = Math.min(this.fileSizeValue, byteOffset + contextBytes);
 
-    // Clear filter and switch to static mode
+    // Context around a line can only be read unfiltered, so the query is dropped
+    // here on purpose - and the mode switch is now visible on the toolbar.
     this.filterInputTarget.value = '';
-    this.modeValue = 'static';
-    this.liveModeTarget.checked = false;
+    this.#setMode('static');
 
     // Update URL with byte_offset and range
     this.#updateUrlParam('byte_offset', byteOffset);
@@ -292,16 +291,7 @@ export default class LogStreamerController extends Controller {
   }
 
   #scrollVerticallyToCenter(element) {
-    // Find the row wrapper that's a direct child of clusterize-content
-    let row = element;
-    while (row.parentElement && !row.parentElement.classList.contains('clusterize-content')) {
-      row = row.parentElement;
-    }
-
-    if (!row) return;
-
-    // Scroll into view first to ensure element is rendered
-    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    this.#rowElement(element).scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 
   #clearHighlighting() {
@@ -377,26 +367,21 @@ export default class LogStreamerController extends Controller {
     this.startSliderTarget.value = start;
     this.endSliderTarget.value = end;
 
-    // Trigger range-slider controller to update visuals
     if (this.hasRangeSliderContainerTarget) {
-      this.rangeSliderContainerTarget.dispatchEvent(new Event('input', { bubbles: true }));
+      this.rangeSliderContainerTarget.dispatchEvent(new CustomEvent('range-slider:refresh'));
     }
-
-    // Also update visuals for log-streamer
-    this.updateRangeVisuals();
   }
 
-  #handleRangeUpdate() {
-    const start = parseInt(this.startSliderTarget.value);
-    const end = parseInt(this.endSliderTarget.value);
-    const isDefaultRange = start === 0 && end === this.fileSizeValue;
+  // The slider only exists in search mode, and it only ever changes the range.
+  // It used to flip the mode as a side effect, which is how people ended up in
+  // live mode without having asked for it.
+  handleRangeUpdate(event) {
+    const { start, end } = event?.detail ?? this.#currentRange();
+    const isDefaultRange = this.#isFullRange(start, end);
 
-    this.liveModeTarget.checked = isDefaultRange;
-    this.modeValue = isDefaultRange ? 'live' : 'static';
     this.#updateUrlParams({
       start_position: isDefaultRange ? null : start,
-      end_position: isDefaultRange ? null : end,
-      mode: isDefaultRange ? null : 'static'
+      end_position: isDefaultRange ? null : end
     });
 
     // Clear byte_offset and highlighting if it falls outside the new range
@@ -412,7 +397,7 @@ export default class LogStreamerController extends Controller {
 
   resetRange() {
     this.#setRange(0, this.fileSizeValue);
-    this.#handleRangeUpdate();
+    this.handleRangeUpdate();
   }
 
   #restoreStateFromUrl() {
@@ -451,15 +436,9 @@ export default class LogStreamerController extends Controller {
     this.#setRange(start, end);
 
     // Calculate mode: check mode param, default to live
-    const modeParam = params.get('mode');
-    if (modeParam === 'static') {
-      this.modeValue = 'static';
-      this.liveModeTarget.checked = false;
-    } else {
-      // Default to live mode
-      this.modeValue = 'live';
-      this.liveModeTarget.checked = true;
-    }
+    this.modeValue = params.get('mode') === 'static' ? 'static' : 'live';
+    this.#liveFilterStartedAt = this.isLiveMode() ? new Date() : null;
+    this.#syncModeControls();
   }
 
   /**
@@ -497,7 +476,40 @@ export default class LogStreamerController extends Controller {
   /**
    * Handle successful connection
    */
+  // An empty query matches every line, so running it would stream the whole file
+  // back. Nothing is searched until something is typed.
+  #isIdleSearch() {
+    if (this.isLiveMode()) return false;
+    if (this.filterInputTarget.value.trim() !== "") return false;
+
+    // A bounded range - the slider, or the window "show around this line" opens -
+    // is a read of a known slice, not an unbounded scan, so it still runs.
+    const start = parseInt(this.startSliderTarget.value);
+    const end = parseInt(this.endSliderTarget.value);
+    return this.#isFullRange(start, end);
+  }
+
+  #syncSearchPlaceholder() {
+    if (!this.hasSearchPlaceholderTarget) return;
+    this.searchPlaceholderTarget.hidden = !this.#isIdleSearch();
+  }
+
+  #setConnectionState(status) {
+    this.#updateWebsocketStatus(status);
+    this.updateStopButtonVisibility();
+  }
+
   #handleConnected() {
+    this.#setConnectionState('connected');
+
+    if (this.#isIdleSearch()) {
+      this.isSearchFinished = true;
+      this.#hideMessage();
+      this.#updateResultsDisplay();
+      this.updateStopButtonVisibility();
+      return;
+    }
+
     const data = {
       file_path: this.filePathValue,
       filter: this.filterInputTarget.value,
@@ -509,7 +521,7 @@ export default class LogStreamerController extends Controller {
     const startSliderValue = parseInt(this.startSliderTarget.value);
     const endSliderValue = parseInt(this.endSliderTarget.value);
 
-    if (startSliderValue > 0 || endSliderValue < this.fileSizeValue) {
+    if (!this.#isFullRange(startSliderValue, endSliderValue)) {
       data.start_position = startSliderValue;
       data.end_position = endSliderValue;
     } else if (this.modeValue === 'static' && this.endPositionValue > 0) {
@@ -520,24 +532,16 @@ export default class LogStreamerController extends Controller {
 
     this.subscription.perform('initialize_watcher', data);
 
-    this.element.classList.add("log-streamer--connected");
-    this.element.classList.remove("log-streamer--disconnected", "log-streamer--rejected");
-    this.#updateWebsocketStatus('connected');
     this.updateStopButtonVisibility();
+    this.#syncSearchPlaceholder();
   }
 
   #handleDisconnected() {
-    this.element.classList.add("log-streamer--disconnected");
-    this.element.classList.remove("log-streamer--connected");
-    this.#updateWebsocketStatus('disconnected');
-    this.updateStopButtonVisibility();
+    this.#setConnectionState('disconnected');
   }
 
   #handleRejected() {
-    this.element.classList.add("log-streamer--rejected");
-    this.element.classList.remove("log-streamer--connected", "log-streamer--disconnected");
-    this.#updateWebsocketStatus('rejected');
-    this.updateStopButtonVisibility();
+    this.#setConnectionState('rejected');
   }
 
   #handleLogLines(lines) {
@@ -581,9 +585,11 @@ export default class LogStreamerController extends Controller {
     // logLine is a JSON object: {content, byte_offset, show_expand_button}
     const { content, byte_offset, show_expand_button } = logLine;
 
-    if (byte_offset && show_expand_button) {
+    const hasOffset = byte_offset != null;
+
+    if (hasOffset && show_expand_button) {
       return `<div style="display: flex; align-items: center;"><button class="onlylogs-expand-btn" data-byte-offset="${byte_offset}" data-action="click->log-streamer#handleExpandClick">+</button><pre data-byte-offset="${byte_offset}">${content}</pre></div>`;
-    } else if (byte_offset) {
+    } else if (hasOffset) {
       return `<pre data-byte-offset="${byte_offset}">${content}</pre>`;
     } else {
       return `<pre>${content}</pre>`;
@@ -591,18 +597,14 @@ export default class LogStreamerController extends Controller {
   }
 
   #handleMessage(message) {
-    this.#hideMessage();
-      if (message === '') {
-      this.messageTarget.innerHTML = "";
-    } else {
-      const loadingIcon = message.endsWith('...') ? '<span class="onlylogs-spin-animation">⟳</span>' : '';
-      this.messageTarget.innerHTML = loadingIcon + message;
-    }
+    const loadingIcon = message.endsWith('...') ? '<span class="onlylogs-spin-animation">⟳</span>' : '';
+    this.messageTarget.innerHTML = message ? loadingIcon + message : '';
   }
 
   #handleFinish(message) {
     this.messageTarget.innerHTML = message;
     this.isSearchFinished = true;
+    this.#updateResultsDisplay();
     this.updateStopButtonVisibility();
   }
 
@@ -624,9 +626,40 @@ export default class LogStreamerController extends Controller {
     this.messageTarget.innerHTML = '';
   }
 
+  // Never silent: a live tail with a query that has not matched yet has to look
+  // different from a search that came back empty, or the two are indistinguishable.
   #updateResultsDisplay() {
-    const resultsCount = this.clusterize.getRowsAmount();
-    this.resultsTarget.textContent = `Results: ${this.#formatNumber(resultsCount)}`;
+    const count = this.#formatNumber(this.clusterize.getRowsAmount());
+    const hasFilter = this.filterInputTarget.value.trim() !== '';
+    const results = this.resultsTarget;
+
+    results.classList.remove('results-text--watching', 'results-text--live', 'results-text--found');
+
+    this.#syncSearchPlaceholder();
+
+    if (this.#isIdleSearch()) {
+      results.textContent = 'No query';
+      return;
+    }
+
+    if (!this.isLiveMode()) {
+      results.textContent = `Results: ${count}`;
+      if (this.isSearchFinished) results.classList.add('results-text--found');
+      return;
+    }
+
+    if (hasFilter) {
+      results.classList.add('results-text--watching');
+      results.textContent = `⏳ watching · ${count} new since ${this.#liveFilterSinceLabel()}`;
+    } else {
+      results.classList.add('results-text--live');
+      results.textContent = `${count} lines · live`;
+    }
+  }
+
+  #liveFilterSinceLabel() {
+    const since = this.#liveFilterStartedAt || new Date();
+    return since.toTimeString().slice(0, 5);
   }
 
   #formatNumber(number) {
@@ -660,15 +693,6 @@ export default class LogStreamerController extends Controller {
     }
   }
 
-  getStatus() {
-    return {
-      isRunning: this.isRunning,
-      filePath: this.filePathValue,
-      lineCount: this.clusterize.getRowsAmount(),
-      connected: this.subscription && this.subscription.identifier
-    };
-  }
-
   #initializeClusterize() {
     this.clusterize = new window.Clusterize({
       scrollId: 'scrollArea',
@@ -682,9 +706,6 @@ export default class LogStreamerController extends Controller {
       no_data_class: 'clusterize-no-data',
       keep_parity: true,
       callbacks: {
-        clusterWillChange: () => {
-          // Optional: handle cluster change
-        },
         clusterChanged: () => {
           // Re-apply highlighting when cluster changes (for virtual scrolling).
           // The byte_offset URL param is the highlight anchor for an explore window.
@@ -698,9 +719,6 @@ export default class LogStreamerController extends Controller {
               }
             }
           }
-        },
-        scrollingProgress: (progress) => {
-          // Optional: handle scrolling progress
         }
       }
     });
@@ -745,67 +763,17 @@ export default class LogStreamerController extends Controller {
     }, 1000);
   }
 
-  // Range slider methods
-  updateRangeVisuals(event) {
-    let start = Number(this.startSliderTarget.value);
-    let end = Number(this.endSliderTarget.value);
-    const sliderMax = Number(this.startSliderTarget.max);
-    const step = Number(this.startSliderTarget.step);
+  // A range input snaps its value to `step` from `min`, so the end thumb can never
+  // land exactly on a file size that is not a multiple of the step. Anything within
+  // one step of the end is the whole file, not a range a few hundred bytes short.
+  #isFullRange(start, end) {
+    const step = Number(this.endSliderTarget.step) || 1;
 
-    // Snap to 100% if close to max (within 2% or one step)
-    const threshold = Math.max(sliderMax * 0.02, step);
-    if (end > sliderMax - threshold) {
-      end = sliderMax;
-      this.endSliderTarget.value = end;
-    }
-    if (start > sliderMax - threshold) {
-      start = sliderMax;
-      this.startSliderTarget.value = start;
-    }
-
-    // Enforce start <= end
-    if (start > end) {
-      [start, end] = [end, start];
-      this.startSliderTarget.value = start;
-      this.endSliderTarget.value = end;
-    }
-
-    this.#updateRangeDisplay(start, end);
-
-    if (event?.type === 'change') {
-      const step = this.#stepForRange(start, end);
-      if (step !== this.lastRangeStep) {
-        this.lastRangeStep = step;
-        this.startSliderTarget.step = step;
-        this.endSliderTarget.step = step;
-      }
-
-      this.rangeSliderContainerTarget.dispatchEvent(new CustomEvent("range:update", { detail: { start, end } }));
-    }
+    return start <= 0 && end >= this.fileSizeValue - step;
   }
 
-  #stepForRange(start, end) {
-    const selectedBytes = Math.max(end - start, 1);
-    const step = 10 ** Math.ceil(Math.log10(selectedBytes / 200));
-
-    return Math.max(1, step);
-  }
-
-  #updateRangeDisplay(start, end) {
-    const sliderMax = Number(this.startSliderTarget.max);
-
-    this.rangeSliderContainerTarget.style.setProperty("--range-start-percent", `${(start / sliderMax) * 100}%`);
-    this.rangeSliderContainerTarget.style.setProperty("--range-end-percent", `${(end / sliderMax) * 100}%`);
-
-    this.startOutputTarget.textContent = `${this.#formatPercent(start)}%`;
-    this.endOutputTarget.textContent = `${this.#formatPercent(end)}%`;
-  }
-
-  #formatPercent(value) {
-    // Show 100% if within 1% of file size
-    if (value >= this.fileSizeValue * 0.99) return '100.0';
-    if (value <= 0) return '0.0';
-    const percent = (value / this.fileSizeValue) * 100;
-    return percent.toFixed(1);
+  // The live values of the two handles.
+  #currentRange() {
+    return { start: Number(this.startSliderTarget.value), end: Number(this.endSliderTarget.value) };
   }
 }

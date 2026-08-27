@@ -1,11 +1,32 @@
 <style>
     .onlylogs-log-container {
+        --ol-surface: #ffffff;
+        --ol-toolbar-bg: #fbfcfe;
+        --ol-border: #dde3ec;
+        --ol-control-border: #b9c4d3;
+        --ol-hover: #eef2f8;
+        --ol-ink: #12171f;
+        --ol-ink-2: #2c3441;
+        --ol-ink-3: #58626f;
+        --ol-muted: #8a95a3;
+        --ol-faint: #97a1af;
+        --ol-accent: #2563eb;
+        --ol-accent-soft: #e8f0fe;
+        --ol-accent-border: #9dbcf7;
+        --ol-accent-ink: #1a4fc4;
+        --ol-live: #16a34a;
+        --ol-alert: #dc2626;
+        --ol-amber: #b7791f;
+        --ol-radius: 3px;
+
         background-color: var(--onlylogs-bg-color, none);
         width: var(--onlylogs-width, 100%);
         height: var(--onlylogs-height, 100%); /* Take full height of parent container */
         min-height: var(--onlylogs-min-height, 400px);
         display: grid;
-        grid-template-rows: auto var(--onlylogs-toolbar-height, 80px);
+        /* The toolbar sizes itself so a wrapping row can never clip; the log pane
+           takes whatever is left. Hosts can still pin a height with the variable. */
+        grid-template-rows: 1fr var(--onlylogs-toolbar-height, auto);
 
         font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
         font-size: var(--onlylogs-font-size, 0.8rem);
@@ -18,6 +39,9 @@
         .onlylogs-log-lines {
             overflow-y: auto;
             overflow-x: auto;
+            background-color: var(--ol-surface);
+            color: var(--ol-ink-2);
+            padding: 0.35rem 0.2rem;
 
             pre {
                 overflow: visible;
@@ -43,14 +67,6 @@
         .clusterize-content {
             outline: 0;
             min-width: max-content;
-        }
-
-        .color-success {
-            color: green;
-        }
-
-        .color-error {
-            color: red;
         }
 
         .fw-bold {
@@ -91,7 +107,7 @@
 
         pre {
             margin: 0 !important;
-            padding: 0.2rem;
+            padding: 0.1rem 0.45rem;
             word-break: break-word;  /* allow breaking long tokens like UUIDs/SQL */
             white-space: pre;
 
@@ -142,21 +158,110 @@
 
         .onlylogs-log-toolbar {
           flex-shrink: 0;
-          padding: 0.5rem;
+          padding: 0.5rem 0.65rem;
           display: flex;
-          flex-wrap: wrap;
-          align-items: center;
-          gap: 0.75rem;
+          flex-direction: column;
+          gap: 0.4rem;
+          background-color: var(--ol-toolbar-bg);
+          border-top: 1px solid var(--ol-border);
+          color: var(--ol-ink-3);
+          }
 
+          /* Controls on the first row, state on the second, so what you can change
+             never has to compete for space with what the viewer is telling you. */
+          .onlylogs-toolbar-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.75rem;
+            min-height: 1.6rem;
+          }
 
+          .onlylogs-toolbar-row--status {
+            gap: 0.4rem;
+          }
 
+          .onlylogs-toolbar-row__end {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-left: auto;
+          }
+
+          .status-message:not(:empty)::before {
+            content: "· ";
+          }
+
+          /* The toolbar is a different shape in each mode: the range slider is
+             meaningless while tailing, autoscroll is meaningless while searching. */
+          &[data-log-streamer-mode-value="live"] [data-onlylogs-mode="static"],
+          &[data-log-streamer-mode-value="static"] [data-onlylogs-mode="live"] {
+            display: none;
+          }
+
+          .onlylogs-mode-switch {
+            display: inline-flex;
+            border: 1px solid var(--ol-control-border);
+            border-radius: 4px;
+            overflow: hidden;
+            background-color: var(--ol-surface);
+            flex-shrink: 0;
+          }
+
+          .onlylogs-mode-switch__button {
+            font: inherit;
+            font-weight: 500;
+            border: 0;
+            background: transparent;
+            color: var(--ol-ink-3);
+            padding: 0.25rem 0.6rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+            transition: background-color 0.15s, color 0.15s;
+
+            & + & {
+              border-left: 1px solid var(--ol-border);
+            }
+
+            &:hover {
+              background-color: var(--ol-hover);
+            }
+
+            &[aria-pressed="true"] {
+              color: #fff;
+            }
+          }
+
+          &[data-log-streamer-mode-value="live"] .onlylogs-mode-switch__button[data-onlylogs-mode-button="live"] {
+            background-color: var(--ol-live);
+          }
+
+          &[data-log-streamer-mode-value="static"] .onlylogs-mode-switch__button[data-onlylogs-mode-button="static"] {
+            background-color: var(--ol-accent);
+          }
+
+          .search-whole-file-button {
+            font: inherit;
+            border: 1px solid var(--ol-accent-border);
+            background-color: var(--ol-accent-soft);
+            color: var(--ol-accent-ink);
+            border-radius: var(--ol-radius);
+            padding: 0.22rem 0.5rem;
+            cursor: pointer;
+            transition: background-color 0.15s;
+
+            &:hover {
+              background-color: #d7e5fd;
+            }
           }
           .clear-filter-button {
             position: absolute;
-            right: 0.25rem;
+            right: 0.2rem;
             background: none;
             border: none;
-            color: #666;
+            color: var(--ol-muted);
             cursor: pointer;
             font-size: 0.8rem;
             padding: 0;
@@ -175,16 +280,15 @@
           }
 
           .grep-warning {
-            color: #f59e0b;
+            color: var(--ol-amber);
             font-size: 1.2em;
             cursor: help;
-            margin-left: auto;
           }
 
           .file-size {
-            color: #666;
+            color: var(--ol-muted);
             cursor: help;
-            margin-left: auto;
+            white-space: nowrap;
           }
 
           .websocket-status {
@@ -192,17 +296,17 @@
             border-radius: 50%;
             background-color: rgba(255, 255, 255, 0.1);
             
-            &--connected {
+            &.websocket-status--connected {
               background-color: rgba(34, 197, 94, 0.2);
               animation: pulse 2s infinite;
             }
-            
-            &--disconnected {
+
+            &.websocket-status--disconnected {
               background-color: rgba(239, 68, 68, 0.2);
               animation: pulse 2s infinite;
             }
-            
-            &--rejected {
+
+            &.websocket-status--rejected {
               background-color: rgba(245, 158, 11, 0.2);
               animation: pulse 2s infinite;
             }
@@ -214,11 +318,13 @@
           }
 
           .stop-search-button {
-            background-color: #dc2626;
+            font: inherit;
+            background-color: var(--ol-alert);
             color: white;
-            border: none;
-            padding: 0.25rem 0.5rem;
-            border-radius: 0.25rem;
+            border: 1px solid var(--ol-alert);
+            padding: 0.22rem 0.5rem;
+            border-radius: var(--ol-radius);
+            cursor: pointer;
             transition: background-color 0.2s;
             
             &:hover {
@@ -253,6 +359,10 @@
           /* Toolbar utilities */
           .toolbar-label {
             margin-bottom: 0;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            color: var(--ol-ink-3);
           }
 
           .filter-input-wrapper {
@@ -262,61 +372,133 @@
           }
 
           .filter-input-wrapper input {
-            padding-right: 1.5rem;
-          }
+            font: inherit;
+            padding: 0.22rem 1.4rem 0.22rem 0.4rem;
+            border: 1px solid var(--ol-control-border);
+            border-radius: var(--ol-radius);
+            background-color: var(--ol-surface);
+            color: var(--ol-ink);
+            width: 11rem;
 
-          .clear-button-wrapper {
-            width: 67px;
+            &::placeholder {
+              color: var(--ol-muted);
+            }
+
+            &:focus-visible {
+              outline: 2px solid var(--ol-accent);
+              outline-offset: 1px;
+            }
           }
 
           .results-text {
-            color: #666;
+            color: var(--ol-ink-3);
+            white-space: nowrap;
+            font-variant-numeric: tabular-nums;
+
+            &.results-text--watching {
+              color: var(--ol-amber);
+            }
+
+            &.results-text--live,
+            &.results-text--found {
+              color: var(--ol-live);
+            }
+          }
+
+          /* The finished/watching state colours the whole status line, not just the count. */
+          .onlylogs-toolbar-row--status:has(.results-text--watching) .status-message {
+            color: var(--ol-amber);
+          }
+
+          .onlylogs-toolbar-row--status:has(.results-text--found) .status-message,
+          .onlylogs-toolbar-row--status:has(.results-text--live) .status-message {
+            color: var(--ol-live);
           }
 
           .hidden-button {
             display: none;
           }
 
+          /* Sits over the (empty) log pane while search has no query. */
+          .onlylogs-search-placeholder {
+            /* Shares the log pane's grid cell rather than being positioned over
+               the container, which would also cover the toolbar. */
+            grid-row: 1;
+            grid-column: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 0.35rem;
+            text-align: center;
+            padding: 1rem;
+            color: var(--ol-muted);
+            background-color: var(--ol-surface);
+            pointer-events: none;
+
+            &[hidden] {
+              display: none;
+            }
+          }
+
+          .onlylogs-search-placeholder__title {
+            margin: 0;
+            font-weight: 600;
+            color: var(--ol-ink-3);
+          }
+
+          .onlylogs-search-placeholder__hint {
+            margin: 0;
+            max-width: 32rem;
+          }
+
+          /* Claims whatever the row has left over: a wider track is a finer
+             scrubber over the byte range. */
           .range-slider-wrapper {
             display: flex;
             align-items: center;
             gap: 0.5rem;
+            flex: 1 1 250px;
             min-width: 250px;
-            flex-shrink: 0;
+            max-width: 30rem;
           }
 
           .range-slider__container {
             display: flex;
             align-items: center;
-            gap: 0.4rem;
+            gap: 0.45rem;
             flex: 1;
-            height: 1.5rem;
           }
 
           .range-slider__label {
-            font-size: 0.75rem;
             font-weight: 500;
             white-space: nowrap;
             flex-shrink: 0;
           }
 
+          /* Track and percentages sit on one line so the group is the same height
+             as every other control and centres on the toolbar's baseline. */
           .range-slider__slider {
-            display: grid;
-            gap: 0.15rem;
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
             flex: 1;
           }
 
           .range-slider__values {
             display: flex;
             gap: 0.15rem;
-            font-size: 0.6rem;
+            color: var(--ol-muted);
             font-variant-numeric: tabular-nums;
-            justify-content: center;
+            white-space: nowrap;
+            flex-shrink: 0;
           }
 
           .range-slider__track {
             position: relative;
             height: var(--range-thumb-size);
+            flex: 1;
+            min-width: 5rem;
           }
 
           .range-slider__track::before,
@@ -376,11 +558,11 @@
           }
 
           .reset-range-button {
-            background-color: transparent;
-            color: #666;
-            border: 1px solid #ccc;
+            background-color: var(--ol-surface);
+            color: var(--ol-ink-2);
+            border: 1px solid var(--ol-control-border);
             padding: 0.3rem 0.5rem;
-            border-radius: 2px;
+            border-radius: var(--ol-radius);
             cursor: pointer;
             font-size: 0.8rem;
             transition: background-color 0.2s;
@@ -390,13 +572,28 @@
             flex-shrink: 0;
 
             &:hover {
-              background-color: #f0f0f0;
+              background-color: var(--ol-hover);
             }
 
             &:active {
-              background-color: #e0e0e0;
+              background-color: #e0e6ee;
+            }
+          }
+
+          .clear-logs-button {
+            font: inherit;
+            line-height: 1;
+            background-color: var(--ol-surface);
+            color: var(--ol-ink-2);
+            border: 1px solid var(--ol-control-border);
+            border-radius: var(--ol-radius);
+            padding: 0.22rem 0.5rem;
+            cursor: pointer;
+            transition: background-color 0.15s;
+
+            &:hover {
+              background-color: var(--ol-hover);
             }
           }
         }
-    }
 </style>

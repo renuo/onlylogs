@@ -95,6 +95,28 @@ module Onlylogs
       assert result[:content].present?
     end
 
+    test "byte offsets in an unfiltered range read point at the true line starts" do
+      lines = Array.new(12) { |i| "alpha-#{i}-#{"x" * (10 + i)}" }
+      content = lines.map { |line| "#{line}\n" }.join
+      ::File.write(@temp_file.path, content)
+
+      # Start inside the first line, so the reader has a partial line to skip.
+      subscribe
+      perform :initialize_watcher, initialize_data(start_position: 3, end_position: content.bytesize)
+
+      sent = transmissions.select { |t| t["action"] == "append_logs" }.flat_map { |t| t["lines"] }
+      refute_empty sent, "expected the range read to send lines"
+
+      sent.each do |line|
+        offset = line["byte_offset"]
+        text = line["content"]
+
+        assert_equal text, content.byteslice(offset, text.bytesize),
+          "line #{text.inspect} is labelled with offset #{offset}, which points at " \
+          "#{content.byteslice(offset, text.bytesize).inspect}"
+      end
+    end
+
     private
 
     test "a filtered search that outruns the configured timeout finishes saying so" do

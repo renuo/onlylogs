@@ -168,56 +168,18 @@ module Onlylogs
         last_byte_offset = nil
         line_count = 0
 
+        show_expand_button = filter.present?
+
         Rails.logger.silence(Logger::ERROR) do
-          skip_first = start_position > 0
-
-          if filter.present?
-            # Use grep for filtered search
-            @log_file.grep(filter, regexp_mode: regexp_mode, start_position: start_position,
-              end_position: end_position, timeout: Onlylogs.search_timeout) do |result|
-              break if @batch_sender.nil? || @log_watcher_running == false
-
-              # Skip first line if start_position > 0 (line is cut off at byte boundary)
-              if skip_first
-                skip_first = false
-                next
-              end
-
-              # Result is a hash with {byte_offset, content}
-              byte_offset = result[:byte_offset]
-              log_line = result[:content]
-
-              # Buffer previous line and skip it to avoid cut-off lines at boundaries
-              if last_line
-                @batch_sender.add_line(render_log_line(last_line, byte_offset: last_byte_offset, show_expand_button: true))
-                line_count += 1
-              end
-              last_line = log_line
-              last_byte_offset = byte_offset
+          each_matching_line(file_path, filter, regexp_mode, start_position, end_position) do |log_line, byte_offset|
+            # Buffer previous line and skip it to avoid cut-off lines at boundaries
+            if last_line
+              @batch_sender.add_line(render_log_line(last_line, byte_offset: last_byte_offset,
+                show_expand_button: show_expand_button))
+              line_count += 1
             end
-          else
-            # No filter - read all lines directly (skip grep)
-            # Still need byte_offset for highlighting when expanding around a line
-            current_byte_offset = start_position
-            read_byte_range(file_path, start_position, end_position) do |log_line|
-              break if @batch_sender.nil? || @log_watcher_running == false
-
-              # Skip first line if start_position > 0 (line is cut off at byte boundary)
-              if skip_first
-                skip_first = false
-                next
-              end
-
-              # Buffer previous line and skip it to avoid cut-off lines at boundaries
-              if last_line
-                @batch_sender.add_line(render_log_line(last_line, byte_offset: last_byte_offset))
-                line_count += 1
-              end
-              last_line = log_line
-              last_byte_offset = current_byte_offset
-              # Account for line content plus newline character (2 bytes for \r\n or 1 for \n)
-              current_byte_offset += log_line.bytesize + 1
-            end
+            last_line = log_line
+            last_byte_offset = byte_offset
           end
         end
 
@@ -249,6 +211,49 @@ module Onlylogs
       end
     end
 
+    # Yields [line, byte_offset] over the requested slice: through grep when there
+    # is a filter, straight off disk when there is not. Either way the offsets are
+    # the real ones, so "show around this line" can re-centre on them.
+    #
+    # A range that starts mid-line opens with a fragment of a line, which is
+    # dropped - but its bytes still count towards every offset after it.
+    def each_matching_line(file_path, filter, regexp_mode, start_position, end_position)
+      skip_first = start_position > 0
+
+      if filter.present?
+        @log_file.grep(filter, regexp_mode: regexp_mode, start_position: start_position,
+          end_position: end_position, timeout: Onlylogs.search_timeout) do |result|
+          break if reading_stopped?
+
+          if skip_first
+            skip_first = false
+            next
+          end
+
+          yield result[:content], result[:byte_offset]
+        end
+      else
+        offset = start_position
+
+        read_byte_range(file_path, start_position, end_position) do |log_line, raw_bytesize|
+          break if reading_stopped?
+
+          if skip_first
+            skip_first = false
+            offset += raw_bytesize
+            next
+          end
+
+          yield log_line, offset
+          offset += raw_bytesize
+        end
+      end
+    end
+
+    def reading_stopped?
+      @batch_sender.nil? || @log_watcher_running == false
+    end
+
     def read_byte_range(file_path, start_position, end_position)
       file_size = ::File.size(file_path)
       range_size = (end_position || file_size) - start_position
@@ -256,7 +261,7 @@ module Onlylogs
       return if start_position < 0 || range_size <= 0 || start_position >= file_size
 
       ::File.read(file_path, range_size, start_position).each_line do |line|
-        yield line.chomp
+        yield line.chomp, line.bytesize
       end
     rescue => e
       Rails.logger.error "Error reading byte range: #{e.message}"

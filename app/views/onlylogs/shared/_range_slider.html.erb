@@ -1,8 +1,10 @@
 <%# app/views/onlylogs/shared/_range_slider.html.erb %>
-<%# locals: (start_name:, end_name:, start_value:, end_value:, min: 0, max: 100, step: 1, label: nil, show_reset: false) %>
+<%# locals: (start_name:, end_name:, start_value:, end_value:, min: 0, max: 100, step: 1, label: nil) %>
 
 <div class="range-slider range-slider--double"
+     data-controller="range-slider"
      data-log-streamer-target="rangeSliderContainer"
+     data-action="range-slider:change->log-streamer#handleRangeUpdate range-slider:refresh->range-slider#refresh"
      style="--range-min: <%= min %>; --range-max: <%= max %>; --range-start: <%= start_value %>; --range-end: <%= end_value %>;">
 
   <div class="range-slider__container">
@@ -24,7 +26,8 @@
                step="<%= step %>"
                value="<%= start_value %>"
                data-log-streamer-target="startSlider"
-               data-action="input->log-streamer#updateRangeVisuals input->range-slider#updateVisuals change->log-streamer#updateRangeVisuals change->range-slider#updateVisuals">
+               data-range-slider-target="startInput"
+               data-action="input->range-slider#updateVisuals change->range-slider#updateVisuals">
 
         <input class="range-slider__input range-slider__input--end"
                type="range"
@@ -34,13 +37,14 @@
                step="<%= step %>"
                value="<%= end_value %>"
                data-log-streamer-target="endSlider"
-               data-action="input->log-streamer#updateRangeVisuals input->range-slider#updateVisuals change->log-streamer#updateRangeVisuals change->range-slider#updateVisuals">
+               data-range-slider-target="endInput"
+               data-action="input->range-slider#updateVisuals change->range-slider#updateVisuals">
       </div>
 
       <div class="range-slider__values">
-        <output data-log-streamer-target="startOutput"><%= start_value %></output>
+        <output data-range-slider-target="startOutput"></output>
         <span>–</span>
-        <output data-log-streamer-target="endOutput"><%= end_value %></output>
+        <output data-range-slider-target="endOutput"></output>
       </div>
     </div>
   </div>

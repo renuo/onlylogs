@@ -90,6 +90,7 @@ export default class TextSelectionController extends Controller {
       
       this.filterInputTarget.value = this.selectedText
       this.filterInputTarget.dispatchEvent(new Event('input', { bubbles: true }))
+      this.dispatch("search")
       this.hideButton()
       window.getSelection().removeAllRanges()
     }
