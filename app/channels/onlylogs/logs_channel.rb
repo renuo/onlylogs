@@ -16,27 +16,8 @@ module Onlylogs
       @last_initialize_params = data.dup
       cleanup_existing_operations
 
-      # Decrypt and verify the file path
-      begin
-        encrypted_file_path = data["file_path"]
-        if encrypted_file_path.present?
-          file_path = Onlylogs::SecureFilePath.decrypt(encrypted_file_path)
-
-          # Verify the decrypted path is still allowed
-          unless Onlylogs.file_path_permitted?(file_path)
-            Rails.logger.error "Onlylogs: Attempted to access non-allowed file: #{file_path}"
-            transmit({action: "error", content: "Access denied"})
-            return
-          end
-        else
-          # Fallback to default if no encrypted path provided
-          file_path = Onlylogs.default_log_file_path
-        end
-      rescue Onlylogs::SecureFilePath::SecurityError => e
-        Rails.logger.error "Onlylogs: Security violation - #{e.message}"
-        transmit({action: "error", content: "Access denied"})
-        return
-      end
+      file_path = authorized_file_path(data["file_path"])
+      return unless file_path
 
       # Check if the file is a text file
       unless Onlylogs::File.text_file?(file_path)
@@ -71,6 +52,32 @@ module Onlylogs
     end
 
     private
+
+    # Decrypts and authorises the requested file. Returns nil (after transmitting
+    # an error) when there is no token, when it cannot be decrypted, or when the
+    # decrypted path is not on the configured allow-list — the three ways a client
+    # can ask for something it is not entitled to stream.
+    def authorized_file_path(encrypted_file_path)
+      if encrypted_file_path.blank?
+        Rails.logger.error "Onlylogs: initialize_watcher without a file path token; refusing to stream"
+        transmit({action: "error", content: "Access denied"})
+        return nil
+      end
+
+      file_path = Onlylogs::SecureFilePath.decrypt(encrypted_file_path)
+
+      unless Onlylogs.file_path_permitted?(file_path)
+        Rails.logger.error "Onlylogs: Attempted to access non-allowed file: #{file_path}"
+        transmit({action: "error", content: "Access denied"})
+        return nil
+      end
+
+      file_path
+    rescue Onlylogs::SecureFilePath::SecurityError => e
+      Rails.logger.error "Onlylogs: Security violation - #{e.message}"
+      transmit({action: "error", content: "Access denied"})
+      nil
+    end
 
     def cleanup_existing_operations
       if @batch_sender
