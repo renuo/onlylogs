@@ -1,9 +1,10 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# Continuous log writer - appends fake logs to the dummy app's log, for testing.
-# Usage: ./bin/continuous_log_writer [logs_per_batch] [interval_seconds]
-# Example: ./bin/continuous_log_writer 5 1  (5 logs every 1 second)
+# Continuous log writer - appends fake Rails request logs (with ANSI colors)
+# to the dummy app's log, for testing.
+# Usage: ./bin/continuous_log_writer [requests_per_batch] [interval_seconds]
+# Example: ./bin/continuous_log_writer 5 1  (5 requests every 1 second)
 
 require_relative "../lib/onlylogs/continuous_log_writer"
 
@@ -11,7 +12,7 @@ log_file = File.expand_path("../test/dummy/log/development.log", __dir__)
 logs_per_batch = (ARGV[0] || 1).to_i
 interval = (ARGV[1] || 2).to_i
 
-puts "📝 Writing #{logs_per_batch} log(s) to #{log_file} every #{interval} second(s)..."
+puts "📝 Writing #{logs_per_batch} request(s) to #{log_file} every #{interval} second(s)..."
 puts "Press Ctrl+C to stop"
 puts
 
