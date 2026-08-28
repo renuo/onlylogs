@@ -168,17 +168,18 @@ module Onlylogs
       nil
     end
 
+    MATCH_TIMEOUT = 0.1 # seconds
+
     def self.match_line?(line, string, regexp_mode: false)
       # Strip ANSI color codes from the line before matching
       stripped_line = line.gsub(/\e\[[0-9;]*m/, "")
       # Normalize multiple spaces to single spaces
       normalized_line = stripped_line.gsub(/\s+/, " ")
 
-      if regexp_mode
-        normalized_line.match?(string)
-      else
-        normalized_line.match?(Regexp.escape(string))
-      end
+      pattern = regexp_mode ? string : Regexp.escape(string)
+      normalized_line.match?(Regexp.new(pattern, timeout: MATCH_TIMEOUT))
+    rescue ::RegexpError
+      false
     end
   end
 end
