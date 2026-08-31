@@ -74,20 +74,6 @@
             <span>🔍 <u>S</u>earch</span>
           </button>
         </div>
-        <div>
-          <label class="toolbar-label">
-            <span data-onlylogs-mode="live">Follow:</span>
-            <span data-onlylogs-mode="static">Query:</span>
-            <input id="autoscroll" type="checkbox" <%= autoscroll ? "checked" : "" %> name="autoscroll" data-log-streamer-target="autoscroll" data-keyboard-shortcuts-target="autoscroll" data-action="change->log-streamer#toggleAutoScroll">
-            <u>A</u>utoscroll
-          </label>
-        </div>
-        <div>
-          <label class="toolbar-label">
-            <input id="regexpMode" type="checkbox" <%= regexp_mode ? "checked" : "" %> name="regexpMode" data-log-streamer-target="regexpMode" data-text-selection-target="regexpMode" data-action="change->log-streamer#toggleRegexpMode">
-            <u>R</u>egexp Mode
-          </label>
-        </div>
         <div data-controller="queries"
              data-queries-log-file-path-value="<%= encrypted_log_file_path %>"
              data-queries-endpoint-value="<%= onlylogs.queries_path %>"
