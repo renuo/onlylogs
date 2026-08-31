@@ -164,10 +164,11 @@ class Onlylogs::QueryTest < ActiveSupport::TestCase
   test "the unique index rejects duplicate names regardless of case" do
     @log_file.queries.create!(name: "Duplicate", filter: "ERROR")
 
-    # insert_all skips validations, so this reaches the index directly - the
-    # path a request that loses the uniqueness race would take.
+    # insert_all! skips validations, so this reaches the index directly - the
+    # path a request that loses the uniqueness race would take. The bang matters:
+    # plain insert_all is ON CONFLICT DO NOTHING and would swallow the violation.
     assert_raises ActiveRecord::RecordNotUnique do
-      @log_file.queries.insert_all(
+      @log_file.queries.insert_all!(
         [{name: "duplicate", filter: "WARN", created_at: Time.current, updated_at: Time.current}]
       )
     end
