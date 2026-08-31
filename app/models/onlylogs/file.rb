@@ -1,6 +1,4 @@
 module Onlylogs
-  class Error < StandardError; end
-
   class File
     attr_reader :path, :last_position
 
@@ -8,6 +6,10 @@ module Onlylogs
       self.path = path
       self.last_position = last_position
       validate!
+    end
+
+    def queries
+      QueryDatabase.model_for(path).order(created_at: :desc, id: :desc)
     end
 
     def go_to_position(position)

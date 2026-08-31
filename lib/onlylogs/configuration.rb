@@ -4,7 +4,7 @@ module Onlylogs
   class Configuration
     attr_accessor :log_file_patterns, :default_log_file_path, :basic_auth_user, :basic_auth_password,
       :parent_controller, :disable_basic_authentication, :ripgrep_enabled, :editor,
-      :max_line_matches, :search_timeout
+      :max_line_matches, :search_timeout, :queries_database_dir
 
     # Seconds a viewer search may run before it is stopped. Bounded by default:
     # a search holds a CPU for as long as it runs, and an unbounded one over a
@@ -24,6 +24,7 @@ module Onlylogs
       @editor = nil
       @max_line_matches = 100000
       @search_timeout = DEFAULT_SEARCH_TIMEOUT
+      @queries_database_dir = ".onlylogs"
     end
 
     def configure
