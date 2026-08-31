@@ -18,6 +18,11 @@ require "onlylogs/http_logger"
 # loader.setup
 
 module Onlylogs
+  # Defined here rather than in an autoloaded file: these are referenced from
+  # class bodies (rescue_from, subclassing), which Zeitwerk cannot resolve
+  # without a matching file of its own.
+  class Error < StandardError; end
+
   class ForbiddenPathError < StandardError; end
 
   if defined?(Importmap)

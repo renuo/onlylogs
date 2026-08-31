@@ -20,9 +20,17 @@ export default class QueriesController extends Controller {
     }
 
     // Close dropdown when clicking outside
-    document.addEventListener("click", (e) => this.#handleDocumentClick(e));
+    this.closeOnOutsideClick = (e) => this.#handleDocumentClick(e);
+    document.addEventListener("click", this.closeOnOutsideClick);
 
     this.loadQueries();
+  }
+
+  disconnect() {
+    if (this.closeOnOutsideClick) {
+      document.removeEventListener("click", this.closeOnOutsideClick);
+      this.closeOnOutsideClick = null;
+    }
   }
 
   get logStreamerController() {
@@ -131,8 +139,8 @@ export default class QueriesController extends Controller {
     // Update filter and regexp mode in log streamer
     if (this.logStreamerController) {
       this.logStreamerController.filterInputTarget.value = query.filter;
-      this.logStreamerController.regexpModeValue = query.regexp_mode;
       this.logStreamerController.regexpModeTarget.checked = query.regexp_mode;
+      this.logStreamerController.toggleRegexpMode();
 
       // Trigger filter application
       this.logStreamerController.applyFilter();
@@ -192,7 +200,10 @@ export default class QueriesController extends Controller {
       );
 
       if (!response.ok) {
+        // Failing silently here is indistinguishable from a file that genuinely
+        // has no saved queries - the dropdown just reads "No saved queries".
         console.error("Failed to load queries");
+        this.#showMessage("Could not load saved queries", "error");
         return;
       }
 
@@ -201,6 +212,7 @@ export default class QueriesController extends Controller {
       this.#updateQueriesList();
     } catch (error) {
       console.error("Error loading queries:", error);
+      this.#showMessage("Could not load saved queries", "error");
     }
   }
 

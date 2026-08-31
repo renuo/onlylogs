@@ -88,6 +88,16 @@ module Onlylogs
       assert_not_equal 999, response.parsed_body["id"]
     end
 
+    test "create treats explicit nulls as the column defaults" do
+      post "/onlylogs/queries",
+        params: {log_file_path: @encrypted_path, name: "Nulls", filter: nil, regexp_mode: nil},
+        as: :json
+
+      assert_response :created
+      assert_equal "", response.parsed_body["filter"]
+      assert_equal false, response.parsed_body["regexp_mode"]
+    end
+
     test "create returns unprocessable entity for a blank name" do
       post "/onlylogs/queries",
         params: {log_file_path: @encrypted_path, name: "", filter: "ERROR"},
@@ -134,6 +144,13 @@ module Onlylogs
 
       assert_response :not_found
       assert_predicate response.parsed_body["error"], :present?
+    end
+
+    test "show does not disclose server paths when the query is missing" do
+      get "/onlylogs/queries/123456", params: {log_file_path: @encrypted_path}
+
+      assert_response :not_found
+      assert_not_includes response.body, @temp_dir
     end
 
     # update
@@ -203,6 +220,16 @@ module Onlylogs
 
       assert_response :bad_request
       assert_predicate response.parsed_body["error"], :present?
+    end
+
+    test "returns not found for a permitted log file that no longer exists" do
+      missing_path = ::File.join(@temp_dir, "rotated-away.log")
+      assert Onlylogs.file_path_permitted?(missing_path)
+
+      get "/onlylogs/queries", params: {log_file_path: SecureFilePath.encrypt(missing_path)}
+
+      assert_response :not_found
+      assert_not_includes response.body, @temp_dir
     end
 
     test "returns forbidden for a path outside the permitted patterns" do

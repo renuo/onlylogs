@@ -5,7 +5,9 @@ module Onlylogs
     before_action :set_log_file
 
     rescue_from(ActiveRecord::RecordInvalid) { |e| render_invalid(e.record) }
-    rescue_from(ActiveRecord::RecordNotFound) { |e| render_error(e.message, :not_found) }
+    rescue_from(ActiveRecord::RecordNotFound) { render_error("Query not found", :not_found) }
+    rescue_from(Onlylogs::Error) { render_error("Log file not found", :not_found) }
+    rescue_from(QueryDatabase::UnavailableError) { |e| render_error(e.message, :service_unavailable) }
     rescue_from(ForbiddenPathError) { |e| render_error(e.message, :forbidden) }
     rescue_from(SecureFilePath::SecurityError) { |e| render_error(e.message, :bad_request) }
 

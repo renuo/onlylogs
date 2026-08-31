@@ -1,6 +1,4 @@
 module Onlylogs
-  class Error < StandardError; end
-
   class File
     attr_reader :path, :last_position
 
