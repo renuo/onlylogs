@@ -72,13 +72,20 @@ class Onlylogs::QueryTest < ActiveSupport::TestCase
     assert_equal ["Query 1", "Query 2", "Query 3"], @log_file.queries.pluck(:name).sort
   end
 
-  test "list the most recently updated queries first" do
-    oldest = @log_file.queries.create(name: "Oldest", filter: "ERROR")
-    newest = @log_file.queries.create(name: "Newest", filter: "WARN")
+  test "list the newest queries first" do
+    older = @log_file.queries.create!(name: "Older", filter: "ERROR")
+    newer = @log_file.queries.create!(name: "Newer", filter: "WARN")
 
-    oldest.touch
+    assert_equal [newer.id, older.id], @log_file.queries.ids
+  end
 
-    assert_equal [oldest.id, newest.id], @log_file.queries.ids
+  test "editing a query does not move it in the list" do
+    older = @log_file.queries.create!(name: "Older", filter: "ERROR")
+    newer = @log_file.queries.create!(name: "Newer", filter: "WARN")
+
+    older.update!(filter: "INFO")
+
+    assert_equal [newer.id, older.id], @log_file.queries.ids
   end
 
   test "log files in the same directory share their queries" do
@@ -152,6 +159,18 @@ class Onlylogs::QueryTest < ActiveSupport::TestCase
 
     assert_not_predicate query, :persisted?
     assert_predicate query.errors[:filter], :any?
+  end
+
+  test "the unique index rejects duplicate names regardless of case" do
+    @log_file.queries.create!(name: "Duplicate", filter: "ERROR")
+
+    # insert_all skips validations, so this reaches the index directly - the
+    # path a request that loses the uniqueness race would take.
+    assert_raises ActiveRecord::RecordNotUnique do
+      @log_file.queries.insert_all(
+        [{name: "duplicate", filter: "WARN", created_at: Time.current, updated_at: Time.current}]
+      )
+    end
   end
 
   test "reject a duplicate query name regardless of case" do

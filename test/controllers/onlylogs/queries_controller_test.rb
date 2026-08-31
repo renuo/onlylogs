@@ -56,7 +56,7 @@ module Onlylogs
       assert_equal [], response.parsed_body["queries"]
     end
 
-    test "index returns the saved queries most recently updated first" do
+    test "index returns the newest saved queries first" do
       create_query(name: "Older", filter: "ERROR")
       create_query(name: "Newer", filter: "WARN")
 
@@ -69,9 +69,7 @@ module Onlylogs
     # create
 
     test "create saves a query and returns it" do
-      post "/onlylogs/queries",
-        params: {log_file_path: @encrypted_path, name: "Errors", filter: "ERROR", regexp_mode: true},
-        as: :json
+      post_query(name: "Errors", filter: "ERROR", regexp_mode: true)
 
       assert_response :created
       assert_equal "Errors", response.parsed_body["name"]
@@ -80,28 +78,28 @@ module Onlylogs
     end
 
     test "create ignores attributes that are not permitted" do
-      post "/onlylogs/queries",
-        params: {log_file_path: @encrypted_path, name: "Errors", filter: "ERROR", id: 999},
-        as: :json
+      post_query(name: "Errors", filter: "ERROR", id: 999)
 
       assert_response :created
       assert_not_equal 999, response.parsed_body["id"]
     end
 
     test "create treats explicit nulls as the column defaults" do
-      post "/onlylogs/queries",
-        params: {log_file_path: @encrypted_path, name: "Nulls", filter: nil, regexp_mode: nil},
-        as: :json
+      post_query(name: "Nulls", filter: nil, regexp_mode: nil)
 
       assert_response :created
       assert_equal "", response.parsed_body["filter"]
       assert_equal false, response.parsed_body["regexp_mode"]
     end
 
+    test "create returns bad request when the query attributes are missing" do
+      post "/onlylogs/queries", params: {log_file_path: @encrypted_path}, as: :json
+
+      assert_response :bad_request
+    end
+
     test "create returns unprocessable entity for a blank name" do
-      post "/onlylogs/queries",
-        params: {log_file_path: @encrypted_path, name: "", filter: "ERROR"},
-        as: :json
+      post_query(name: "", filter: "ERROR")
 
       assert_response :unprocessable_entity
       assert_includes response.parsed_body["errors"]["name"], "can't be blank"
@@ -111,18 +109,14 @@ module Onlylogs
     test "create returns unprocessable entity for a duplicate name" do
       create_query(name: "Errors", filter: "ERROR")
 
-      post "/onlylogs/queries",
-        params: {log_file_path: @encrypted_path, name: "errors", filter: "WARN"},
-        as: :json
+      post_query(name: "errors", filter: "WARN")
 
       assert_response :unprocessable_entity
       assert_includes response.parsed_body["errors"]["name"], "has already been taken"
     end
 
     test "create returns unprocessable entity for an invalid regexp" do
-      post "/onlylogs/queries",
-        params: {log_file_path: @encrypted_path, name: "Broken", filter: "[invalid", regexp_mode: true},
-        as: :json
+      post_query(name: "Broken", filter: "[invalid", regexp_mode: true)
 
       assert_response :unprocessable_entity
       assert_predicate response.parsed_body["errors"]["filter"], :any?
@@ -158,9 +152,7 @@ module Onlylogs
     test "update changes the query" do
       query = create_query(name: "Before", filter: "ERROR")
 
-      patch "/onlylogs/queries/#{query["id"]}",
-        params: {log_file_path: @encrypted_path, name: "After", filter: "WARN", regexp_mode: true},
-        as: :json
+      patch_query(query["id"], name: "After", filter: "WARN", regexp_mode: true)
 
       assert_response :success
       assert_equal "After", response.parsed_body["name"]
@@ -172,18 +164,14 @@ module Onlylogs
       create_query(name: "Taken", filter: "ERROR")
       query = create_query(name: "Mine", filter: "WARN")
 
-      patch "/onlylogs/queries/#{query["id"]}",
-        params: {log_file_path: @encrypted_path, name: "Taken"},
-        as: :json
+      patch_query(query["id"], name: "Taken")
 
       assert_response :unprocessable_entity
       assert_includes response.parsed_body["errors"]["name"], "has already been taken"
     end
 
     test "update returns not found for an unknown id" do
-      patch "/onlylogs/queries/123456",
-        params: {log_file_path: @encrypted_path, name: "Nope"},
-        as: :json
+      patch_query(123_456, name: "Nope")
 
       assert_response :not_found
     end
@@ -241,7 +229,10 @@ module Onlylogs
 
     test "create is refused for a path outside the permitted patterns" do
       post "/onlylogs/queries",
-        params: {log_file_path: SecureFilePath.encrypt("/etc/passwd"), name: "Sneaky", filter: "x"},
+        params: {
+          log_file_path: SecureFilePath.encrypt("/etc/passwd"),
+          query: {name: "Sneaky", filter: "x"}
+        },
         as: :json
 
       assert_response :forbidden
@@ -278,8 +269,21 @@ module Onlylogs
 
     private
 
+    # Attributes nest under :query; log_file_path stays alongside it.
+    def post_query(attributes)
+      post "/onlylogs/queries",
+        params: {log_file_path: @encrypted_path, query: attributes},
+        as: :json
+    end
+
+    def patch_query(id, attributes)
+      patch "/onlylogs/queries/#{id}",
+        params: {log_file_path: @encrypted_path, query: attributes},
+        as: :json
+    end
+
     def create_query(attributes)
-      post "/onlylogs/queries", params: attributes.merge(log_file_path: @encrypted_path), as: :json
+      post_query(attributes)
       assert_response :created
 
       response.parsed_body

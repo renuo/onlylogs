@@ -109,9 +109,11 @@ export default class QueriesController extends Controller {
         },
         body: JSON.stringify({
           log_file_path: this.logFilePathValue,
-          name: name,
-          filter: filter,
-          regexp_mode: regexpMode,
+          query: {
+            name: name,
+            filter: filter,
+            regexp_mode: regexpMode,
+          },
         }),
       });
 

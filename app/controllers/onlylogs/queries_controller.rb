@@ -5,6 +5,9 @@ module Onlylogs
     before_action :set_log_file
 
     rescue_from(ActiveRecord::RecordInvalid) { |e| render_invalid(e.record) }
+    # The unique index catches what the uniqueness validation loses to a race.
+    # Same answer either way, so the client cannot tell which one fired.
+    rescue_from(ActiveRecord::RecordNotUnique) { render_error("Name has already been taken", :unprocessable_entity) }
     rescue_from(ActiveRecord::RecordNotFound) { render_error("Query not found", :not_found) }
     rescue_from(Onlylogs::Error) { render_error("Log file not found", :not_found) }
     rescue_from(QueryDatabase::UnavailableError) { |e| render_error(e.message, :service_unavailable) }
@@ -42,7 +45,7 @@ module Onlylogs
     end
 
     def query_params
-      params.permit(:name, :filter, :regexp_mode)
+      params.expect(query: [:name, :filter, :regexp_mode])
     end
 
     def set_log_file

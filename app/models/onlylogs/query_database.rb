@@ -89,10 +89,12 @@ module Onlylogs
       def create_table(model)
         model.with_connection do |connection|
           connection.create_table(TABLE_NAME, if_not_exists: true) do |t|
-            t.string :name, null: false, index: {unique: true}
+            t.string :name, null: false
             t.string :filter, null: false, default: ""
             t.boolean :regexp_mode, null: false, default: false
             t.timestamps
+
+            t.index "LOWER(name)", unique: true, name: "index_queries_on_lower_name"
           end
         end
       end
