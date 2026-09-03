@@ -6,6 +6,25 @@
   Subscribe to record whatever your application wants recorded.
 - **Viewer searches are now bounded.** A filtered search from the log viewer ran with no ceiling at
   all. It now stops at `config.search_timeout`, in seconds, default is 120.
+- **Searches show how far they have got.** While a search runs, the status row reads
+  `Searching... 37%`, so a query that matches nothing until the end of a large file no longer looks
+  stuck. The percentage is the share of the requested byte range that has been read.
+- **A stopped search now stops.** Pressing Stop, retyping the query or leaving the page used to
+  leave the search running to the end of the file whenever nothing matched, because it was only
+  ever checked between two matching lines. It is now stopped within a fraction of a second.
+- **Byte-range searches are faster and cheaper.** The search process now gets the log file itself
+  as its stdin, opened and seeked to the start of the range, and reads it directly: nothing copies
+  the data any more. Ruby follows the search through the shared file offset, which is where the
+  progress figure comes from and how the end of the range is enforced. On the production box a
+  1 GB window went from 2.2 to 0.95 CPU-seconds, and a whole-file search costs exactly what
+  ripgrep alone costs. On macOS, where the BSD `tail`/`head` pipe was the bottleneck, ranged
+  searches are two orders of magnitude faster.
+- `bin/super_ripgrep` and `bin/super_grep` no longer take `--start-position`/`--end-position`;
+  without a file argument they read stdin, and both now print `<byte offset>:<line>` with
+  line-buffered output. Byte offsets, and with them the "show context around this line" button,
+  now work with plain grep too.
+- `Onlylogs::Grep.grep` and `Onlylogs::File#grep` accept an `on_progress:` callable, called a few
+  times a second with `(bytes_read, bytes_total)`. Returning `false` from it stops the search.
 
 ## 0.8.0
 

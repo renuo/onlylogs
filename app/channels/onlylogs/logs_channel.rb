@@ -190,6 +190,10 @@ module Onlylogs
           end
         end
 
+        # Stopped part way, by the client or by it leaving: whoever stopped it
+        # has already said so, and the sender is gone.
+        return if reading_stopped?
+
         # Send last line only if no end_position (avoid cut-off line at byte boundary)
         if last_line && !end_position
           @batch_sender.add_line(render_log_line(last_line, byte_offset: last_byte_offset, show_expand_button: filter.present?))
@@ -229,7 +233,8 @@ module Onlylogs
 
       if filter.present?
         @log_file.grep(filter, regexp_mode: regexp_mode, start_position: start_position,
-          end_position: end_position, timeout: Onlylogs.search_timeout) do |result|
+          end_position: end_position, timeout: Onlylogs.search_timeout,
+          on_progress: search_progress_reporter) do |result|
           break if reading_stopped?
 
           if skip_first
@@ -259,6 +264,25 @@ module Onlylogs
 
     def reading_stopped?
       @batch_sender.nil? || @log_watcher_running == false
+    end
+
+    # Tells the client how far the search has read, one message per whole
+    # percent, and ends the search once nobody is waiting for it any more.
+    # Without that a query with no matches keeps a core busy until the end of
+    # the file, however long ago the client stopped it or moved on.
+    def search_progress_reporter
+      last_percent = nil
+
+      lambda do |bytes_read, bytes_total|
+        return false if reading_stopped?
+
+        percent = bytes_total.zero? ? 100 : bytes_read * 100 / bytes_total
+        return true if percent == last_percent
+
+        last_percent = percent
+        transmit({action: "message", content: "Searching...", progress: percent})
+        true
+      end
     end
 
     def read_byte_range(file_path, start_position, end_position)

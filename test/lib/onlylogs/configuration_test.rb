@@ -5,7 +5,9 @@ require "test_helper"
 module Onlylogs
   class ConfigurationTest < ActiveSupport::TestCase
     def setup
-      # Reset configuration for each test
+      # Each test starts from the engine defaults; the dummy app's configuration
+      # is put back afterwards so later tests still see its settings.
+      @original_configuration = Onlylogs.configuration
       Onlylogs.instance_variable_set(:@configuration, nil)
 
       # Create temporary test files
@@ -21,6 +23,7 @@ module Onlylogs
 
     def teardown
       FileUtils.rm_rf(@test_dir) if ::File.exist?(@test_dir)
+      Onlylogs.instance_variable_set(:@configuration, @original_configuration)
     end
 
     test "default configuration includes Rails log file" do

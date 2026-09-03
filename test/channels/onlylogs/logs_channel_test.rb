@@ -10,6 +10,9 @@ module Onlylogs
       @temp_file.close
 
       # Configure the engine to permit the temp file so no mocking is needed.
+      # The dummy app's configuration is put back afterwards, so tests that run
+      # later still see its settings rather than the engine defaults.
+      @original_configuration = Onlylogs.configuration
       Onlylogs.instance_variable_set(:@configuration, nil)
       Onlylogs.configure do |config|
         config.log_file_patterns = [@temp_file.path]
@@ -21,7 +24,7 @@ module Onlylogs
 
     teardown do
       @temp_file.unlink
-      Onlylogs.instance_variable_set(:@configuration, nil)
+      Onlylogs.instance_variable_set(:@configuration, @original_configuration)
     end
 
     # `initialize_watcher` clamps start/end positions into [0, file_size] before
@@ -137,6 +140,16 @@ module Onlylogs
           "line #{text.inspect} is labelled with offset #{offset}, which points at " \
           "#{content.byteslice(offset, text.bytesize).inspect}"
       end
+    end
+
+    test "a filtered search reports how far through the file it is" do
+      subscribe
+      perform :initialize_watcher, initialize_data(filter: "line")
+
+      percents = transmissions.select { |t| t["action"] == "message" && t.key?("progress") }.map { |t| t["progress"] }
+      assert_equal 100, percents.last
+      assert_equal percents.sort, percents
+      assert_equal "finish", transmissions.last["action"]
     end
 
     private

@@ -280,6 +280,64 @@ class Onlylogs::GrepTest < ActiveSupport::TestCase
     assert_window_returns_every_line(path, BLOCK_BYTES + 1024, BLOCK_BYTES + LINE_WIDTH, engine_name)
   end
 
+  WINDOW_BYTES = 4 * BLOCK_BYTES
+
+  test_both_engine_modes "it reports how far through the range it has read" do |engine_name|
+    path = write_fixed_width_log(3 * WINDOW_BYTES)
+    reports = []
+
+    lines = Onlylogs::Grep.grep("MARK", path, start_position: WINDOW_BYTES,
+      on_progress: ->(bytes_read, bytes_total) { reports << [bytes_read, bytes_total] })
+
+    assert_equal 2 * WINDOW_BYTES / LINE_WIDTH, lines.length, "Failed with #{engine_name}"
+    assert_equal [2 * WINDOW_BYTES], reports.map(&:last).uniq, "Failed with #{engine_name}"
+    assert_equal reports.map(&:first).sort, reports.map(&:first), "bytes_read went backwards with #{engine_name}"
+    assert_equal 2 * WINDOW_BYTES, reports.last.first, "the last report is not the end of the range with #{engine_name}"
+  end
+
+  test "returning false from on_progress ends the search where it is" do
+    recorder = pid_recorder
+
+    elapsed = measure do
+      with_search_command(stalling_command(recorder)) do
+        Onlylogs::Grep.grep("never matches", @fixture_path, on_progress: ->(*) { false }) { |result| result }
+      end
+    end
+
+    assert_operator elapsed, :<, 3, "the search ran on for #{elapsed.round(1)}s after on_progress said stop"
+    assert_search_processes_gone recorder
+  end
+
+  test_both_engine_modes "it stops reading the file once the match limit is reached" do |engine_name|
+    path = write_fixed_width_log(3 * WINDOW_BYTES)
+    reports = []
+
+    lines = Onlylogs::Grep.grep("MARK", path, max_matches: 5,
+      on_progress: ->(bytes_read, _) { reports << bytes_read })
+
+    assert_equal 5, lines.length, "Failed with #{engine_name}"
+    assert_operator reports.last, :<, 3 * WINDOW_BYTES, "read the whole file anyway with #{engine_name}"
+  end
+
+  # The search only stops once it has read well past the end of the range, so
+  # a range that ends long before the file does is where a line found right at
+  # the end could be lost to output still buffered when the search is stopped.
+  test_both_engine_modes "it returns every line of a range that ends long before the file does" do |engine_name|
+    path = write_fixed_width_log(3 * WINDOW_BYTES)
+    assert_window_returns_every_line(path, BLOCK_BYTES, BLOCK_BYTES - LINE_WIDTH, engine_name)
+  end
+
+  test_both_engine_modes "a match on the last line of a range survives the search being stopped past it" do |engine_name|
+    path = write_fixed_width_log(3 * WINDOW_BYTES)
+    end_position = 2 * BLOCK_BYTES
+    last_line = end_position / LINE_WIDTH - 1
+
+    lines = Onlylogs::Grep.grep(format("MARK %010d", last_line), path,
+      start_position: BLOCK_BYTES, end_position: end_position)
+
+    assert_equal [last_line * LINE_WIDTH], lines.map { |line| line[:byte_offset] }, "Failed with #{engine_name}"
+  end
+
   test_both_engine_modes "it handles byte range searches correctly with regexp mode" do |engine_name|
     file_size = File.size(@fixture_path)
     start_pos = file_size / 4
@@ -333,7 +391,7 @@ class Onlylogs::GrepTest < ActiveSupport::TestCase
     lines = []
 
     elapsed = measure do
-      with_search_command(stalling_command(recorder, emit: "MATCH")) do
+      with_search_command(stalling_command(recorder, emit: "0:MATCH")) do
         Onlylogs::Grep.grep("anything", @fixture_path) do |result|
           lines << result[:content]
           break
@@ -352,7 +410,7 @@ class Onlylogs::GrepTest < ActiveSupport::TestCase
 
     elapsed = measure do
       assert_raises(RuntimeError) do
-        with_search_command(stalling_command(recorder, emit: "MATCH")) do
+        with_search_command(stalling_command(recorder, emit: "0:MATCH")) do
           Onlylogs::Grep.grep("anything", @fixture_path) { raise "consumer exploded" }
         end
       end
@@ -381,7 +439,7 @@ class Onlylogs::GrepTest < ActiveSupport::TestCase
   test "a search that completes normally yields every line and reaps its child" do
     Onlylogs.configuration.ripgrep_enabled = false
     recorder = pid_recorder
-    command = ["bash", "-c", "echo $$ > #{recorder}; echo one; echo two; printf 'no-trailing-newline'"]
+    command = ["bash", "-c", "echo $$ > #{recorder}; echo 0:one; echo 6:two; printf '10:no-trailing-newline'"]
     lines = []
 
     with_search_command(command) do

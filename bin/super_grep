@@ -1,23 +1,16 @@
 #!/usr/bin/env bash
+# Usage: super_grep [--max-matches N] [--regexp] QUERY [FILE]
+# Without FILE the input is read from stdin. Every output line is
+# "<byte offset of the line>:<line>".
 export LC_ALL=C
 
 # Parse arguments
 max_matches=""
-start_position=""
-end_position=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --max-matches)
       max_matches="$2"
-      shift 2
-      ;;
-    --start-position)
-      start_position="$2"
-      shift 2
-      ;;
-    --end-position)
-      end_position="$2"
       shift 2
       ;;
     --regexp)
@@ -33,8 +26,9 @@ done
 query="$1"
 file="$2"
 
-# Validate file
-[ -f "$file" ] || exit 1
+if [ -n "$file" ]; then
+  [ -f "$file" ] || exit 1
+fi
 
 # Prepare query regex based on mode
 if [ "$regexp_mode" = true ]; then
@@ -56,31 +50,15 @@ query_regex="${query_regex//$placeholder/$actual_color_regex}"
 
 
 # Build grep command
-grep_cmd=(grep -E -h)             # -h = no filename (portable)
+# -b: byte offset of each line, -h: no filename, --line-buffered: every match
+# is written out as it is found. All three are portable across GNU and BSD.
+grep_cmd=(grep -E -h -b --line-buffered)
 if [ -n "$max_matches" ]; then
   grep_cmd+=(-m "$max_matches")   # -m = max count (portable)
 fi
 
-# Handle byte range if specified
-if [ -n "$start_position" ] || [ -n "$end_position" ]; then
-  case "${start_position:-0}${end_position:-0}" in
-    *[!0-9]*) exit 1 ;;
-  esac
-
-  file_size=$(wc -c < "$file")
-  range_start=${start_position:-0}
-  range_end=${end_position:-$file_size}
-  range_size=$((range_end - range_start))
-
-  if [ $range_size -le 0 ] || [ $range_start -ge $file_size ]; then
-    exit 0
-  fi
-
-  [ $range_end -gt $file_size ] && range_end=$file_size && range_size=$((range_end - range_start))
-
-  tail -c +$((range_start + 1)) "$file" | head -c $range_size | \
-    "${grep_cmd[@]}" "$query_regex"
+if [ -n "$file" ]; then
+  exec "${grep_cmd[@]}" "$query_regex" "$file"
 else
-  # Search entire file
-  "${grep_cmd[@]}" "$query_regex" "$file"
+  exec "${grep_cmd[@]}" "$query_regex"
 fi
