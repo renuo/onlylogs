@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- **`HttpLogger` no longer burns a CPU core and stalls every request.** The sender thread polled
+  its queue in a tight loop whenever a partial batch waited for `flush_interval`, holding the GVL for
+  up to 0.5 s per request regardless of the drain's health; it now blocks on the queue.
+  `Rails.logger.flush`, which Rails calls after every request, no longer performs the HTTP delivery
+  or spool writes on the request thread: it is the tag reset it inherits, and when to ship is the
+  sender's decision alone (every 100 lines or 0.5 s). `close` stays synchronous.
+- The spool keeps an in-memory byte ledger instead of listing and stat-ing every file on each write.
+- `bin/fake_drain` and `bin/fake_app` simulate a drain outage locally and show what it does to the
+  app.
+
 ## 0.9.0
 
 - **Every search is instrumented** as `search.onlylogs`. 
