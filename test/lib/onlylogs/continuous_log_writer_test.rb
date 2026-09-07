@@ -6,7 +6,7 @@ require "onlylogs/continuous_log_writer"
 
 module Onlylogs
   class ContinuousLogWriterTest < ActiveSupport::TestCase
-    LINE = /\A\[[0-9a-f-]{36}\] \[\S+\] \[[IWE]\] method=\S+ path=\S+ format=\S+ /
+    LINE = /\A\[[0-9a-f-]{36}\] \[\S+\] \[[IDWF]\] /
 
     # `call` loops forever; interrupting the first sleep stops it after one batch.
     class SingleBatchWriter < Onlylogs::ContinuousLogWriter
@@ -27,42 +27,54 @@ module Onlylogs
       @file.close!
     end
 
-    test "builds a line in the onlylogs format" do
-      assert_match LINE, @writer.build_line
+    test "builds a full request in the onlylogs format" do
+      lines = @writer.build_request_lines(status: 200)
+
+      assert lines.all? { |line| line.match?(LINE) }, lines.join("\n")
+      assert_match(/Started (GET|POST) "/, lines.first)
+      assert(lines.any? { |line| line.include?("Processing by") })
+      assert(lines.any? { |line| line.include?("Completed 200 OK in") })
     end
 
     test "builds lines the formatter's tags can be read back from" do
-      _request_id, timestamp, severity = @writer.build_line.scan(/\[([^\]]*)\]/).flatten
+      request_id, timestamp, severity = @writer.build_request_lines.first.scan(/\[([^\]]*)\]/).flatten
 
+      assert_match(/\A[0-9a-f-]{36}\z/, request_id)
       assert_nothing_raised { Time.iso8601(timestamp) }
-      assert_includes %w[I W E], severity
+      assert_includes %w[I D W F], severity
     end
 
-    test "severity matches the status" do
-      lines = 200.times.map { @writer.build_line }
+    test "tags every line of a request with the same request id" do
+      lines = @writer.build_request_lines
 
-      lines.each do |line|
-        status = line[/status=(\d+)/, 1].to_i
-        severity = line[/\] \[([IWE])\] /, 1]
+      assert_equal 1, lines.map { |line| line[/\A\[([^\]]*)\]/, 1] }.uniq.size
+    end
 
-        expected = if status >= 500
-          "E"
-        elsif status >= 400
-          "W"
-        else
-          "I"
-        end
-        assert_equal expected, severity, line
+    test "colors SQL lines with ANSI codes the viewer can parse" do
+      lines = @writer.build_request_lines(status: 200)
+      sql_lines = lines.select { |line| line.include?("SELECT") }
+
+      assert sql_lines.any?
+      sql_lines.each do |line|
+        assert_match(/\e\[1m\e\[3\dm.*\e\[0m/, line)
       end
     end
 
-    test "appends a batch to the file and counts it" do
+    test "logs a red fatal exception on 500s" do
+      lines = @writer.build_request_lines(status: 500)
+
+      assert(lines.any? { |line| line.include?("Completed 500 Internal Server Error") })
+      assert(lines.any? { |line| line.match?(/\[F\] \e\[1m\e\[31mNoMethodError/) })
+    end
+
+    test "appends a batch to the file and counts the lines" do
       writer = SingleBatchWriter.new(@path, logs_per_batch: 3, interval: 0, out: StringIO.new)
       writer.call
 
-      assert_equal 3, writer.counter
-      assert_equal 3, ::File.readlines(@path).size
-      assert ::File.readlines(@path).all? { |line| line.match?(LINE) }
+      lines = ::File.readlines(@path)
+      assert_equal lines.size, writer.counter
+      assert_equal 3, lines.grep(/Started /).size
+      assert lines.all? { |line| line.match?(LINE) }
     end
 
     test "appends to an existing file instead of truncating it" do
@@ -71,7 +83,7 @@ module Onlylogs
       writer.call
 
       assert_equal "already here\n", ::File.readlines(@path).first
-      assert_equal 2, ::File.readlines(@path).size
+      assert_operator ::File.readlines(@path).size, :>, 1
     end
   end
 end

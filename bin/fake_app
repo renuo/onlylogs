@@ -1,0 +1,475 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Fake Rails app draining to onlylogs.io through Onlylogs::HttpLogger, with a live dashboard of
+# what the logger is doing to the process: request latency and where it goes, CPU, memory, what
+# the sender thread is busy with, the in-memory queue, the circuit breaker, the on-disk spool and
+# an event log. Pair it with bin/fake_drain and flip the drain between 200 and 500 to watch an
+# outage from the app's point of view.
+#
+# Usage: bin/fake_app [options]
+#   --drain URL          drain to post to (default http://127.0.0.1:9999/)
+#   --threads N          concurrent "Puma threads" (default 5)
+#   --think-ms MS        simulated work per request (default 50)
+#   --spool-dir DIR      where the device spools undeliverable batches (default tmp/onlylogs/fake_app_spool)
+#
+# Each request thread does what a Rails request does: logs a handful of lines and then calls
+# Rails.logger.flush (ActiveSupport::LogSubscriber.flush_all! runs after every request).
+#
+# Keys while running:  m more traffic   l less traffic   p pause traffic   q quit
+#
+# "Work per request" is a sleep standing in for the time a real request spends in the database or
+# rendering: the thread holds no GVL during it. Halving it (m) doubles the request rate and so the
+# log lines per second; use it to see how the logger's cost scales with traffic.
+
+require "bundler/setup"
+require "optparse"
+require "io/console"
+require "fileutils"
+require "active_support"
+require "active_support/all"
+require_relative "../lib/onlylogs/formatter"
+require_relative "../lib/onlylogs/logger"
+require_relative "../lib/onlylogs/http_logger"
+
+options = {
+  drain: "http://127.0.0.1:9999/",
+  threads: 5,
+  think_ms: 50,
+  spool_dir: File.expand_path("../tmp/onlylogs/fake_app_spool", __dir__)
+}
+OptionParser.new do |parser|
+  parser.on("--drain URL") { |value| options[:drain] = value }
+  parser.on("--threads N", Integer) { |value| options[:threads] = value }
+  parser.on("--think-ms MS", Integer) { |value| options[:think_ms] = value }
+  parser.on("--spool-dir DIR") { |value| options[:spool_dir] = value }
+end.parse!
+
+def monotonic
+  Process.clock_gettime(Process::CLOCK_MONOTONIC)
+end
+
+# Timestamped ring of notable things that happened (circuit transitions, drain errors, replays).
+class EventLog
+  attr_reader :entries
+
+  def initialize(size)
+    @size = size
+    @entries = []
+    @mutex = Mutex.new
+  end
+
+  def add(message)
+    @mutex.synchronize { @entries = (@entries + [[Time.now, message]]).last(@size) }
+  end
+end
+EVENTS = EventLog.new(9)
+
+# Hooks into the device to count deliveries and spool writes, time them, and tell which thread did
+# them (the background sender or a request thread).
+module DeviceInstrumentation
+  STATS = Hash.new(0)
+  STATS_MUTEX = Mutex.new
+
+  def self.record(key, value = 1)
+    STATS_MUTEX.synchronize { STATS[key] += value }
+  end
+
+  def self.set(key, value)
+    STATS_MUTEX.synchronize { STATS[key] = value }
+  end
+
+  def self.snapshot
+    STATS_MUTEX.synchronize { STATS.dup }
+  end
+
+  def deliver(body)
+    from_request_thread = Thread.current != @sender_thread
+    started = monotonic
+    super
+    DeviceInstrumentation.record(:delivered)
+    DeviceInstrumentation.record(:delivered_bytes, body.bytesize)
+    DeviceInstrumentation.record(:request_thread_deliveries) if from_request_thread
+    DeviceInstrumentation.set(:last_success_at, Time.now)
+  rescue => e
+    DeviceInstrumentation.record(:failed)
+    DeviceInstrumentation.record(:request_thread_deliveries) if from_request_thread
+    DeviceInstrumentation.set(:last_error, "#{e.class}: #{e.message}")
+    DeviceInstrumentation.set(:last_error_at, Time.now)
+    where = from_request_thread ? " (on a request thread)" : ""
+    EVENTS.add("delivery failed#{where}: #{e.message[0, 70]}")
+    raise
+  ensure
+    DeviceInstrumentation.set(:last_delivery_ms, (monotonic - started) * 1000)
+  end
+
+  def spool_write(body)
+    started = monotonic
+    super
+    ms = (monotonic - started) * 1000
+    DeviceInstrumentation.record(:spool_writes)
+    DeviceInstrumentation.record(:request_thread_spool_writes) if Thread.current != @sender_thread
+    DeviceInstrumentation.set(:last_spool_write_ms, ms)
+    DeviceInstrumentation.set(:max_spool_write_ms, [ms, DeviceInstrumentation.snapshot[:max_spool_write_ms]].max)
+  end
+
+  def drain_spool
+    return super if @spool.nil? || @spool.empty?
+
+    files = Dir.glob(File.join(@spool.instance_variable_get(:@dir), "*.batch")).size
+    where = (Thread.current != @sender_thread) ? " on a request thread" : ""
+    EVENTS.add("replaying #{files} spool files#{where}")
+    started = monotonic
+    super
+    left = @spool.empty? ? "all delivered" : "stopped at first failure"
+    EVENTS.add(format("spool replay took %.2fs, %s", monotonic - started, left))
+  end
+end
+Onlylogs::HttpDevice.prepend(DeviceInstrumentation)
+
+# The device reports its own problems with Kernel.warn; route them into the event log instead of
+# letting them scroll over the dashboard.
+class WarningCapture
+  def write(*chunks)
+    chunks.join.each_line do |line|
+      next if line.strip.empty? || line.include?(" error: ")
+
+      EVENTS.add("warn: #{line.chomp.delete_prefix("Onlylogs::HttpDevice: ")}")
+    end
+    chunks.sum(&:bytesize)
+  end
+
+  def sync=(_)
+  end
+
+  def flush
+  end
+end
+$stderr = WarningCapture.new
+
+FileUtils.rm_rf(options[:spool_dir])
+logger = Onlylogs::HttpLogger.new(
+  local_fallback: File.open(File::NULL, "w"), drain_url: options[:drain], spool_dir: options[:spool_dir]
+)
+logger.level = Logger::INFO
+device = logger.device
+
+state = {running: true, paused: false, think: options[:think_ms] / 1000.0}
+window = {requests: 0, latencies: [], think_overrun: 0.0, logger_time: 0.0}
+window_mutex = Mutex.new
+
+# Samples what the sender thread is doing, to show how much of its life it spends busy-looping.
+class SenderSampler
+  def initialize(thread)
+    @thread = thread
+    @counts = Hash.new(0)
+    @mutex = Mutex.new
+    Thread.new { loop { sample } }
+  end
+
+  def take
+    @mutex.synchronize do
+      counts = @counts
+      @counts = Hash.new(0)
+      counts
+    end
+  end
+
+  private
+
+  def sample
+    sleep 0.02
+    frames = @thread&.backtrace || []
+    @mutex.synchronize { @counts[classify(frames, @thread&.status)] += 1 }
+  end
+
+  # "sleep" covers both Kernel#sleep and a blocking Queue#pop: the thread is parked and costs
+  # nothing. "run" inside its own loop means it is polling, i.e. spinning.
+  def classify(frames, status)
+    return :other unless status
+    return :sending if frames.any? { |frame| frame.include?("net/http") || frame.include?("#deliver") }
+    return :spool if frames.any? { |frame| frame.include?("spool.rb") }
+    return :sleeping if status == "sleep"
+
+    :spinning
+  end
+end
+sampler = SenderSampler.new(device.instance_variable_get(:@sender_thread))
+
+workers = Array.new(options[:threads]) do |index|
+  Thread.new do
+    count = 0
+    while state[:running]
+      if state[:paused]
+        sleep 0.1
+        next
+      end
+      count += 1
+      logger_time = 0.0
+      timed = lambda do |&block|
+        started = monotonic
+        block.call
+        logger_time += monotonic - started
+      end
+
+      started = monotonic
+      timed.call { logger.info "Started GET \"/orders/#{count}\" for 10.0.0.#{index} at #{Time.now}" }
+      timed.call { logger.info "Processing by OrdersController#show as HTML" }
+      timed.call { logger.info "  Parameters: {\"id\" => \"#{count}\"}" }
+      timed.call { logger.info "  Order Load (0.4ms)  SELECT \"orders\".* FROM \"orders\" WHERE id = $1" }
+      think = state[:think]
+      before_sleep = monotonic
+      sleep think
+      overrun = monotonic - before_sleep - think
+      timed.call { logger.info "  Rendered orders/show.html.erb within layouts/application (Duration: 3.1ms)" }
+      timed.call { logger.info "Completed 200 OK in #{(think * 1000).round}ms (Views: 3.1ms | ActiveRecord: 0.4ms)" }
+      timed.call { logger.flush }
+      elapsed = monotonic - started
+      window_mutex.synchronize do
+        window[:requests] += 1
+        window[:latencies] << elapsed
+        window[:think_overrun] += overrun
+        window[:logger_time] += logger_time
+      end
+    end
+  end
+end
+
+# Raw mode for the whole run so single keys arrive without Enter (and are not echoed over the
+# dashboard). intr: true keeps Ctrl+C working. Output must then end lines with \r\n. If the
+# terminal refuses raw mode we stay in line mode: keys then need Enter.
+keyboard = $stdin.tty? && $stdout.tty?
+raw_mode = false
+if keyboard
+  begin
+    $stdin.raw!(intr: true)
+    raw_mode = true
+    at_exit { $stdin.cooked! }
+  rescue SystemCallError, IOError => e
+    state[:last_key] = "raw mode unavailable (#{e.message}); type a key + Enter"
+  end
+end
+
+if keyboard
+  Thread.new do
+    while (key = $stdin.getc)
+      state[:last_key] = key.inspect unless key == "\n" || key == "\r"
+      case key
+      when "q", "\u0003" then state[:running] = false
+      when "p"
+        state[:paused] = !state[:paused]
+        EVENTS.add(state[:paused] ? "traffic paused" : "traffic resumed")
+      when "m"
+        state[:think] = [state[:think] / 2, 0.001].max
+        EVENTS.add("work per request now #{(state[:think] * 1000).round} ms (more traffic)")
+      when "l"
+        state[:think] *= 2
+        EVENTS.add("work per request now #{(state[:think] * 1000).round} ms (less traffic)")
+      end
+    end
+  end
+end
+trap("INT") { state[:running] = false }
+
+# --- rendering ---------------------------------------------------------------------------------
+
+COLORS = {red: 31, green: 32, yellow: 33, blue: 34, magenta: 35, cyan: 36, grey: 90, bold: 1}.freeze
+USE_COLOR = keyboard
+
+def paint(text, *styles)
+  return text.to_s unless USE_COLOR
+
+  "\e[#{styles.map { |style| COLORS.fetch(style) }.join(";")}m#{text}\e[0m"
+end
+
+# Pad before painting: ANSI escapes would count towards the width otherwise.
+def label(name)
+  paint(format("%-9s", name), :bold)
+end
+
+def bar(fraction, width)
+  filled = (fraction.clamp(0, 1) * width).round
+  ("█" * filled) + ("░" * (width - filled))
+end
+
+SPARKS = "▁▂▃▄▅▆▇█".chars.freeze
+def sparkline(values, max = nil)
+  max = [values.compact.max || 0, max || 0, 0.000001].max
+  values.map { |value| value.nil? ? " " : SPARKS[((value / max) * (SPARKS.size - 1)).round] }.join
+end
+
+def percentile(sorted, fraction)
+  sorted.empty? ? 0 : sorted[((sorted.size - 1) * fraction).round]
+end
+
+def megabytes(bytes)
+  format("%.1f MB", bytes / 1024.0 / 1024.0)
+end
+
+def ago(time)
+  time.is_a?(Time) ? "#{(Time.now - time).round}s ago" : "never"
+end
+
+def cpu_color(percent)
+  if percent > 70
+    :red
+  elsif percent > 30
+    :yellow
+  else
+    :green
+  end
+end
+
+def spool_stats(dir)
+  files = Dir.children(dir).select { |name| name.end_with?(".batch") }
+  [files.size, files.sum { |name| File.size?(File.join(dir, name)) || 0 }]
+rescue Errno::ENOENT
+  [0, 0]
+end
+
+history = {rps: [], p50: [], cpu: []}
+HISTORY_WIDTH = 40
+push_history = lambda do |key, value|
+  history[key] = (history[key] + [value]).last(HISTORY_WIDTH)
+end
+
+spool = device.instance_variable_get(:@spool)
+spool_max = spool&.instance_variable_get(:@max_bytes) || 0
+spool_label = options[:spool_dir].delete_prefix("#{File.expand_path("..", __dir__)}/")
+circuit_was_open = false
+started_at = monotonic
+last_wall = started_at
+last_cpu = Process.clock_gettime(Process::CLOCK_PROCESS_CPUTIME_ID)
+last_delivered = 0
+clear = keyboard ? "\e[H\e[2J" : ""
+newline = raw_mode ? "\r\n" : "\n"
+
+while state[:running]
+  sleep 1
+  now = monotonic
+  cpu = Process.clock_gettime(Process::CLOCK_PROCESS_CPUTIME_ID)
+  elapsed = now - last_wall
+  frame = window_mutex.synchronize do
+    snapshot = window.merge(latencies: window[:latencies].sort)
+    window[:requests] = 0
+    window[:latencies] = []
+    window[:think_overrun] = 0.0
+    window[:logger_time] = 0.0
+    snapshot
+  end
+  stats = DeviceInstrumentation.snapshot
+  samples = sampler.take
+  total_samples = [samples.values.sum, 1].max
+  cpu_percent = (cpu - last_cpu) / elapsed * 100
+  rss = `ps -o rss= -p #{Process.pid}`.to_i * 1024
+  queue = device.instance_variable_get(:@queue)
+  sender = device.instance_variable_get(:@sender_thread)
+  open_until = device.instance_variable_get(:@circuit_open_until)
+  failures = device.instance_variable_get(:@consecutive_failures)
+  circuit_open = open_until && Time.now < open_until
+  if circuit_open != circuit_was_open
+    cooldown = device.instance_variable_get(:@circuit_cooldown).round
+    EVENTS.add(circuit_open ? "circuit OPENED: drain paused for #{cooldown}s" : "circuit closed: drain answered again")
+    circuit_was_open = circuit_open
+  end
+  requests = frame[:requests]
+  rps = requests / elapsed
+  p50 = percentile(frame[:latencies], 0.5) * 1000
+  per_request = ->(total) { (requests.positive? ? total / requests : 0) * 1000 }
+  push_history.call(:rps, rps)
+  push_history.call(:p50, p50)
+  push_history.call(:cpu, cpu_percent)
+  files, spool_bytes = spool_stats(options[:spool_dir])
+  drain_rps = (stats[:delivered] - last_delivered) / elapsed
+  last_delivered = stats[:delivered]
+  spinning = samples[:spinning] * 100.0 / total_samples
+  sleeping = samples[:sleeping] * 100.0 / total_samples
+  sending = samples[:sending] * 100.0 / total_samples
+  spooling = samples[:spool] * 100.0 / total_samples
+
+  raw_hint = raw_mode ? "" : "   (raw mode off: press Enter after a key)"
+  lines = []
+  lines << paint(" onlylogs fake app", :bold) + "  →  #{options[:drain]}" \
+    "#{" " * 12}uptime #{Time.at(now - started_at).utc.strftime("%M:%S")}"
+  lines << paint(" keys", :grey) + "  [m]ore / [l]ess traffic   [p]ause   [q]uit" \
+    "        last key: #{state[:last_key] || "none"}#{raw_hint}"
+  lines << ""
+
+  lines << format(" %s %d threads × %d ms simulated work  →  %s   %s",
+    label("TRAFFIC"), options[:threads], (state[:think] * 1000).round,
+    state[:paused] ? paint("PAUSED", :yellow) : format("%6.1f req/s", rps),
+    paint(sparkline(history[:rps]), :cyan))
+  work_note = "the work is a sleep standing in for DB/view time (no GVL held)"
+  lines << format("           ≈ %.0f log lines/s; %s", rps * 6, work_note)
+  overhead = p50 - (state[:think] * 1000)
+  lines << format(" %s p50 %s  p95 %4.0f ms  max %4.0f ms   %s",
+    label("LATENCY"),
+    paint(format("%4.0f ms", p50), (overhead > 100) ? :red : :green),
+    percentile(frame[:latencies], 0.95) * 1000, (frame[:latencies].last || 0) * 1000,
+    paint(sparkline(history[:p50]), :cyan))
+  overrun_ms = per_request.call(frame[:think_overrun])
+  logger_ms = per_request.call(frame[:logger_time])
+  overhead = paint(format("%.0f ms in logger.info/flush + %.0f ms sleep overrun", logger_ms, overrun_ms),
+    (logger_ms + overrun_ms > 50) ? :red : :green)
+  lines << format("           per request: %d ms work + %s   (overhead = waiting for the GVL)",
+    (state[:think] * 1000).round, overhead)
+  cpu_per_request = rps.positive? ? (cpu_percent / 100 * 1000) / rps : 0
+  lines << format(" %s CPU %s %s   RSS %s   threads %d   %s",
+    label("PROCESS"), paint(format("%3.0f%%", cpu_percent), cpu_color(cpu_percent)),
+    paint(bar(cpu_percent / 100, 20), cpu_color(cpu_percent)), megabytes(rss), Thread.list.size,
+    paint(sparkline(history[:cpu], 100), :cyan))
+  cpu_note = "(100% CPU at thousands of req/s is honest work; at 2 req/s it is the bug)"
+  lines << format("           CPU per request %s   %s",
+    paint(format("%.2f ms", cpu_per_request), (cpu_per_request > 5) ? :red : :green), cpu_note)
+  spin_color = (spinning > 20) ? :red : :green
+  lines << format(" %s busy in loop %s %s   sleeping %3.0f%%   sending %3.0f%%   spool I/O %3.0f%%   status %s",
+    label("SENDER"), paint(format("%3.0f%%", spinning), spin_color), paint(bar(spinning / 100, 20), spin_color),
+    sleeping, sending, spooling, sender&.status.inspect)
+  spin_note = "a partial batch should wait parked inside Queue#pop, not spin"
+  lines << format("           batch_size %d   flush_interval %.1fs   %s",
+    device.instance_variable_get(:@batch_size), device.instance_variable_get(:@flush_interval), spin_note)
+  lines << ""
+
+  queue_fraction = queue.size.to_f / device.instance_variable_get(:@max_queue_size)
+  lines << format(" %s %5d / %d lines in memory %s   dropped %d",
+    label("QUEUE"), queue.size, device.instance_variable_get(:@max_queue_size),
+    paint(bar(queue_fraction, 20), (queue_fraction > 0.5) ? :red : :green), device.instance_variable_get(:@dropped))
+  circuit_text = if circuit_open
+    paint(format("● OPEN, next retry in %2ds", open_until - Time.now), :red)
+  else
+    paint("● closed (drain considered healthy)", :green)
+  end
+  lines << format(" %s %s   consecutive failures %d   cooldown %.0fs",
+    label("CIRCUIT"), circuit_text, failures, device.instance_variable_get(:@circuit_cooldown))
+  lines << format(" %s %5d files  %s / %s %s   writes %d (%d on request threads)   write %.1f ms (max %.1f)",
+    label("SPOOL"), files, megabytes(spool_bytes), megabytes(spool_max),
+    paint(bar((spool_max.positive? ? spool_bytes.to_f / spool_max : 0), 10), :yellow),
+    stats[:spool_writes], stats[:request_thread_spool_writes], stats[:last_spool_write_ms], stats[:max_spool_write_ms])
+  lines << format("           %s", paint(spool_label, :grey))
+  lines << format(" %s %4.1f batches/s   ok %d   failed %d   %s shipped   HTTP calls on request threads: %s",
+    label("DRAIN"), drain_rps, stats[:delivered], stats[:failed], megabytes(stats[:delivered_bytes]),
+    paint(stats[:request_thread_deliveries], (stats[:request_thread_deliveries] > 0) ? :yellow : :green))
+  lines << format("           last success %s   last error %s%s",
+    ago(stats[:last_success_at]), ago(stats[:last_error_at]),
+    stats[:last_error].is_a?(String) ? ": #{paint(stats[:last_error][0, 60], :red)}" : "")
+  lines << ""
+
+  lines << paint(" EVENTS", :bold)
+  EVENTS.entries.each { |time, message| lines << format("   %s  %s", paint(time.strftime("%H:%M:%S"), :grey), message) }
+  lines << "" if EVENTS.entries.empty?
+  lines << ""
+  lines << paint(" healthy: CPU a few %, latency ≈ work, sender mostly sleeping, no HTTP on request threads", :grey)
+  lines << paint(" regression: sender busy in loop, CPU ≈ 100% at a few req/s, latency ≈ work + interval", :grey)
+
+  $stdout.write(clear + lines.join(newline) + newline)
+  $stdout.flush
+  last_wall = now
+  last_cpu = cpu
+end
+
+$stdin.cooked! if raw_mode
+workers.each { |worker| worker.join(5) }
+$stdout.puts "closing logger (this is what at_exit does in the app)..."
+closing = monotonic
+logger.close
+$stdout.puts format("logger.close took %.2fs", monotonic - closing)

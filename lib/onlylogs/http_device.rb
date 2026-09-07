@@ -83,15 +83,12 @@ module Onlylogs
       enqueue(message.chomp)
     end
 
+    # Ships everything still queued, then stops the sender. This is the only synchronous path: there
+    # is deliberately no #flush, when to ship is the sender's decision (batch size or interval).
     def close
-      flush
-      @running = false
+      @queue.close
       @sender_thread&.join(2)
       close_connection
-    end
-
-    def flush
-      send_batch(drain_queue)
     end
 
     private
@@ -106,47 +103,48 @@ module Onlylogs
       end
 
       @queue << line
+    rescue ClosedQueueError
+      nil
     end
 
     def start_sender
-      @running = true
-
       @sender_thread = Thread.new do
         # Replay anything left in the spool by a previous run or a crashed/redeployed sibling.
         drain_spool
-
-        batch = []
-        last_flush = Time.now
-
-        while @running || !@queue.empty?
-          begin
-            line = @queue.pop(true)
-            batch << line if line
-          rescue ThreadError
-            # queue empty
-          end
-
-          if batch.any? && (batch.size >= @batch_size || (Time.now - last_flush) >= @flush_interval)
-            send_batch(batch)
-            batch = []
-            last_flush = Time.now
-          end
-
-          sleep 0.01 if batch.empty?
-        end
-
-        send_batch(batch) if batch.any?
+        sender_loop
       end
 
       at_exit { close }
     end
 
-    def drain_queue
-      lines = []
-      lines << @queue.pop(true) until @queue.empty?
-      lines
-    rescue ThreadError
-      lines
+    # Blocks on the queue instead of polling it: a partial batch waits for the rest of the flush
+    # interval inside Queue#pop, so the thread costs nothing while idle. A full batch sends early;
+    # a closed queue (see #close) ends the loop once it has been emptied.
+    def sender_loop
+      batch = []
+      deadline = nil
+
+      loop do
+        line = @queue.pop(timeout: deadline && [deadline - monotonic_now, 0].max)
+        break if line.nil? && @queue.closed?
+
+        if line
+          batch << line
+          deadline ||= monotonic_now + @flush_interval
+        end
+        next if batch.empty?
+        next unless batch.size >= @batch_size || monotonic_now >= deadline
+
+        send_batch(batch)
+        batch = []
+        deadline = nil
+      end
+
+      send_batch(batch) if batch.any?
+    end
+
+    def monotonic_now
+      Process.clock_gettime(Process::CLOCK_MONOTONIC)
     end
 
     def send_batch(lines)

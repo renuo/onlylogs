@@ -9,8 +9,10 @@ require_relative "multi_device"
 #
 # This is a plain Onlylogs::Logger whose log device is an Onlylogs::HttpDevice teed with the local
 # fallback. It deliberately does NOT override #add: the stock Logger#add applies the level and
-# formats each line before writing, so a below-level line reaches neither sink. All the batching,
-# circuit breaking and disk spooling lives in HttpDevice.
+# formats each line before writing, so a below-level line reaches neither sink. Nor #flush: Rails
+# calls it after every request, on the request thread, and it must stay the tag reset it inherits.
+# When to ship is the sender's decision (batch size or interval); all the batching, circuit
+# breaking and disk spooling lives in HttpDevice, and shutdown goes through #close.
 module Onlylogs
   class HttpLogger < Onlylogs::Logger
     attr_reader :device
@@ -18,11 +20,6 @@ module Onlylogs
     def initialize(local_fallback: $stdout, **device_options)
       @device = HttpDevice.new(**device_options)
       super(MultiDevice.new(local_fallback, @device))
-    end
-
-    # Drain the device's in-memory queue to the drain now (tests and graceful shutdown rely on it).
-    def flush
-      @device.flush
     end
 
     # Only the remote device is ours to close; the local fallback ($stdout) belongs to the app, so

@@ -87,6 +87,24 @@ module Onlylogs
       assert_equal ["b" * 8, "c" * 8], bodies
     end
 
+    # Sibling processes (other Puma workers) share the directory: their files must count towards
+    # the cap even though this instance did not write them.
+    test "counts batches written by another instance towards the byte cap" do
+      sibling = Onlylogs::Spool.new(dir: @dir, max_bytes: 20)
+      sibling.write("a" * 8)
+
+      spool = Onlylogs::Spool.new(dir: @dir, max_bytes: 20)
+      spool.write("b" * 8) # 16 bytes total, seen via the directory listing
+      spool.write("c" * 8) # 24 > 20 -> evict the sibling's "a"
+
+      bodies = []
+      spool.replay do |body|
+        bodies << body
+        true
+      end
+      assert_equal ["b" * 8, "c" * 8], bodies
+    end
+
     test "a fresh instance replays files left behind by a previous one (survives restart)" do
       @spool.write("survivor")
 

@@ -73,6 +73,28 @@ module Onlylogs
       assert_equal "Access denied", error["content"]
     end
 
+    test "denies access when no file path token is supplied" do
+      subscribe
+      perform :initialize_watcher, initialize_data(file_path: nil)
+
+      error = transmissions.find { |t| t["action"] == "error" }
+      assert error, "expected an error transmission when no token is supplied"
+      assert_equal "Access denied", error["content"]
+      assert_empty transmissions.select { |t| t["action"] == "append_logs" },
+        "must not stream any lines without a token"
+    end
+
+    test "denies access when the file path token is blank" do
+      subscribe
+      perform :initialize_watcher, initialize_data(file_path: "")
+
+      error = transmissions.find { |t| t["action"] == "error" }
+      assert error, "expected an error transmission for a blank token"
+      assert_equal "Access denied", error["content"]
+      assert_empty transmissions.select { |t| t["action"] == "append_logs" },
+        "must not stream any lines for a blank token"
+    end
+
     # Expand-around-line feature tests
 
     test "render_log_line includes byte_offset and expand button for static searches" do

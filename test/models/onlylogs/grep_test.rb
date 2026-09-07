@@ -81,6 +81,24 @@ class Onlylogs::GrepTest < ActiveSupport::TestCase
     # assert Onlylogs::Grep.match_line?("[d310974f-969e-4f61-8502-07b7f51fdaef]   [1m[36mCACHE Book Count (0.0ms)[0m  [1m[34mSELECT COUNT(*) FROM \"books\"[0m", "07b7f51fdaef]   CACHE")
   end
 
+  test "match_line? gives up on a catastrophic-backtracking pattern instead of hanging" do
+    evil_pattern = "(a+)+$"
+    non_matching_line = ("a" * 40) + "X"
+
+    started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    result = Onlylogs::Grep.match_line?(non_matching_line, evil_pattern, regexp_mode: true)
+    elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started_at
+
+    refute result, "a timed-out match must report no match, not raise"
+    assert_operator elapsed, :<, Onlylogs::Grep::MATCH_TIMEOUT + 3,
+      "match_line? kept backtracking for #{elapsed.round(1)}s despite the deadline"
+  end
+  test "match_line? returns false for a syntactically invalid pattern instead of raising" do
+    refute Onlylogs::Grep.match_line?("any log line", "(", regexp_mode: true)
+    refute Onlylogs::Grep.match_line?("any log line", "[unterminated", regexp_mode: true)
+    refute Onlylogs::Grep.match_line?("any log line", "*?", regexp_mode: true)
+  end
+
   test_both_engine_modes "it can grep with regexp mode using dot wildcard" do |engine_name|
     # In literal mode, dot should match literal dot
     lines_literal = Onlylogs::Grep.grep("(0.0ms)", @special_lines_path, regexp_mode: false)

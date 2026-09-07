@@ -1,0 +1,238 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Fake onlylogs.io drain: a keep-alive HTTP server whose behaviour you switch with one key while it
+# runs, to see how Onlylogs::HttpLogger (bin/fake_app, bin/fake_app_fixed) reacts.
+#
+# Usage: bin/fake_drain [port] [state]     (defaults: 9999, 200)
+#
+# Keys (or type the word/status + Enter when the terminal has no raw mode):
+#   2  200    healthy
+#   5  500    up but failing, what onlylogs.io did on 2026-09-07 (answers "error")
+#   3  503    overloaded
+#   4  413    batch rejected as too large
+#   h  hang   accept the connection but never answer: the client blocks until its read timeout
+#   s  slow   answer 200 after 2s, longer than the client's read timeout
+#   r  reset  accept, then close the connection without answering
+#   d  down   stop listening: connections are refused, like a stopped server
+#   q  quit
+# The same switch is available over HTTP, e.g. curl http://127.0.0.1:9999/__state/500
+
+require "socket"
+require "io/console"
+
+class FakeDrain
+  STATES = {
+    "2" => 200, "5" => 500, "3" => 503, "4" => 413,
+    "h" => :hang, "s" => :slow, "r" => :reset, "d" => :down
+  }.freeze
+  REASONS = {
+    200 => "OK", 413 => "Content Too Large", 500 => "Internal Server Error", 503 => "Service Unavailable"
+  }.freeze
+  SLOW_DELAY = 2
+
+  attr_reader :state
+
+  def initialize(port, state, newline)
+    @port = port
+    @state = state
+    @newline = newline
+    @mutex = Mutex.new
+    @clients = []
+    @requests = 0
+    @bytes = 0
+    @last_request_at = nil
+    @server = nil
+    listen unless state == :down
+  end
+
+  def self.parse_state(word)
+    case word.to_s
+    when "hang", "slow", "reset", "down" then word.to_sym
+    when /\A\d{3}\z/ then word.to_i
+    end
+  end
+
+  def state=(value)
+    @mutex.synchronize { @state = value }
+    if value == :down
+      stop_listening
+    else
+      listen
+    end
+    # Kept-alive and hung connections are closed so the client reconnects and meets the new state.
+    release_clients
+    log "drain now: #{describe(value)}"
+  end
+
+  def run
+    loop do
+      server = @mutex.synchronize { @server }
+      if server.nil?
+        sleep 0.1
+        next
+      end
+
+      client = begin
+        server.accept
+      rescue IOError, Errno::EBADF
+        next # closed by "down"
+      end
+      @mutex.synchronize { @clients << client }
+      Thread.new(client) { |sock| serve(sock) }
+    end
+  end
+
+  def summary
+    @mutex.synchronize do
+      ago = @last_request_at ? "#{(Time.now - @last_request_at).round}s ago" : "never"
+      "drain :#{@port} | #{describe(@state)} | #{@requests} requests, #{@bytes / 1024} KiB | last #{ago}"
+    end
+  end
+
+  def log(message)
+    $stdout.write("\r\e[2K#{message}#{@newline}")
+  end
+
+  private
+
+  def describe(value)
+    case value
+    when :hang then "HANG (accepts, never answers)"
+    when :slow then "SLOW (200 after #{SLOW_DELAY}s)"
+    when :reset then "RESET (accepts, closes without answering)"
+    when :down then "DOWN (not listening, connection refused)"
+    else "#{value} #{REASONS.fetch(value, "")}".strip
+    end
+  end
+
+  def listen
+    @mutex.synchronize { @server ||= TCPServer.new("127.0.0.1", @port) }
+  rescue Errno::EADDRINUSE
+    log "port #{@port} is already in use"
+  end
+
+  def stop_listening
+    server = @mutex.synchronize do
+      current = @server
+      @server = nil
+      current
+    end
+    server&.close
+  end
+
+  def release_clients
+    sockets = @mutex.synchronize do
+      current = @clients
+      @clients = []
+      current
+    end
+    sockets.each { |sock| close_quietly(sock) }
+  end
+
+  def serve(sock)
+    hold = false
+    while (request = read_request(sock))
+      path, body = request
+      if (match = path.match(%r{\A/__state/(\w+)}))
+        wanted = FakeDrain.parse_state(match[1])
+        self.state = wanted if wanted
+        respond(sock, 200, "state is now #{describe(state)}#{@newline}")
+        next
+      end
+
+      @mutex.synchronize do
+        @requests += 1
+        @bytes += body.bytesize
+        @last_request_at = Time.now
+      end
+
+      case (current = state)
+      when :hang
+        hold = true
+        break
+      when :reset
+        break
+      when :slow
+        sleep SLOW_DELAY
+        respond(sock, 200, "ok\n")
+      else
+        respond(sock, current, (current == 200) ? "ok\n" : "error\n")
+      end
+    end
+  rescue Errno::ECONNRESET, Errno::EPIPE, IOError
+    # client went away
+  ensure
+    unless hold
+      close_quietly(sock)
+      @mutex.synchronize { @clients.delete(sock) }
+    end
+  end
+
+  # Returns [path, body] for one request on a keep-alive connection, or nil once the client closed it.
+  def read_request(sock)
+    request_line = sock.gets
+    return nil if request_line.nil?
+
+    path = request_line.split(" ")[1].to_s
+    content_length = 0
+    while (line = sock.gets) && line != "\r\n"
+      content_length = line.split(":", 2).last.to_i if line.downcase.start_with?("content-length:")
+    end
+    [path, content_length.positive? ? sock.read(content_length) : ""]
+  end
+
+  def respond(sock, code, body)
+    sock.write "HTTP/1.1 #{code} #{REASONS.fetch(code, "Whatever")}\r\nContent-Type: text/plain\r\n" \
+               "Content-Length: #{body.bytesize}\r\nConnection: keep-alive\r\n\r\n#{body}"
+  end
+
+  def close_quietly(sock)
+    sock.close
+  rescue IOError, SystemCallError
+    nil
+  end
+end
+
+$stdout.sync = true
+port = (ARGV[0] || 9999).to_i
+initial = FakeDrain.parse_state(ARGV[1]) || 200
+raw_mode = false
+if $stdin.tty? && $stdout.tty?
+  begin
+    $stdin.raw!(intr: true)
+    raw_mode = true
+    at_exit { $stdin.cooked! }
+  rescue SystemCallError, IOError
+    raw_mode = false
+  end
+end
+newline = raw_mode ? "\r\n" : "\n"
+drain = FakeDrain.new(port, initial, newline)
+
+drain.log "fake drain on http://127.0.0.1:#{port}/   keys: 2=200 5=500 3=503 4=413 h=hang s=slow r=reset d=down q=quit"
+
+Thread.new do
+  if raw_mode
+    while (key = $stdin.getc)
+      exit if key == "q" || key == ""
+      drain.state = FakeDrain::STATES[key] if FakeDrain::STATES.key?(key)
+    end
+  else
+    while (line = $stdin.gets)
+      word = line.strip
+      exit if word == "q"
+      wanted = FakeDrain::STATES[word] || FakeDrain.parse_state(word)
+      drain.state = wanted if wanted
+    end
+  end
+end
+
+Thread.new do
+  loop do
+    sleep 1
+    raw_mode ? $stdout.write("\r\e[2K#{drain.summary}") : $stdout.write("#{drain.summary}\n")
+  end
+end
+
+drain.run
