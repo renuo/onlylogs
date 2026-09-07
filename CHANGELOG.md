@@ -9,6 +9,15 @@
   or spool writes on the request thread: it is the tag reset it inherits, and when to ship is the
   sender's decision alone (every 100 lines or 0.5 s). `close` stays synchronous.
 - The spool keeps an in-memory byte ledger instead of listing and stat-ing every file on each write.
+- **`HttpLogger` now works in forked processes (Puma cluster mode, `fork_worker`).** The logger is
+  built in the Puma master and inherited by the workers, but threads do not survive a fork: every
+  worker logged into a queue nobody read and, once it was full, dropped every line silently. The
+  first write in a new process now rebuilds the queue, the keep-alive connection (previously shared
+  with the siblings) and the spool token (previously identical across workers, so their batches
+  overwrote each other) and starts a sender for that process.
+- **The sender thread can no longer die.** Its own diagnostics on `$stderr` could raise (closed pipe,
+  detached tty) from inside an error path, ending the thread for good; they never raise now, every
+  loop iteration is rescued, and should the thread die anyway the next write restarts it.
 - `bin/fake_drain` and `bin/fake_app` simulate a drain outage locally and show what it does to the
   app.
 

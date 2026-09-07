@@ -281,6 +281,96 @@ module Onlylogs
         "a DEBUG line was shipped to the drain even though the level is INFO"
     end
 
+    # Puma cluster mode (and fork_worker) builds the logger in the master and forks the workers;
+    # threads are not inherited, so without supervision every worker logs into a queue nobody reads.
+    test "ships lines logged in a forked child, which does not inherit the sender thread" do
+      skip "fork is not available" unless Process.respond_to?(:fork)
+
+      drain = build_drain
+      logger = build_logger(drain, batch_size: 1, flush_interval: 0.01)
+
+      logger.add(Logger::INFO, "parent line")
+      assert wait_until { drain.received.include?("parent line") }
+
+      # exit! skips at_exit, which would otherwise run minitest itself again in the child.
+      pid = fork do
+        logger.add(Logger::INFO, "child line")
+        logger.close
+        exit!(0)
+      end
+      Process.wait(pid)
+
+      assert wait_until { drain.received.include?("child line") },
+        "the child's line never reached the drain: the sender thread did not survive the fork"
+    end
+
+    # Workers share one spool directory. A child that keeps the parent's spool token writes
+    # <token>-000000001.batch like its siblings and the atomic rename silently overwrites theirs.
+    test "gives a forked child its own spool token so sibling workers do not overwrite batches" do
+      skip "fork is not available" unless Process.respond_to?(:fork)
+
+      dir = ::Dir.mktmpdir
+      drain = build_drain(status: 503)
+      logger = build_logger(drain, batch_size: 1, flush_interval: 0.01, spool_dir: dir)
+      batches = -> { ::Dir.glob(::File.join(dir, "*.batch")) }
+
+      capture_stderr do
+        logger.add(Logger::INFO, "parent batch")
+        assert wait_until { batches.call.size == 1 }, "the parent's failed batch should be spooled"
+
+        pid = fork do
+          logger.add(Logger::INFO, "child batch")
+          wait_until { batches.call.size == 2 }
+          exit!(0)
+        end
+        Process.wait(pid)
+      end
+
+      files = batches.call
+      assert_equal 2, files.size, "expected one spool file per process, got #{files.map { |f| ::File.basename(f) }}"
+      bodies = files.map { |file| ::File.read(file) }.join("\n")
+      assert_includes bodies, "parent batch"
+      assert_includes bodies, "child batch"
+    ensure
+      ::FileUtils.remove_entry(dir) if dir && ::File.directory?(dir)
+    end
+
+    test "restarts the sender thread on the next write if it died" do
+      drain = build_drain
+      logger = build_logger(drain, batch_size: 1, flush_interval: 0.01)
+
+      logger.device.instance_variable_get(:@sender_thread).kill.join
+      logger.add(Logger::INFO, "after sender death")
+
+      assert wait_until { drain.received.include?("after sender death") },
+        "a dead sender thread was not restarted; the app would log into a queue nobody reads"
+    end
+
+    # The device reports its own failures on $stderr. With a closed pipe or a detached tty that
+    # write raises, and an exception inside the error path used to end the sender thread for good.
+    test "keeps the sender thread alive when its own warnings cannot be written" do
+      drain = build_drain(status: 503)
+      logger = build_logger(drain, batch_size: 1, flush_interval: 0.01, circuit_cooldown: 0.3)
+      sender = logger.device.instance_variable_get(:@sender_thread)
+
+      reader, writer = IO.pipe
+      reader.close
+      with_stderr(writer) do
+        5.times { |i| logger.add(Logger::INFO, "failing #{i}") }
+        assert wait_until { logger.device.instance_variable_get(:@circuit_open_until) },
+          "the failing drain should trip the circuit"
+
+        drain.status = 200
+        sleep 0.4
+        logger.add(Logger::INFO, "after recovery")
+        assert wait_until { drain.received.include?("after recovery") }
+      end
+
+      assert sender.alive?, "the sender thread died on a warning it could not write"
+    ensure
+      writer&.close
+    end
+
     private
 
     # Spins up a MockDrain and registers it so teardown closes it. See MockDrain for `status:`.
@@ -310,9 +400,13 @@ module Onlylogs
       end
     end
 
-    def capture_stderr
+    def capture_stderr(&block)
+      with_stderr(StringIO.new, &block)
+    end
+
+    def with_stderr(io)
       original = $stderr
-      $stderr = StringIO.new
+      $stderr = io
       yield
     ensure
       $stderr = original

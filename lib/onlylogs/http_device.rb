@@ -16,6 +16,15 @@ require_relative "spool"
 # By default an on-disk Spool buffers any batch we could not deliver and replays it once the
 # drain recovers, so a transient outage or a restart does not lose logs. It is on by default
 # (set ONLYLOGS_SPOOL_DIR empty to disable) and bounded by bytes; see Onlylogs::Spool.
+#
+# Every write checks that a sender thread is alive in the current process and starts one if not:
+# * The device is usually built in the Puma master (production.rb runs before the workers are
+#   forked with preload_app!) and inherited by every worker. Threads do not survive a fork, so
+#   the child would have a queue nobody drains, a keep-alive socket shared with its siblings and a
+#   spool token that makes siblings overwrite each other's batches. The first write in a new
+#   process rebuilds all of that for the child.
+# * The sender must never die, so its error path never raises (see #safe_warn) and every loop
+#   iteration is rescued; should it die anyway, the next write restarts it.
 module Onlylogs
   class HttpDevice
     DEFAULT_BATCH_SIZE = 100
@@ -56,21 +65,18 @@ module Onlylogs
       @read_timeout = read_timeout
       @circuit_cooldown = circuit_cooldown
       @keep_alive_timeout = keep_alive_timeout
-      @queue = Queue.new
-      @mutex = Mutex.new
-      @http_mutex = Mutex.new
-      @http = nil
-      @spool = nil
-
-      @consecutive_failures = 0
-      @circuit_open_until = nil
-      @dropped = 0
+      @spool_dir = spool_dir
+      @spool_max_bytes = spool_max_bytes
+      @supervisor_mutex = Mutex.new
+      reset_process_state
 
       if @drain_url
-        @spool = build_spool(spool_dir, spool_max_bytes)
         start_sender
+        # at_exit procs are inherited by forked children, so this is registered exactly once: a
+        # child that rebuilt its state after the fork closes through the same block.
+        at_exit { close }
       else
-        $stderr.puts "Onlylogs::HttpDevice: ONLYLOGS_DRAIN_URL is not set; logging locally only." # rubocop:disable Style/StderrPuts
+        safe_warn "Onlylogs::HttpDevice: ONLYLOGS_DRAIN_URL is not set; logging locally only."
       end
     end
 
@@ -80,12 +86,17 @@ module Onlylogs
       # No drain configured: nothing to ship. The local fallback (see MultiDevice) still logs it.
       return unless @drain_url
 
+      ensure_sender
       enqueue(message.chomp)
     end
 
     # Ships everything still queued, then stops the sender. This is the only synchronous path: there
     # is deliberately no #flush, when to ship is the sender's decision (batch size or interval).
     def close
+      # A forked child that never logged owns nothing here: the queued lines and the connection
+      # belong to the parent, and finishing an inherited TLS socket would send close_notify on it.
+      return if forked?
+
       @queue.close
       @sender_thread&.join(2)
       close_connection
@@ -107,14 +118,50 @@ module Onlylogs
       nil
     end
 
+    # Cheap on the hot path (a getpid and a thread status check); only the first write after a fork
+    # or after the sender died pays for the rebuild. Several request threads can race here in a
+    # fresh worker, hence the double check under the lock.
+    def ensure_sender
+      return if sender_healthy?
+
+      @supervisor_mutex.synchronize do
+        next if sender_healthy?
+
+        # Deliberately no close_connection here: after a fork the inherited socket is still in use
+        # by the parent, and lines left in the inherited queue are the parent's to ship.
+        reset_process_state if forked?
+        start_sender
+      end
+    end
+
+    # A closed queue means #close ran: there is nothing left to supervise.
+    def sender_healthy?
+      !forked? && (@queue.closed? || @sender_thread&.alive?)
+    end
+
+    def forked?
+      Process.pid != @pid
+    end
+
+    def reset_process_state
+      @pid = Process.pid
+      @queue = Queue.new
+      @mutex = Mutex.new
+      @http_mutex = Mutex.new
+      @http = nil
+      @sender_thread = nil
+      @spool = build_spool(@spool_dir, @spool_max_bytes) if @drain_url
+      @consecutive_failures = 0
+      @circuit_open_until = nil
+      @dropped = 0
+    end
+
     def start_sender
       @sender_thread = Thread.new do
         # Replay anything left in the spool by a previous run or a crashed/redeployed sibling.
-        drain_spool
+        guard { drain_spool }
         sender_loop
       end
-
-      at_exit { close }
     end
 
     # Blocks on the queue instead of polling it: a partial batch waits for the rest of the flush
@@ -135,12 +182,29 @@ module Onlylogs
         next if batch.empty?
         next unless batch.size >= @batch_size || monotonic_now >= deadline
 
-        send_batch(batch)
+        guard { send_batch(batch) }
         batch = []
         deadline = nil
       end
 
-      send_batch(batch) if batch.any?
+      guard { send_batch(batch) } if batch.any?
+    end
+
+    # Last line of defence for the sender thread: whatever escapes the per-batch handling is
+    # reported and the batch given up, never the thread.
+    def guard
+      yield
+    rescue => e
+      safe_warn "Onlylogs::HttpDevice sender error: #{e.class}: #{e.message}"
+    end
+
+    # All of the device's own diagnostics go through here. Kernel.warn itself raises when $stderr is
+    # a closed pipe or a detached tty (EPIPE, EIO, IOError), and an exception inside an error path
+    # would take the sender thread down with it.
+    def safe_warn(message)
+      Kernel.warn(message)
+    rescue
+      nil
     end
 
     def monotonic_now
@@ -167,7 +231,7 @@ module Onlylogs
     rescue => e
       record_failure
       spool_write(body)
-      Kernel.warn "Onlylogs::HttpDevice error: #{e.class}: #{e.message}"
+      safe_warn "Onlylogs::HttpDevice error: #{e.class}: #{e.message}"
     end
 
     def spool_write(body)
@@ -186,7 +250,7 @@ module Onlylogs
         true
       rescue => e
         record_failure
-        Kernel.warn "Onlylogs::HttpDevice replay error: #{e.class}: #{e.message}"
+        safe_warn "Onlylogs::HttpDevice replay error: #{e.class}: #{e.message}"
         false
       end
     end
@@ -196,7 +260,7 @@ module Onlylogs
 
       Spool.new(dir: dir, max_bytes: max_bytes)
     rescue => e
-      Kernel.warn "Onlylogs::HttpDevice: spool disabled (#{e.class}: #{e.message})"
+      safe_warn "Onlylogs::HttpDevice: spool disabled (#{e.class}: #{e.message})"
       nil
     end
 
@@ -309,7 +373,7 @@ module Onlylogs
       return unless opened
 
       suffix = dropped.positive? ? " (#{dropped} log lines dropped)" : ""
-      Kernel.warn "Onlylogs::HttpDevice: drain unavailable, pausing for #{@circuit_cooldown}s#{suffix}"
+      safe_warn "Onlylogs::HttpDevice: drain unavailable, pausing for #{@circuit_cooldown}s#{suffix}"
     end
   end
 end
