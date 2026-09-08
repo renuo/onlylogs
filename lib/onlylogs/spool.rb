@@ -15,9 +15,15 @@ module Onlylogs
   # The byte cap is enforced from an in-memory ledger of the files in the directory, refreshed by
   # listing the directory at most every LEDGER_TTL seconds (sibling processes such as other Puma
   # workers write to the same directory), so a write costs one file and not a stat of every file.
+  #
+  # Those siblings replay the same directory too. A file is claimed with an atomic rename before it
+  # is delivered, so each batch is shipped by one worker only; a claim a dead worker left behind is
+  # handed back after STALE_CLAIM_AFTER seconds.
   class Spool
     DEFAULT_MAX_BYTES = 128 * 1024 * 1024 # 128 MB
     LEDGER_TTL = 5
+    CLAIM_SUFFIX = ".sending"
+    STALE_CLAIM_AFTER = 60
 
     def initialize(dir:, max_bytes: DEFAULT_MAX_BYTES)
       @dir = dir
@@ -67,15 +73,19 @@ module Onlylogs
       end
 
       paths.each do |path|
-        body = read(path)
-        if body.nil? # claimed/deleted by another process, or quarantined
+        sending = path + CLAIM_SUFFIX
+        body = claim(path, sending)
+        if body.nil? # taken by another process, or quarantined
           forget(path)
           next
         end
 
-        break unless yield(body)
+        unless yield(body)
+          release(sending, path)
+          break
+        end
 
-        delete(path)
+        delete(sending)
         forget(path)
       end
     end
@@ -103,8 +113,22 @@ module Onlylogs
     # Oldest-first. mtime is the primary key; the zero-padded sequence in the filename breaks
     # ties (and preserves per-process write order when mtimes collide at coarse FS resolution).
     def pending_files
+      reclaim_stale_claims
       ::Dir.glob(::File.join(@dir, "*.batch")).reject { |path| @quarantined.include?(path) }
         .sort_by { |path| [mtime(path), path] }
+    end
+
+    # A worker that died mid-delivery leaves its claim behind. Hand such files back so they are not
+    # lost; the claim's touched mtime puts them at the back of the queue.
+    def reclaim_stale_claims
+      cutoff = Time.now - STALE_CLAIM_AFTER
+      ::Dir.glob(::File.join(@dir, "*#{CLAIM_SUFFIX}")).each do |sending|
+        next unless mtime(sending) < cutoff
+
+        ::File.rename(sending, sending.delete_suffix(CLAIM_SUFFIX))
+      rescue SystemCallError
+        nil
+      end
     end
 
     def mtime(path)
@@ -125,13 +149,25 @@ module Onlylogs
       end
     end
 
-    def read(path)
-      ::File.binread(path)
+    # Take the file away from sibling workers, then read it. Rename is atomic within a directory,
+    # so the loser of a race gets ENOENT. The mtime is bumped so a stale claim can be told apart
+    # from the batch's own age.
+    def claim(path, sending)
+      ::File.rename(path, sending)
+      now = Time.now
+      ::File.utime(now, now, sending)
+      ::File.binread(sending)
     rescue Errno::ENOENT
       nil
     rescue SystemCallError => e
-      quarantine(path, "read", e)
+      quarantine(path, "claim", e)
       nil
+    end
+
+    def release(sending, path)
+      ::File.rename(sending, path)
+    rescue SystemCallError => e
+      safe_warn "Onlylogs::Spool: cannot release #{sending} (#{e.class}: #{e.message})"
     end
 
     def delete(path)
@@ -139,12 +175,12 @@ module Onlylogs
     rescue Errno::ENOENT
       nil
     rescue SystemCallError => e
-      quarantine(path, "delete", e)
+      quarantine(path.delete_suffix(CLAIM_SUFFIX), "delete", e)
     end
 
-    # A file this process cannot read or delete (a directory, another owner, a read-only volume)
-    # is left alone for the rest of the process: retrying it would fail the same way, in a tight
-    # loop. May run with or without @mutex held (evict vs replay).
+    # A file this process cannot claim, read or delete (a directory, another owner, a read-only
+    # volume) is left alone for the rest of the process: retrying it would fail the same way, in a
+    # tight loop. May run with or without @mutex held (evict vs replay).
     def quarantine(path, action, error)
       if @mutex.owned?
         @quarantined << path
