@@ -71,31 +71,36 @@ module Onlylogs
     # the same second.
     CIRCUIT_COOLDOWN = 30
 
+    # Every setting is validated up front: a typo in an env var must never leave the sender without
+    # timeouts (Net::HTTP treats 0 as "no timeout") or unable to truncate a line. Invalid numbers
+    # fall back to the default with a warning; a drain URL that is not http(s) or has no host falls
+    # back to local-only logging. A misconfiguration is never a boot failure.
     def initialize(
       drain_url: ENV["ONLYLOGS_DRAIN_URL"],
-      batch_size: ENV.fetch("ONLYLOGS_BATCH_SIZE", DEFAULT_BATCH_SIZE).to_i,
-      flush_interval: ENV.fetch("ONLYLOGS_FLUSH_INTERVAL", DEFAULT_FLUSH_INTERVAL).to_f,
-      max_queue_size: ENV.fetch("ONLYLOGS_MAX_QUEUE_SIZE", DEFAULT_MAX_QUEUE_SIZE).to_i,
-      max_batch_bytes: ENV.fetch("ONLYLOGS_MAX_BATCH_BYTES", DEFAULT_MAX_BATCH_BYTES).to_i,
-      open_timeout: ENV.fetch("ONLYLOGS_OPEN_TIMEOUT", DEFAULT_OPEN_TIMEOUT).to_f,
-      read_timeout: ENV.fetch("ONLYLOGS_READ_TIMEOUT", DEFAULT_READ_TIMEOUT).to_f,
-      circuit_cooldown: ENV.fetch("ONLYLOGS_CIRCUIT_COOLDOWN", CIRCUIT_COOLDOWN).to_f,
-      keep_alive_timeout: ENV.fetch("ONLYLOGS_KEEP_ALIVE_TIMEOUT", DEFAULT_KEEP_ALIVE_TIMEOUT).to_f,
+      batch_size: ENV.fetch("ONLYLOGS_BATCH_SIZE", DEFAULT_BATCH_SIZE),
+      flush_interval: ENV.fetch("ONLYLOGS_FLUSH_INTERVAL", DEFAULT_FLUSH_INTERVAL),
+      max_queue_size: ENV.fetch("ONLYLOGS_MAX_QUEUE_SIZE", DEFAULT_MAX_QUEUE_SIZE),
+      max_batch_bytes: ENV.fetch("ONLYLOGS_MAX_BATCH_BYTES", DEFAULT_MAX_BATCH_BYTES),
+      open_timeout: ENV.fetch("ONLYLOGS_OPEN_TIMEOUT", DEFAULT_OPEN_TIMEOUT),
+      read_timeout: ENV.fetch("ONLYLOGS_READ_TIMEOUT", DEFAULT_READ_TIMEOUT),
+      circuit_cooldown: ENV.fetch("ONLYLOGS_CIRCUIT_COOLDOWN", CIRCUIT_COOLDOWN),
+      keep_alive_timeout: ENV.fetch("ONLYLOGS_KEEP_ALIVE_TIMEOUT", DEFAULT_KEEP_ALIVE_TIMEOUT),
       spool_dir: ENV.fetch("ONLYLOGS_SPOOL_DIR", default_spool_dir),
-      spool_max_bytes: ENV.fetch("ONLYLOGS_SPOOL_MAX_BYTES", Spool::DEFAULT_MAX_BYTES).to_i
+      spool_max_bytes: ENV.fetch("ONLYLOGS_SPOOL_MAX_BYTES", Spool::DEFAULT_MAX_BYTES)
     )
-      @drain_url = drain_url
-      @uri = URI.parse(drain_url) if drain_url
-      @batch_size = batch_size
-      @flush_interval = flush_interval
-      @max_queue_size = max_queue_size
-      @max_batch_bytes = max_batch_bytes
-      @open_timeout = open_timeout
-      @read_timeout = read_timeout
-      @circuit_cooldown = circuit_cooldown
-      @keep_alive_timeout = keep_alive_timeout
+      @uri = parse_drain_url(drain_url)
+      @drain_url = drain_url if @uri
+      @batch_size = integer_setting("ONLYLOGS_BATCH_SIZE", batch_size, DEFAULT_BATCH_SIZE)
+      @flush_interval = float_setting("ONLYLOGS_FLUSH_INTERVAL", flush_interval, DEFAULT_FLUSH_INTERVAL)
+      @max_queue_size = integer_setting("ONLYLOGS_MAX_QUEUE_SIZE", max_queue_size, DEFAULT_MAX_QUEUE_SIZE)
+      @max_batch_bytes = integer_setting("ONLYLOGS_MAX_BATCH_BYTES", max_batch_bytes, DEFAULT_MAX_BATCH_BYTES,
+        min: MIN_BATCH_BYTES)
+      @open_timeout = float_setting("ONLYLOGS_OPEN_TIMEOUT", open_timeout, DEFAULT_OPEN_TIMEOUT)
+      @read_timeout = float_setting("ONLYLOGS_READ_TIMEOUT", read_timeout, DEFAULT_READ_TIMEOUT)
+      @circuit_cooldown = float_setting("ONLYLOGS_CIRCUIT_COOLDOWN", circuit_cooldown, CIRCUIT_COOLDOWN)
+      @keep_alive_timeout = float_setting("ONLYLOGS_KEEP_ALIVE_TIMEOUT", keep_alive_timeout, DEFAULT_KEEP_ALIVE_TIMEOUT)
       @spool_dir = spool_dir
-      @spool_max_bytes = spool_max_bytes
+      @spool_max_bytes = integer_setting("ONLYLOGS_SPOOL_MAX_BYTES", spool_max_bytes, Spool::DEFAULT_MAX_BYTES)
       @supervisor_mutex = Mutex.new
       reset_process_state
 
@@ -104,7 +109,7 @@ module Onlylogs
         # at_exit procs are inherited by forked children, so this is registered exactly once: a
         # child that rebuilt its state after the fork closes through the same block.
         at_exit { close }
-      else
+      elsif blank?(drain_url)
         safe_warn "Onlylogs::HttpDevice: ONLYLOGS_DRAIN_URL is not set; logging locally only."
       end
     end
@@ -134,6 +139,44 @@ module Onlylogs
     private
 
     TRUNCATION_MARKER = "...[truncated by onlylogs]"
+
+    # A cap that cannot hold the marker would make every truncation raise.
+    MIN_BATCH_BYTES = TRUNCATION_MARKER.bytesize + 1
+
+    def parse_drain_url(url)
+      return if blank?(url)
+
+      uri = URI.parse(url.to_s)
+      raise URI::InvalidURIError, "not an http(s) URL with a host" unless uri.is_a?(URI::HTTP) && !blank?(uri.host)
+
+      uri
+    rescue URI::InvalidURIError => e
+      safe_warn "Onlylogs::HttpDevice: ONLYLOGS_DRAIN_URL #{url.inspect} is invalid (#{e.message}); logging locally only."
+      nil
+    end
+
+    def blank?(value)
+      value.nil? || value.to_s.strip.empty?
+    end
+
+    def integer_setting(name, value, default, min: 1)
+      number = Integer(value, exception: false)
+      return number if number && number >= min
+
+      fallback_setting(name, value, default, "an integer of at least #{min}")
+    end
+
+    def float_setting(name, value, default)
+      number = Float(value, exception: false)
+      return number if number&.positive?
+
+      fallback_setting(name, value, default, "a positive number")
+    end
+
+    def fallback_setting(name, value, default, expected)
+      safe_warn "Onlylogs::HttpDevice: #{name} is #{value.inspect}, expected #{expected}; using #{default}"
+      default
+    end
 
     def truncate(line)
       return line if line.bytesize <= @max_batch_bytes
