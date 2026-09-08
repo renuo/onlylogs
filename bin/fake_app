@@ -425,9 +425,11 @@ while state[:running]
     device.instance_variable_get(:@batch_size), device.instance_variable_get(:@flush_interval), spin_note)
   lines << ""
 
-  queue_fraction = queue.size.to_f / device.instance_variable_get(:@max_queue_size)
-  lines << format(" %s %5d / %d lines in memory %s   dropped %d",
-    label("QUEUE"), queue.size, device.instance_variable_get(:@max_queue_size),
+  queued_bytes = device.instance_variable_get(:@queued_bytes)
+  max_queue_bytes = device.instance_variable_get(:@max_queue_bytes)
+  queue_fraction = queued_bytes.to_f / max_queue_bytes
+  lines << format(" %s %5d lines, %s / %s in memory %s   dropped %d",
+    label("QUEUE"), queue.size, megabytes(queued_bytes), megabytes(max_queue_bytes),
     paint(bar(queue_fraction, 20), (queue_fraction > 0.5) ? :red : :green), device.instance_variable_get(:@dropped))
   circuit_text = if circuit_open
     paint(format("● OPEN, next retry in %2ds", open_until - Time.now), :red)

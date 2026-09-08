@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- **`HttpLogger`'s in-memory queue is bounded by bytes instead of lines.** The old cap of 10,000
+  lines said nothing about memory: with lines of up to 1 MB that was a 10 GB worst case, and apps
+  that log payloads routinely produce lines of 50-100 KB. The queue now holds at most
+  `ONLYLOGS_MAX_QUEUE_BYTES` (32 MB); `ONLYLOGS_MAX_QUEUE_SIZE` and the `max_queue_size` option
+  are gone.
+
 ## 0.10.0
 
 - **`HttpLogger` no longer burns a CPU core and stalls every request.** The sender thread polled

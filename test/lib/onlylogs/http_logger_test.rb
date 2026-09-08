@@ -88,17 +88,32 @@ module Onlylogs
     # is accepted but the server never sends a response, so each request blocks until the
     # read timeout. This is the dangerous case the unreachable (connection-refused) test
     # above does NOT cover, because connection-refused fails instantly.
-    test "bounds the in-memory queue when the drain is down so it cannot OOM the app" do
+    test "bounds the in-memory queue by bytes when the drain is down so it cannot OOM the app" do
       drain = build_drain(status: :hang)
       logger = build_logger(drain,
-        batch_size: 100, flush_interval: 0.01, max_queue_size: 500, open_timeout: 0.2, read_timeout: 0.2)
+        batch_size: 100, flush_interval: 0.01, max_queue_bytes: 50_000, open_timeout: 0.2, read_timeout: 0.2)
 
-      # A busy app firing far more lines than a down drain can ever absorb.
-      5_000.times { |i| logger.add(Logger::INFO, "line #{i}") }
+      # A busy app logging payloads far faster than a down drain can ever absorb.
+      payload = "x" * 1_000
+      5_000.times { |i| logger.add(Logger::INFO, "line #{i} #{payload}") }
 
-      queue = logger.device.instance_variable_get(:@queue)
-      assert_operator queue.size, :<=, 500,
-        "queue grew past max_queue_size (#{queue.size}); a down drain would exhaust memory"
+      device = logger.device
+      queued_bytes = device.instance_variable_get(:@queued_bytes)
+      assert_operator queued_bytes, :<=, 50_000,
+        "queue grew to #{queued_bytes} bytes, past max_queue_bytes; a down drain would exhaust memory"
+      assert_operator device.instance_variable_get(:@dropped), :>, 0
+    end
+
+    test "releases queued bytes once the sender has shipped the lines" do
+      drain = build_drain
+      logger = build_logger(drain, batch_size: 1000, flush_interval: 0.05)
+
+      10.times { |i| logger.add(Logger::INFO, "shipped line #{i}") }
+
+      device = logger.device
+      assert wait_until { drain.received.include?("shipped line 9") }
+      assert wait_until { device.instance_variable_get(:@queued_bytes).zero? },
+        "queued bytes ledger did not return to 0 after the queue was drained"
     end
 
     test "stops blocking on every send once the drain is detected as down (circuit breaker)" do

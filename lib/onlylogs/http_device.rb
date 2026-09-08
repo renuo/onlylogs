@@ -8,7 +8,8 @@ require_relative "spool"
 # via HTTP.
 #
 # When the drain is unreachable or unresponsive, we do two things to protect the app:
-# * an upper bound to the in-memory queue: log lines can never accumulate without limit and exhaust memory
+# * an upper bound, in bytes, to the in-memory queue: log lines can never accumulate without limit
+#   and exhaust memory
 # * cooldown: once the drain is known to be failing we stop attempting
 #   requests for a cooldown period instead of blocking on every send for the full
 #   read timeout (a down host accepts the TCP/TLS connection but never answers).
@@ -50,7 +51,10 @@ module Onlylogs
 
     DEFAULT_BATCH_SIZE = 100
     DEFAULT_FLUSH_INTERVAL = 0.5
-    DEFAULT_MAX_QUEUE_SIZE = 10_000
+
+    # The in-memory queue is bounded by bytes, not lines: apps that log payloads produce lines of
+    # 50-100 KB, and a line can be as big as a whole batch, so a line count says nothing about memory.
+    DEFAULT_MAX_QUEUE_BYTES = 32 * 1024 * 1024
 
     # A batch body never exceeds this many bytes, and neither does a single line: a drain cannot
     # answer 413 to a request we never make. Lines over the cap are cut and marked.
@@ -75,7 +79,7 @@ module Onlylogs
       drain_url: ENV["ONLYLOGS_DRAIN_URL"],
       batch_size: ENV.fetch("ONLYLOGS_BATCH_SIZE", DEFAULT_BATCH_SIZE).to_i,
       flush_interval: ENV.fetch("ONLYLOGS_FLUSH_INTERVAL", DEFAULT_FLUSH_INTERVAL).to_f,
-      max_queue_size: ENV.fetch("ONLYLOGS_MAX_QUEUE_SIZE", DEFAULT_MAX_QUEUE_SIZE).to_i,
+      max_queue_bytes: ENV.fetch("ONLYLOGS_MAX_QUEUE_BYTES", DEFAULT_MAX_QUEUE_BYTES).to_i,
       max_batch_bytes: ENV.fetch("ONLYLOGS_MAX_BATCH_BYTES", DEFAULT_MAX_BATCH_BYTES).to_i,
       open_timeout: ENV.fetch("ONLYLOGS_OPEN_TIMEOUT", DEFAULT_OPEN_TIMEOUT).to_f,
       read_timeout: ENV.fetch("ONLYLOGS_READ_TIMEOUT", DEFAULT_READ_TIMEOUT).to_f,
@@ -88,7 +92,7 @@ module Onlylogs
       @uri = URI.parse(drain_url) if drain_url
       @batch_size = batch_size
       @flush_interval = flush_interval
-      @max_queue_size = max_queue_size
+      @max_queue_bytes = max_queue_bytes
       @max_batch_bytes = max_batch_bytes
       @open_timeout = open_timeout
       @read_timeout = read_timeout
@@ -141,13 +145,18 @@ module Onlylogs
       line.byteslice(0, @max_batch_bytes - TRUNCATION_MARKER.bytesize).scrub("") + TRUNCATION_MARKER
     end
 
-    # Push a line onto the queue unless it is full. Dropping is intentional: blocking the
-    # caller (a request thread) or growing without bound (OOM) are both worse than losing
-    # logs while the drain is unavailable.
+    # Push a line onto the queue unless it would grow past the byte cap. Dropping is intentional:
+    # blocking the caller (a request thread) or growing without bound (OOM) are both worse than
+    # losing logs while the drain is unavailable. @queued_bytes is the queue's own ledger: it goes
+    # up here and down in the sender as lines are popped.
     def enqueue(line)
-      if @queue.size >= @max_queue_size
-        @mutex.synchronize { @dropped += 1 }
-        return
+      @mutex.synchronize do
+        if @queued_bytes + line.bytesize > @max_queue_bytes
+          @dropped += 1
+          return
+        end
+
+        @queued_bytes += line.bytesize
       end
 
       @queue << line
@@ -187,6 +196,7 @@ module Onlylogs
       @http_mutex = Mutex.new
       @http = nil
       @sender_thread = nil
+      @queued_bytes = 0
       @spool = build_spool(@spool_dir, @spool_max_bytes) if @drain_url
       @consecutive_failures = 0
       @circuit_open_until = nil
@@ -217,6 +227,7 @@ module Onlylogs
         break if line.nil? && @queue.closed?
 
         if line
+          @mutex.synchronize { @queued_bytes -= line.bytesize }
           if batch.any? && bytes + line.bytesize + 1 > @max_batch_bytes
             guard { send_batch(batch) }
             batch = []
