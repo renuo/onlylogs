@@ -180,11 +180,10 @@ module Onlylogs
         open1 = wait_until { logger.device.instance_variable_get(:@circuit_open_until) }
         assert open1, "circuit should have opened on the initial failures"
 
-        # Let the cooldown lapse, then hand the sender a fresh line to retry.
-        sleep 0.7
-        logger.add(Logger::INFO, "retry while still down")
-
+        # Keep handing the sender lines: the pause is jittered, so the retry happens sometime
+        # between 0.5x and 1.5x the cooldown, and without a spool only a live batch triggers it.
         open2 = wait_until do
+          logger.add(Logger::INFO, "retry while still down")
           later = logger.device.instance_variable_get(:@circuit_open_until)
           later if later && later > open1
         end
@@ -369,6 +368,112 @@ module Onlylogs
       assert sender.alive?, "the sender thread died on a warning it could not write"
     ensure
       writer&.close
+    end
+
+    # onlylogs.io answers 404 to an unknown or deleted token and 403 to a paused project: no retry
+    # will ever make such a batch acceptable. It must be dropped with a warning, not spooled, and
+    # it must not open the circuit (the drain is up).
+    test "drops a batch the drain rejects with a 4xx instead of spooling and retrying it" do
+      dir = ::Dir.mktmpdir
+      drain = build_drain(status: 404)
+      logger = build_logger(drain, batch_size: 1, flush_interval: 0.01, spool_dir: dir)
+
+      warnings = nil
+      capture_stderr do
+        3.times { |i| logger.add(Logger::INFO, "rejected #{i}") }
+        assert wait_until { drain.bodies.size >= 3 }, "every batch should still be attempted"
+        warnings = $stderr.string
+      end
+
+      assert_empty ::Dir.glob(::File.join(dir, "*.batch")), "a permanently rejected batch must not be spooled"
+      assert_nil logger.device.instance_variable_get(:@circuit_open_until),
+        "a 4xx means the drain is up; it must not open the circuit"
+      assert_includes warnings, "404"
+      assert_equal 1, warnings.scan("dropped").size, "one warning per cooldown, not one per batch"
+    ensure
+      logger&.close
+      ::FileUtils.remove_entry(dir) if dir && ::File.directory?(dir)
+    end
+
+    # A rejected batch at the head of the spool must not block everything behind it forever.
+    test "deletes a spooled batch the drain rejects on replay" do
+      dir = ::Dir.mktmpdir
+      Onlylogs::Spool.new(dir: dir).write("poison batch")
+
+      drain = build_drain(status: 404)
+      logger = build_logger(drain, batch_size: 1, flush_interval: 0.01, spool_dir: dir)
+
+      capture_stderr do
+        assert wait_until { ::Dir.glob(::File.join(dir, "*.batch")).empty? },
+          "a spooled batch the drain rejects for good should be deleted, not retried forever"
+      end
+      assert_includes drain.received, "poison batch"
+    ensure
+      logger&.close
+      ::FileUtils.remove_entry(dir) if dir && ::File.directory?(dir)
+    end
+
+    # A 429 is the drain asking us to slow down: honour Retry-After, keep the batch, and try again
+    # later, without counting it as an outage.
+    test "pauses for Retry-After and keeps the batch when the drain answers 429" do
+      dir = ::Dir.mktmpdir
+      drain = build_drain(status: 429, headers: {"Retry-After" => "1"})
+      logger = build_logger(drain, batch_size: 1, flush_interval: 0.01, circuit_cooldown: 30, spool_dir: dir)
+
+      capture_stderr do
+        logger.add(Logger::INFO, "throttled line")
+        open_until = wait_until { logger.device.instance_variable_get(:@circuit_open_until) }
+        assert open_until, "a 429 should pause the sender"
+        assert_in_delta 1, open_until - Time.now, 0.5, "the pause should follow Retry-After, not the cooldown"
+        assert_equal 0, logger.device.instance_variable_get(:@consecutive_failures), "a 429 is not a failure"
+        refute_empty ::Dir.glob(::File.join(dir, "*.batch")), "the throttled batch should be kept on disk"
+
+        drain.status = 200
+        assert wait_until { drain.received.include?("throttled line") }, "the batch should be replayed after the pause"
+      end
+    ensure
+      logger&.close
+      ::FileUtils.remove_entry(dir) if dir && ::File.directory?(dir)
+    end
+
+    # A batch never exceeds max_batch_bytes, and neither does a single line, so the drain can never
+    # answer 413 to what we send.
+    test "caps the batch body and truncates oversized lines" do
+      drain = build_drain
+      logger = build_logger(drain, batch_size: 1000, flush_interval: 0.05, max_batch_bytes: 200)
+
+      10.times { |i| logger.add(Logger::INFO, "line #{i} #{"x" * 40}") }
+      logger.add(Logger::INFO, "huge #{"y" * 500}")
+
+      assert wait_until { drain.received.include?("truncated by onlylogs") }
+      assert wait_until { drain.received.include?("line 9") }
+      drain.bodies.each do |body|
+        assert_operator body.bytesize, :<=, 200, "a batch body exceeded the cap: #{body.bytesize} bytes"
+      end
+      assert_equal 1, drain.bodies.count { |body| body.include?("huge") }
+    end
+
+    # After an outage the backlog is replayed one file per live batch, not all at once: replaying
+    # everything first would let the live queue overflow, and every client of a drain that just
+    # came back would hit it with its whole spool at full speed.
+    test "interleaves spool replay with live batches instead of replaying the whole backlog first" do
+      dir = ::Dir.mktmpdir
+      previous = Onlylogs::Spool.new(dir: dir)
+      200.times { |i| previous.write("spooled #{i}") }
+
+      drain = build_drain
+      logger = build_logger(drain, batch_size: 1, flush_interval: 0.01, spool_dir: dir)
+      logger.add(Logger::INFO, "live line")
+
+      assert wait_until(timeout: 10) { ::Dir.glob(::File.join(dir, "*.batch")).empty? }, "the spool should drain"
+      bodies = drain.bodies
+      live_at = bodies.index { |body| body.include?("live line") }
+      assert live_at, "the live line should have been delivered"
+      assert_operator live_at, :<, 100,
+        "the live line was delivered after #{live_at} spooled batches; replay should interleave with live traffic"
+    ensure
+      logger&.close
+      ::FileUtils.remove_entry(dir) if dir && ::File.directory?(dir)
     end
 
     private

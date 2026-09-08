@@ -25,11 +25,36 @@ require_relative "spool"
 #   process rebuilds all of that for the child.
 # * The sender must never die, so its error path never raises (see #safe_warn) and every loop
 #   iteration is rescued; should it die anyway, the next write restarts it.
+#
+# Not every failure is worth retrying. The drain's answer decides what happens to a batch:
+# * 2xx: delivered.
+# * 429: the drain is overloaded and asks us to slow down. Pause for Retry-After (or a cooldown)
+#   and keep the batch on disk; nothing is lost, it is just late.
+# * other 4xx: the drain will never accept this batch (unknown token, paused project, body too
+#   big). Retrying cannot help, so the batch is dropped and a warning says why.
+# * 5xx, timeouts, connection errors: retryable. Count towards opening the circuit and spool.
 module Onlylogs
   class HttpDevice
+    # The drain answered with a 4xx other than 429: the batch itself is the problem, not the drain.
+    class Rejected < StandardError; end
+
+    # The drain answered 429: it is up but wants us to back off.
+    class Throttled < StandardError
+      attr_reader :retry_after
+
+      def initialize(message, retry_after: nil)
+        super(message)
+        @retry_after = retry_after
+      end
+    end
+
     DEFAULT_BATCH_SIZE = 100
     DEFAULT_FLUSH_INTERVAL = 0.5
     DEFAULT_MAX_QUEUE_SIZE = 10_000
+
+    # A batch body never exceeds this many bytes, and neither does a single line: a drain cannot
+    # answer 413 to a request we never make. Lines over the cap are cut and marked.
+    DEFAULT_MAX_BATCH_BYTES = 1024 * 1024
 
     # Keep timeouts short: a single slow/dead drain must never stall the app for long.
     DEFAULT_OPEN_TIMEOUT = 0.5
@@ -41,7 +66,9 @@ module Onlylogs
 
     # Open the circuit after this many consecutive failed sends
     CIRCUIT_FAILURE_THRESHOLD = 3
-    # ...and keep it open for this long once it is open.
+    # ...and keep it open for about this long once it is open. The actual pause is jittered
+    # between 0.5x and 1.5x so that every client of a drain that just came back does not retry in
+    # the same second.
     CIRCUIT_COOLDOWN = 30
 
     def initialize(
@@ -49,6 +76,7 @@ module Onlylogs
       batch_size: ENV.fetch("ONLYLOGS_BATCH_SIZE", DEFAULT_BATCH_SIZE).to_i,
       flush_interval: ENV.fetch("ONLYLOGS_FLUSH_INTERVAL", DEFAULT_FLUSH_INTERVAL).to_f,
       max_queue_size: ENV.fetch("ONLYLOGS_MAX_QUEUE_SIZE", DEFAULT_MAX_QUEUE_SIZE).to_i,
+      max_batch_bytes: ENV.fetch("ONLYLOGS_MAX_BATCH_BYTES", DEFAULT_MAX_BATCH_BYTES).to_i,
       open_timeout: ENV.fetch("ONLYLOGS_OPEN_TIMEOUT", DEFAULT_OPEN_TIMEOUT).to_f,
       read_timeout: ENV.fetch("ONLYLOGS_READ_TIMEOUT", DEFAULT_READ_TIMEOUT).to_f,
       circuit_cooldown: ENV.fetch("ONLYLOGS_CIRCUIT_COOLDOWN", CIRCUIT_COOLDOWN).to_f,
@@ -61,6 +89,7 @@ module Onlylogs
       @batch_size = batch_size
       @flush_interval = flush_interval
       @max_queue_size = max_queue_size
+      @max_batch_bytes = max_batch_bytes
       @open_timeout = open_timeout
       @read_timeout = read_timeout
       @circuit_cooldown = circuit_cooldown
@@ -87,7 +116,7 @@ module Onlylogs
       return unless @drain_url
 
       ensure_sender
-      enqueue(message.chomp)
+      enqueue(truncate(message.chomp))
     end
 
     # Ships everything still queued, then stops the sender. This is the only synchronous path: there
@@ -103,6 +132,14 @@ module Onlylogs
     end
 
     private
+
+    TRUNCATION_MARKER = "...[truncated by onlylogs]"
+
+    def truncate(line)
+      return line if line.bytesize <= @max_batch_bytes
+
+      line.byteslice(0, @max_batch_bytes - TRUNCATION_MARKER.bytesize).scrub("") + TRUNCATION_MARKER
+    end
 
     # Push a line onto the queue unless it is full. Dropping is intentional: blocking the
     # caller (a request thread) or growing without bound (OOM) are both worse than losing
@@ -154,40 +191,69 @@ module Onlylogs
       @consecutive_failures = 0
       @circuit_open_until = nil
       @dropped = 0
+      @rejected = 0
+      @rejection_warned_at = nil
     end
 
     def start_sender
-      @sender_thread = Thread.new do
-        # Replay anything left in the spool by a previous run or a crashed/redeployed sibling.
-        guard { drain_spool }
-        sender_loop
-      end
+      @sender_thread = Thread.new { sender_loop }
     end
 
     # Blocks on the queue instead of polling it: a partial batch waits for the rest of the flush
     # interval inside Queue#pop, so the thread costs nothing while idle. A full batch sends early;
     # a closed queue (see #close) ends the loop once it has been emptied.
+    #
+    # The spool (batches left by an outage, or by a previous run) is replayed one file at a time
+    # between live batches, never all at once: the live queue must not overflow while we catch up,
+    # and a drain that just recovered must not be hit with every client's whole backlog at full
+    # speed. While the queue is idle the loop keeps replaying, one file per turn.
     def sender_loop
       batch = []
+      bytes = 0
       deadline = nil
 
       loop do
-        line = @queue.pop(timeout: deadline && [deadline - monotonic_now, 0].max)
+        line = @queue.pop(timeout: pop_timeout(deadline))
         break if line.nil? && @queue.closed?
 
         if line
+          if batch.any? && bytes + line.bytesize + 1 > @max_batch_bytes
+            guard { send_batch(batch) }
+            batch = []
+            bytes = 0
+            deadline = nil
+          end
           batch << line
+          bytes += line.bytesize + 1
           deadline ||= monotonic_now + @flush_interval
         end
-        next if batch.empty?
-        next unless batch.size >= @batch_size || monotonic_now >= deadline
 
-        guard { send_batch(batch) }
-        batch = []
-        deadline = nil
+        if batch.any? && (batch.size >= @batch_size || monotonic_now >= deadline)
+          guard { send_batch(batch) }
+          batch = []
+          bytes = 0
+          deadline = nil
+          guard { replay_one }
+        elsif line.nil?
+          guard { replay_one }
+        end
       end
 
       guard { send_batch(batch) } if batch.any?
+    end
+
+    # How long the sender may block waiting for the next line: until the partial batch is due,
+    # until the circuit closes if there is a backlog to replay, not at all if we can replay right
+    # now, or indefinitely when there is nothing to do.
+    def pop_timeout(deadline)
+      return [deadline - monotonic_now, 0].max if deadline
+      return nil unless spool_pending?
+
+      circuit_remaining
+    end
+
+    def spool_pending?
+      !@spool.nil? && !@spool.empty?
     end
 
     # Last line of defence for the sender thread: whatever escapes the per-batch handling is
@@ -226,8 +292,11 @@ module Onlylogs
 
       deliver(body)
       record_success
-      # The drain just answered: replay anything we had buffered while it was unavailable.
-      drain_spool
+    rescue Rejected => e
+      record_rejection(lines.size, e)
+    rescue Throttled => e
+      record_throttle(e)
+      spool_write(body)
     rescue => e
       record_failure
       spool_write(body)
@@ -238,16 +307,22 @@ module Onlylogs
       @spool&.write(body)
     end
 
-    # Replay buffered batches now that the drain is responding. Oldest first; stop at the first
-    # failure (record it and leave the rest on disk) so a drain that just went down again does not
-    # burn the whole backlog into the void.
-    def drain_spool
-      return unless @spool
+    # Replay the oldest buffered batch, if the drain is believed to be up. A batch the drain rejects
+    # for good is deleted too, otherwise it would sit at the head of the spool forever and block
+    # everything behind it.
+    def replay_one
+      return if @spool.nil? || circuit_open?
 
-      @spool.replay do |body|
+      @spool.replay(limit: 1) do |body|
         deliver(body)
         record_success
         true
+      rescue Rejected => e
+        record_rejection(body.count("\n") + 1, e)
+        true
+      rescue Throttled => e
+        record_throttle(e)
+        false
       rescue => e
         record_failure
         safe_warn "Onlylogs::HttpDevice replay error: #{e.class}: #{e.message}"
@@ -298,13 +373,30 @@ module Onlylogs
       end
     end
 
-    # Net::HTTP does not raise on 4xx/5xx; it returns the response. Treat any non-2xx as a
-    # failed delivery so send_batch records it and the circuit can open. Without this a drain
-    # that is up but answering 500/413 would look like success and we'd silently drop every batch.
+    # Net::HTTP does not raise on 4xx/5xx; it returns the response. Every non-2xx raises so the
+    # caller can tell a drain that is down (retry) from one that refuses the batch (drop) or asks
+    # us to slow down (pause). The drain's body is included: onlylogs.io says why in one line.
     def ensure_success!(response)
       return if response.is_a?(Net::HTTPSuccess)
 
-      raise "drain responded #{response.code} #{response.message}"
+      message = "drain responded #{response.code} #{response.message}"
+      detail = response.body.to_s.lines.first.to_s.strip
+      message += " (#{detail[0, 80]})" unless detail.empty?
+
+      case response
+      when Net::HTTPTooManyRequests
+        raise Throttled.new(message, retry_after: parse_retry_after(response["Retry-After"]))
+      when Net::HTTPClientError
+        raise Rejected, message
+      else
+        raise message
+      end
+    end
+
+    # Only the delay-seconds form; an HTTP-date is rare and the cooldown is a fine fallback.
+    def parse_retry_after(value)
+      seconds = Integer(value.to_s, 10, exception: false)
+      seconds if seconds&.positive?
     end
 
     def build_request(body)
@@ -341,7 +433,12 @@ module Onlylogs
     end
 
     def circuit_open?
-      @mutex.synchronize { !@circuit_open_until.nil? && Time.now < @circuit_open_until }
+      circuit_remaining.positive?
+    end
+
+    # Seconds until the circuit closes again; 0 when it is closed.
+    def circuit_remaining
+      @mutex.synchronize { @circuit_open_until ? [@circuit_open_until - Time.now, 0].max : 0 }
     end
 
     def record_success
@@ -352,7 +449,7 @@ module Onlylogs
     end
 
     def record_failure
-      opened = false
+      pause = nil
       dropped = 0
 
       @mutex.synchronize do
@@ -362,18 +459,51 @@ module Onlylogs
         # (Re)open the circuit. record_failure only runs on a real send attempt — send_batch
         # short-circuits while the circuit is open — so reaching here always means the drain
         # is still down and we should pause again (this is how recovery retries every cooldown).
-        @circuit_open_until = Time.now + @circuit_cooldown
-        opened = true
+        pause = jittered_cooldown
+        @circuit_open_until = Time.now + pause
         dropped = @dropped
         @dropped = 0
       end
 
       # Warn outside the mutex:
       # doing it inside the lock would re-enter @mutex through record_failure and raise a recursive-lock error.
-      return unless opened
+      return unless pause
 
       suffix = dropped.positive? ? " (#{dropped} log lines dropped)" : ""
-      safe_warn "Onlylogs::HttpDevice: drain unavailable, pausing for #{@circuit_cooldown}s#{suffix}"
+      safe_warn "Onlylogs::HttpDevice: drain unavailable, pausing for #{pause.round}s#{suffix}"
+    end
+
+    # A 429 is not an outage: the drain is up and told us how long to wait. Open the circuit for
+    # that long without counting a failure, so the batch goes to the spool and is replayed later.
+    def record_throttle(error)
+      pause = error.retry_after || jittered_cooldown
+      @mutex.synchronize { @circuit_open_until = Time.now + pause }
+      safe_warn "Onlylogs::HttpDevice: #{error.message}, pausing for #{pause.round}s"
+    end
+
+    # The drain is up (so the circuit stays closed) but refuses this batch for good. One warning
+    # per cooldown period, with the running count, rather than one per batch: an unknown token
+    # rejects every single batch and would otherwise flood stderr.
+    def record_rejection(line_count, error)
+      rejected = nil
+
+      @mutex.synchronize do
+        @consecutive_failures = 0
+        @rejected += line_count
+        next unless @rejection_warned_at.nil? || monotonic_now - @rejection_warned_at >= @circuit_cooldown
+
+        rejected = @rejected
+        @rejected = 0
+        @rejection_warned_at = monotonic_now
+      end
+
+      return unless rejected
+
+      safe_warn "Onlylogs::HttpDevice: #{error.message}, dropped #{rejected} log lines the drain will not accept"
+    end
+
+    def jittered_cooldown
+      @circuit_cooldown * (0.5 + rand)
     end
   end
 end
