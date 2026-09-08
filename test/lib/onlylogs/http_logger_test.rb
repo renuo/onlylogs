@@ -205,7 +205,7 @@ module Onlylogs
         # buffered, so the drain flip below cannot race with a still-in-flight batch.
         assert wait_until { logger.device.instance_variable_get(:@circuit_open_until) },
           "the failing drain should buffer batches and trip the circuit"
-        refute_empty ::Dir.glob(::File.join(dir, "*.batch")),
+        refute_empty ::Dir.glob(::File.join(dir, "*", "*.batch")),
           "the failed batches should be on disk in the spool"
 
         # Drain recovers; once the cooldown lapses the next successful send replays the backlog.
@@ -213,7 +213,7 @@ module Onlylogs
         sleep 0.4
         logger.add(Logger::INFO, "recovery trigger")
 
-        assert wait_until { ::Dir.glob(::File.join(dir, "*.batch")).empty? },
+        assert wait_until { ::Dir.glob(::File.join(dir, "*", "*.batch")).empty? },
           "the spool should drain once the drain recovers"
       end
 
@@ -231,11 +231,12 @@ module Onlylogs
       previous = Onlylogs::Spool.new(dir: dir)
       previous.write("orphaned one")
       previous.write("orphaned two")
+      previous.close
 
       drain = build_drain(status: 200)
       logger = build_logger(drain, batch_size: 1, flush_interval: 0.01, spool_dir: dir)
 
-      assert wait_until { ::Dir.glob(::File.join(dir, "*.batch")).empty? },
+      assert wait_until { ::Dir.glob(::File.join(dir, "*", "*.batch")).empty? },
         "a new logger should replay spool files left by a previous run"
 
       assert_includes drain.received, "orphaned one"
@@ -259,7 +260,7 @@ module Onlylogs
       assert_nil disabled.device.instance_variable_get(:@spool),
         "an empty spool dir should opt out of buffering"
     ensure
-      spool_dir = spool&.instance_variable_get(:@dir)
+      spool_dir = default_logger&.device&.instance_variable_get(:@spool_dir)
       ::FileUtils.remove_entry(spool_dir) if spool_dir && ::File.directory?(spool_dir)
     end
 
@@ -303,15 +304,16 @@ module Onlylogs
         "the child's line never reached the drain: the sender thread did not survive the fork"
     end
 
-    # Workers share one spool directory. A child that keeps the parent's spool token writes
-    # <token>-000000001.batch like its siblings and the atomic rename silently overwrites theirs.
-    test "gives a forked child its own spool token so sibling workers do not overwrite batches" do
+    # A child that kept using the parent's spool directory would write 000000001.batch like the
+    # parent and overwrite it. Each process gets its own directory; the child's is adoptable once it
+    # is gone, the parent's stays locked while the parent lives.
+    test "gives a forked child its own spool directory" do
       skip "fork is not available" unless Process.respond_to?(:fork)
 
       dir = ::Dir.mktmpdir
       drain = build_drain(status: 503)
       logger = build_logger(drain, batch_size: 1, flush_interval: 0.01, spool_dir: dir)
-      batches = -> { ::Dir.glob(::File.join(dir, "*.batch")) }
+      batches = -> { ::Dir.glob(::File.join(dir, "*", "*.batch")) }
 
       capture_stderr do
         logger.add(Logger::INFO, "parent batch")
@@ -327,10 +329,64 @@ module Onlylogs
 
       files = batches.call
       assert_equal 2, files.size, "expected one spool file per process, got #{files.map { |f| ::File.basename(f) }}"
-      bodies = files.map { |file| ::File.read(file) }.join("\n")
-      assert_includes bodies, "parent batch"
-      assert_includes bodies, "child batch"
+      assert_equal 2, files.map { |file| ::File.dirname(file) }.uniq.size, "each process should have its own directory"
+
+      heir = Onlylogs::Spool.new(dir: dir)
+      heir.adopt_orphans
+      adopted = []
+      heir.replay do |body|
+        adopted << body
+        true
+      end
+      assert_equal 1, adopted.size, "only the dead child's directory should be adoptable"
+      assert_includes adopted.first, "child batch"
     ensure
+      heir&.close
+      ::FileUtils.remove_entry(dir) if dir && ::File.directory?(dir)
+    end
+
+    # The child inherits the parent's lock file descriptor. Unless it closes its copy, the parent's
+    # directory stays locked after the parent is gone and its batches are never adopted.
+    test "a forked child releases the parent's spool lock" do
+      skip "fork is not available" unless Process.respond_to?(:fork)
+
+      dir = ::Dir.mktmpdir
+      drain = build_drain(status: 503)
+      logger = build_logger(drain, batch_size: 1, flush_interval: 0.01, spool_dir: dir)
+      batches = -> { ::Dir.glob(::File.join(dir, "*", "*.batch")) }
+      reader, writer = IO.pipe
+      heir = nil
+
+      capture_stderr do
+        logger.add(Logger::INFO, "parent batch")
+        assert wait_until { batches.call.size == 1 }, "the parent's failed batch should be spooled"
+
+        pid = fork do
+          writer.close
+          logger.add(Logger::INFO, "child batch")
+          wait_until { batches.call.size == 2 }
+          reader.read
+          exit!(0)
+        end
+        reader.close
+        assert wait_until { batches.call.size == 2 }, "the child's batch should be spooled"
+
+        logger.device.instance_variable_get(:@spool).close
+        heir = Onlylogs::Spool.new(dir: dir)
+        heir.adopt_orphans
+        adopted = []
+        heir.replay do |body|
+          adopted << body
+          true
+        end
+        assert_equal 1, adopted.size, "the live child must not keep the parent's directory locked"
+        assert_includes adopted.first, "parent batch"
+
+        writer.close
+        Process.wait(pid)
+      end
+    ensure
+      heir&.close
       ::FileUtils.remove_entry(dir) if dir && ::File.directory?(dir)
     end
 
@@ -385,7 +441,7 @@ module Onlylogs
         warnings = $stderr.string
       end
 
-      assert_empty ::Dir.glob(::File.join(dir, "*.batch")), "a permanently rejected batch must not be spooled"
+      assert_empty ::Dir.glob(::File.join(dir, "*", "*.batch")), "a permanently rejected batch must not be spooled"
       assert_nil logger.device.instance_variable_get(:@circuit_open_until),
         "a 4xx means the drain is up; it must not open the circuit"
       assert_includes warnings, "404"
@@ -398,13 +454,13 @@ module Onlylogs
     # A rejected batch at the head of the spool must not block everything behind it forever.
     test "deletes a spooled batch the drain rejects on replay" do
       dir = ::Dir.mktmpdir
-      Onlylogs::Spool.new(dir: dir).write("poison batch")
+      Onlylogs::Spool.new(dir: dir).tap { |previous| previous.write("poison batch") }.close
 
       drain = build_drain(status: 404)
       logger = build_logger(drain, batch_size: 1, flush_interval: 0.01, spool_dir: dir)
 
       capture_stderr do
-        assert wait_until { ::Dir.glob(::File.join(dir, "*.batch")).empty? },
+        assert wait_until { ::Dir.glob(::File.join(dir, "*", "*.batch")).empty? },
           "a spooled batch the drain rejects for good should be deleted, not retried forever"
       end
       assert_includes drain.received, "poison batch"
@@ -413,43 +469,143 @@ module Onlylogs
       ::FileUtils.remove_entry(dir) if dir && ::File.directory?(dir)
     end
 
-    # A spool file this process cannot claim (and so could not delete after sending) must not turn
-    # into a tight loop that re-sends the same batch and warns on every turn.
-    test "skips a spooled batch it cannot claim instead of looping on it" do
-      skip "root can rename anything" if Process.uid.zero?
+    # A spool file this process cannot delete after sending must not turn into a tight loop that
+    # re-sends the same batch and warns on every turn.
+    test "warns once and moves on when a delivered spool batch cannot be deleted" do
+      skip "root can delete anything" if Process.uid.zero?
       dir = ::Dir.mktmpdir
-      Onlylogs::Spool.new(dir: dir).write("stuck batch")
-      ::File.chmod(0o555, dir)
-
-      drain = build_drain
-      logger = build_logger(drain, batch_size: 1, flush_interval: 0.01, spool_dir: dir)
+      drain = build_drain(status: 503)
+      logger = build_logger(drain, batch_size: 1, flush_interval: 0.01, circuit_cooldown: 0.3, spool_dir: dir)
+      spool_dir = logger.device.instance_variable_get(:@spool).dir
+      attempts_before_recovery = nil
 
       warnings = capture_stderr do
-        assert wait_until { $stderr.string.include?("cannot claim") }
+        logger.add(Logger::INFO, "stuck batch")
+        assert wait_until { ::Dir.glob(::File.join(spool_dir, "*.batch")).size == 1 }, "the batch should be spooled"
+        ::File.chmod(0o555, spool_dir)
+        attempts_before_recovery = drain.bodies.size
+        drain.status = 200
+        assert wait_until { drain.bodies.size > attempts_before_recovery }
         sleep 0.3
         $stderr.string
       end
-      assert_empty drain.bodies, "an unclaimable spool file should be skipped"
-      assert_equal 1, warnings.scan("cannot claim").size, "one warning for the stuck file, not one per turn"
+      assert_equal 1, drain.bodies.size - attempts_before_recovery,
+        "an undeletable spool file should be delivered once, not re-sent in a loop"
+      assert_equal 1, warnings.scan("cannot delete").size, "one warning for the stuck file, not one per turn"
     ensure
       logger&.close
-      ::File.chmod(0o755, dir) if dir && ::File.directory?(dir)
+      ::File.chmod(0o755, spool_dir) if spool_dir && ::File.directory?(spool_dir)
       ::FileUtils.remove_entry(dir) if dir && ::File.directory?(dir)
     end
 
-    # Puma workers share one spool directory; after an outage each of them replays it. A batch
-    # must reach the drain once, not once per worker.
-    test "workers sharing a spool directory deliver each batch once" do
+    # Puma workers share one spool root; after a worker dies, the others race to adopt its
+    # directory. A batch must reach the drain once, not once per worker.
+    test "two processes adopt a dead one's spool without delivering a batch twice" do
       dir = ::Dir.mktmpdir
       previous = Onlylogs::Spool.new(dir: dir)
       50.times { |i| previous.write("spooled #{i}") }
+      previous.close
 
       drain = build_drain
       2.times { build_logger(drain, batch_size: 1, flush_interval: 0.01, spool_dir: dir) }
 
-      assert wait_until(timeout: 10) { ::Dir.glob(::File.join(dir, "*.batch")).empty? }, "the spool should drain"
+      assert wait_until(timeout: 10) { ::Dir.glob(::File.join(dir, "*", "*.batch")).empty? }, "the spool should drain"
       sleep 0.1
       assert_equal 50, drain.bodies.size, "duplicates: #{drain.bodies.tally.select { |_, n| n > 1 }.keys.first(5)}"
+    ensure
+      ::FileUtils.remove_entry(dir) if dir && ::File.directory?(dir)
+    end
+
+    # A 429 while replaying the backlog pauses the replay and keeps the batch, like a 429 on a live
+    # batch does.
+    test "pauses and keeps a spooled batch when the drain answers 429 on replay" do
+      dir = ::Dir.mktmpdir
+      Onlylogs::Spool.new(dir: dir).tap { |previous| previous.write("throttled replay") }.close
+      drain = build_drain(status: 429, headers: {"Retry-After" => "1"})
+      logger = build_logger(drain, batch_size: 1, flush_interval: 0.01, circuit_cooldown: 30, spool_dir: dir)
+
+      capture_stderr do
+        open_until = wait_until { logger.device.instance_variable_get(:@circuit_open_until) }
+        assert open_until, "a 429 on replay should pause the sender"
+        assert_in_delta 1.0, open_until - Time.now, 0.5, "the pause should honour Retry-After"
+        assert_equal 1, ::Dir.glob(::File.join(dir, "*", "*.batch")).size, "the throttled batch should be kept"
+
+        drain.status = 200
+        assert wait_until(timeout: 3) { drain.bodies.count { |body| body.include?("throttled replay") } == 2 },
+          "the batch should be replayed after the pause"
+      end
+    ensure
+      logger&.close
+      ::FileUtils.remove_entry(dir) if dir && ::File.directory?(dir)
+    end
+
+    # A worker that dies mid-outage leaves its backlog behind; the survivors must ship it without
+    # anyone restarting anything.
+    test "a live worker picks up a dead sibling's backlog without a restart" do
+      dir = ::Dir.mktmpdir
+      drain = build_drain
+      logger = build_logger(drain, batch_size: 1, flush_interval: 0.01, spool_dir: dir)
+      logger.add(Logger::INFO, "warm up")
+      assert wait_until { drain.received.include?("warm up") }
+
+      dead = Onlylogs::Spool.new(dir: dir)
+      5.times { |i| dead.write("left behind #{i}") }
+      dead.close
+
+      picked_up = wait_until(timeout: Onlylogs::HttpDevice::ORPHAN_CHECK_INTERVAL + 2) do
+        drain.bodies.count { |body| body.include?("left behind") } == 5
+      end
+      assert picked_up, "the idle sender should adopt the dead sibling's directory on its next wake"
+      assert_empty ::Dir.glob(::File.join(dir, "*", "*.batch"))
+    ensure
+      ::FileUtils.remove_entry(dir) if dir && ::File.directory?(dir)
+    end
+
+    # Best-effort logging: a spool that cannot be set up is disabled with a warning, never fatal.
+    test "logs without a spool when the spool directory cannot be used" do
+      dir = ::Dir.mktmpdir
+      not_a_dir = ::File.join(dir, "file")
+      ::File.write(not_a_dir, "")
+      drain = build_drain
+
+      warnings = capture_stderr do
+        logger = build_logger(drain, batch_size: 1, flush_interval: 0.01, spool_dir: not_a_dir)
+        logger.add(Logger::INFO, "still shipped")
+        assert wait_until { drain.received.include?("still shipped") }
+        $stderr.string
+      end
+
+      assert_includes warnings, "spool disabled"
+    ensure
+      ::FileUtils.remove_entry(dir) if dir && ::File.directory?(dir)
+    end
+
+    test "removes its spool directory on close when nothing is left in it" do
+      dir = ::Dir.mktmpdir
+      drain = build_drain
+      logger = build_logger(drain, batch_size: 1, flush_interval: 0.01, spool_dir: dir)
+      logger.add(Logger::INFO, "delivered")
+      assert wait_until { drain.received.include?("delivered") }
+
+      logger.close
+
+      assert_empty ::Dir.children(dir), "a clean shutdown should leave no directory behind"
+    ensure
+      ::FileUtils.remove_entry(dir) if dir && ::File.directory?(dir)
+    end
+
+    test "keeps its spool directory on close while batches are still undelivered" do
+      dir = ::Dir.mktmpdir
+      drain = build_drain(status: 503)
+      logger = build_logger(drain, batch_size: 1, flush_interval: 0.01, spool_dir: dir)
+
+      capture_stderr do
+        logger.add(Logger::INFO, "not yet")
+        assert wait_until { ::Dir.glob(::File.join(dir, "*", "*.batch")).size == 1 }
+        logger.close
+      end
+
+      assert_equal 1, ::Dir.glob(::File.join(dir, "*", "*.batch")).size, "an undelivered batch must survive shutdown"
     ensure
       ::FileUtils.remove_entry(dir) if dir && ::File.directory?(dir)
     end
@@ -458,11 +614,10 @@ module Onlylogs
     # at the circuit's pace and not in a tight loop.
     test "opens the circuit when replaying from the spool keeps failing" do
       dir = ::Dir.mktmpdir
-      Onlylogs::Spool.new(dir: dir).write("cursed batch")
-
       drain = build_drain
       logger = build_logger(drain, batch_size: 1, flush_interval: 0.01, spool_dir: dir)
       spool = logger.device.instance_variable_get(:@spool)
+      spool.define_singleton_method(:empty?) { false }
       spool.define_singleton_method(:replay) { |**| raise "spool exploded" }
 
       capture_stderr do
@@ -487,7 +642,7 @@ module Onlylogs
         assert open_until, "a 429 should pause the sender"
         assert_in_delta 1, open_until - Time.now, 0.5, "the pause should follow Retry-After, not the cooldown"
         assert_equal 0, logger.device.instance_variable_get(:@consecutive_failures), "a 429 is not a failure"
-        refute_empty ::Dir.glob(::File.join(dir, "*.batch")), "the throttled batch should be kept on disk"
+        refute_empty ::Dir.glob(::File.join(dir, "*", "*.batch")), "the throttled batch should be kept on disk"
 
         drain.status = 200
         assert wait_until { drain.received.include?("throttled line") }, "the batch should be replayed after the pause"
@@ -521,12 +676,13 @@ module Onlylogs
       dir = ::Dir.mktmpdir
       previous = Onlylogs::Spool.new(dir: dir)
       200.times { |i| previous.write("spooled #{i}") }
+      previous.close
 
       drain = build_drain
       logger = build_logger(drain, batch_size: 1, flush_interval: 0.01, spool_dir: dir)
       logger.add(Logger::INFO, "live line")
 
-      assert wait_until(timeout: 10) { ::Dir.glob(::File.join(dir, "*.batch")).empty? }, "the spool should drain"
+      assert wait_until(timeout: 10) { ::Dir.glob(::File.join(dir, "*", "*.batch")).empty? }, "the spool should drain"
       bodies = drain.bodies
       live_at = bodies.index { |body| body.include?("live line") }
       assert live_at, "the live line should have been delivered"

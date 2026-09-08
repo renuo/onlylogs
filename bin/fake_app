@@ -316,10 +316,8 @@ def cpu_color(percent)
 end
 
 def spool_stats(dir)
-  files = Dir.children(dir).select { |name| name.end_with?(".batch") }
-  [files.size, files.sum { |name| File.size?(File.join(dir, name)) || 0 }]
-rescue Errno::ENOENT
-  [0, 0]
+  files = Dir.glob(File.join(dir, "*", "*.batch"))
+  [files.size, files.sum { |path| File.size?(path) || 0 }]
 end
 
 history = {rps: [], p50: [], cpu: []}

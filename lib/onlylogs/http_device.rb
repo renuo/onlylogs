@@ -13,16 +13,17 @@ require_relative "spool"
 #   requests for a cooldown period instead of blocking on every send for the full
 #   read timeout (a down host accepts the TCP/TLS connection but never answers).
 #
-# By default an on-disk Spool buffers any batch we could not deliver and replays it once the
+# By default an on-disk spool buffers any batch we could not deliver and replays it once the
 # drain recovers, so a transient outage or a restart does not lose logs. It is on by default
-# (set ONLYLOGS_SPOOL_DIR empty to disable) and bounded by bytes; see Onlylogs::Spool.
+# (set ONLYLOGS_SPOOL_DIR empty to disable) and bounded by bytes. Each process spools into its own
+# directory; see Onlylogs::Spool.
 #
 # Every write checks that a sender thread is alive in the current process and starts one if not:
 # * The device is usually built in the Puma master (production.rb runs before the workers are
 #   forked with preload_app!) and inherited by every worker. Threads do not survive a fork, so
-#   the child would have a queue nobody drains, a keep-alive socket shared with its siblings and a
-#   spool token that makes siblings overwrite each other's batches. The first write in a new
-#   process rebuilds all of that for the child.
+#   the child would have a queue nobody drains, a keep-alive socket shared with its siblings and
+#   the parent's spool directory. The first write in a new process rebuilds all of that for the
+#   child.
 # * The sender must never die, so its error path never raises (see #safe_warn) and every loop
 #   iteration is rescued; should it die anyway, the next write restarts it.
 #
@@ -63,6 +64,9 @@ module Onlylogs
     # How long Net::HTTP may keep an idle connection around for reuse. Comfortably longer than
     # the default flush interval so normal traffic reuses one connection across many batches.
     DEFAULT_KEEP_ALIVE_TIMEOUT = 30
+
+    # An idle sender wakes this often to look for spool directories dead siblings left behind.
+    ORPHAN_CHECK_INTERVAL = 5
 
     # Open the circuit after this many consecutive failed sends
     CIRCUIT_FAILURE_THRESHOLD = 3
@@ -129,6 +133,7 @@ module Onlylogs
       @queue.close
       @sender_thread&.join(2)
       close_connection
+      @spool&.close
     end
 
     private
@@ -187,6 +192,7 @@ module Onlylogs
       @http_mutex = Mutex.new
       @http = nil
       @sender_thread = nil
+      @spool&.detach
       @spool = build_spool(@spool_dir, @spool_max_bytes) if @drain_url
       @consecutive_failures = 0
       @circuit_open_until = nil
@@ -211,6 +217,7 @@ module Onlylogs
       batch = []
       bytes = 0
       deadline = nil
+      guard { @spool&.adopt_orphans }
 
       loop do
         line = @queue.pop(timeout: pop_timeout(deadline))
@@ -244,12 +251,12 @@ module Onlylogs
 
     # How long the sender may block waiting for the next line: until the partial batch is due,
     # until the circuit closes if there is a backlog to replay, not at all if we can replay right
-    # now, or indefinitely when there is nothing to do.
+    # now, or until the next look for orphaned spool directories when there is nothing to do.
     def pop_timeout(deadline)
       return [deadline - monotonic_now, 0].max if deadline
-      return nil unless spool_pending?
+      return circuit_remaining if spool_pending?
 
-      circuit_remaining
+      ORPHAN_CHECK_INTERVAL
     end
 
     def spool_pending?
@@ -309,10 +316,12 @@ module Onlylogs
 
     # Replay the oldest buffered batch, if the drain is believed to be up. A batch the drain rejects
     # for good is deleted too, otherwise it would sit at the head of the spool forever and block
-    # everything behind it.
+    # everything behind it. With nothing of its own left, the sender takes a share of whatever dead
+    # siblings left behind.
     def replay_one
       return if @spool.nil? || circuit_open?
 
+      @spool.adopt_orphans if @spool.empty?
       @spool.replay(limit: 1) do |body|
         deliver(body)
         record_success
@@ -345,8 +354,8 @@ module Onlylogs
     end
 
     # The spool is on by default. It lives under the app's tmp dir, which survives a drain outage
-    # while the app keeps running; point ONLYLOGS_SPOOL_DIR at a persistent volume to also survive
-    # redeploys, or set it empty to disable.
+    # while the app keeps running; point ONLYLOGS_SPOOL_DIR at a persistent, host-local volume to
+    # also survive redeploys, or set it empty to disable.
     def default_spool_dir
       base = if defined?(Rails) && Rails.respond_to?(:root) && Rails.root
         Rails.root.to_s

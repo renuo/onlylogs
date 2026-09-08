@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- **Each process now spools into its own directory.** Puma workers used to share one spool
+  directory and each of them replayed it, so a batch could reach the drain once per worker, and a
+  file a worker could not delete was re-sent in a tight loop. Every process now writes under
+  `ONLYLOGS_SPOOL_DIR/<token>/` and holds an `flock` on it for its lifetime. Live processes adopt
+  the batches of any directory whose lock is free (its owner is gone) within 5 s, 100 at a time so
+  that a big backlog is shared between them, and replay them. `ONLYLOGS_SPOOL_MAX_BYTES` (128 MB)
+  is now a cap per process rather than per directory. The spool directory must be on a host-local
+  filesystem.
+
 ## 0.10.0
 
 - **`HttpLogger` no longer burns a CPU core and stalls every request.** The sender thread polled
