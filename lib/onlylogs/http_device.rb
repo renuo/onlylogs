@@ -371,6 +371,11 @@ module Onlylogs
         safe_warn "Onlylogs::HttpDevice replay error: #{e.class}: #{e.message}"
         false
       end
+    rescue => e
+      # The spool itself failed (not the delivery). Counting it as a failure lets the circuit pace
+      # the retries instead of the sender loop spinning on it.
+      record_failure
+      safe_warn "Onlylogs::HttpDevice spool error: #{e.class}: #{e.message}"
     end
 
     def build_spool(dir, max_bytes)
