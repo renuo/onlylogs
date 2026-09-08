@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- **Each process now spools into its own directory.** Puma workers used to share one spool
+  directory and each of them replayed it, so a batch could reach the drain once per worker, and a
+  file a worker could not delete was re-sent in a tight loop. Every process now writes under
+  `ONLYLOGS_SPOOL_DIR/<token>/` and holds an `flock` on it for its lifetime. Live processes adopt
+  the batches of any directory whose lock is free (its owner is gone) within 5 s, 100 at a time so
+  that a big backlog is shared between them, and replay them. `ONLYLOGS_SPOOL_MAX_BYTES` (128 MB)
+  is now a cap per process rather than per directory. The spool directory must be on a host-local
+  filesystem.
+
 - **Saved searches live inside the query field.** Next to the query sit a clear button, a list of the saved searches
   and a star that saves the current query, fills in when it is already saved and offers rename or removal. The list
   marks the search you are on, shows when you have edited it since applying it, and renames and deletes in place.
