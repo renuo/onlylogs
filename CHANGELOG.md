@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- **`HttpLogger` validates its configuration instead of trusting it.** A non-numeric or zero
+  `ONLYLOGS_OPEN_TIMEOUT` used to become `0`, which Net::HTTP reads as "no timeout", so the sender
+  could block on connect forever; an `ONLYLOGS_MAX_BATCH_BYTES` smaller than the truncation marker
+  made every oversized line raise; a malformed `ONLYLOGS_DRAIN_URL` raised from `production.rb` and
+  prevented the app from booting. Numbers that are not positive (or a batch cap that cannot hold
+  the marker) now fall back to their default with a warning, and a drain URL that is not `http(s)`
+  or has no host falls back to local-only logging with a warning.
+
 ## 0.10.0
 
 - **`HttpLogger` no longer burns a CPU core and stalls every request.** The sender thread polled

@@ -476,6 +476,75 @@ module Onlylogs
       ::FileUtils.remove_entry(dir) if dir && ::File.directory?(dir)
     end
 
+    test "falls back to the default with a warning when a numeric setting is not a positive number" do
+      drain = build_drain
+      logger = nil
+
+      stderr = StringIO.new
+      with_stderr(stderr) do
+        logger = build_logger(drain, open_timeout: "abc", read_timeout: 0, batch_size: -5, flush_interval: 0.05)
+      end
+      device = logger.device
+
+      assert_equal HttpDevice::DEFAULT_OPEN_TIMEOUT, device.instance_variable_get(:@open_timeout)
+      assert_equal HttpDevice::DEFAULT_READ_TIMEOUT, device.instance_variable_get(:@read_timeout)
+      assert_equal HttpDevice::DEFAULT_BATCH_SIZE, device.instance_variable_get(:@batch_size)
+      assert_match(/ONLYLOGS_OPEN_TIMEOUT is "abc", expected a positive number; using 0.5/, stderr.string)
+      assert_match(/ONLYLOGS_READ_TIMEOUT is 0, expected/, stderr.string)
+      assert_match(/ONLYLOGS_BATCH_SIZE is -5, expected an integer of at least 1/, stderr.string)
+
+      logger.add(Logger::INFO, "still shipping")
+      assert wait_until { drain.received.include?("still shipping") }
+    end
+
+    test "reads and validates settings from the environment" do
+      original = ENV.to_h.slice("ONLYLOGS_OPEN_TIMEOUT", "ONLYLOGS_MAX_QUEUE_SIZE")
+      ENV["ONLYLOGS_OPEN_TIMEOUT"] = "0"
+      ENV["ONLYLOGS_MAX_QUEUE_SIZE"] = "250"
+      logger = nil
+
+      stderr = StringIO.new
+      with_stderr(stderr) { logger = build_logger(build_drain) }
+      device = logger.device
+
+      assert_equal HttpDevice::DEFAULT_OPEN_TIMEOUT, device.instance_variable_get(:@open_timeout)
+      assert_equal 250, device.instance_variable_get(:@max_queue_size)
+      assert_match(/ONLYLOGS_OPEN_TIMEOUT is "0"/, stderr.string)
+    ensure
+      ENV.delete("ONLYLOGS_OPEN_TIMEOUT")
+      ENV.delete("ONLYLOGS_MAX_QUEUE_SIZE")
+      ENV.update(original)
+    end
+
+    test "rejects a batch byte cap too small to hold the truncation marker" do
+      drain = build_drain
+      logger = nil
+
+      stderr = StringIO.new
+      with_stderr(stderr) { logger = build_logger(drain, max_batch_bytes: 5, flush_interval: 0.05) }
+
+      assert_match(/ONLYLOGS_MAX_BATCH_BYTES is 5, expected an integer of at least #{HttpDevice::MIN_BATCH_BYTES}/o, stderr.string)
+      logger.add(Logger::INFO, "huge #{"y" * 2000}")
+      assert wait_until { drain.received.include?("huge") }
+    end
+
+    test "logs locally only when the drain URL is malformed instead of failing to boot" do
+      ["http://bad host/drain", "onlylogs.io/drain", "ftp://onlylogs.io/drain", "http:///drain", "   "].each do |url|
+        local = StringIO.new
+        logger = nil
+
+        stderr = StringIO.new
+        with_stderr(stderr) do
+          assert_nothing_raised { logger = build_logger(url, local_fallback: local) }
+        end
+
+        assert_match(/logging locally only/, stderr.string, "expected a warning for #{url.inspect}")
+        logger.add(Logger::INFO, "local line for #{url}")
+        logger.close
+        assert_includes local.string, "local line for #{url}"
+      end
+    end
+
     private
 
     # Spins up a MockDrain and registers it so teardown closes it. See MockDrain for `status:`.
