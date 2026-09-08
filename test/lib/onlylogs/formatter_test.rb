@@ -20,6 +20,29 @@ module Onlylogs
       assert_nil result
     end
 
+    test "formats non-string messages instead of raising" do
+      assert_includes @formatter.call("INFO", @time, nil, nil), "nil"
+      assert_includes @formatter.call("INFO", @time, nil, 42), "42"
+      assert_includes @formatter.call("WARN", @time, nil, :symbol), ":symbol"
+      assert_includes @formatter.call("INFO", @time, nil, {user: 1}), "{user: 1}"
+    end
+
+    test "formats exceptions with their message, class and backtrace" do
+      error = RuntimeError.new("boom")
+      error.set_backtrace(["app/models/user.rb:1:in `save'"])
+
+      result = @formatter.call("ERROR", @time, nil, error)
+      assert_includes result, "boom (RuntimeError)"
+      assert_includes result, "app/models/user.rb:1"
+    end
+
+    test "applies filters to the stringified message" do
+      @formatter.denylist = [/secret/]
+
+      assert_nil @formatter.call("ERROR", @time, nil, RuntimeError.new("secret leaked"))
+      assert_nil @formatter.call("INFO", @time, nil, :"Onlylogs::LogsChannel")
+    end
+
     test "denylist defaults to empty array" do
       assert_equal [], @formatter.denylist
     end
