@@ -113,16 +113,11 @@ module DeviceInstrumentation
     DeviceInstrumentation.set(:max_spool_write_ms, [ms, DeviceInstrumentation.snapshot[:max_spool_write_ms]].max)
   end
 
-  def drain_spool
-    return super if @spool.nil? || @spool.empty?
-
-    files = Dir.glob(File.join(@spool.instance_variable_get(:@dir), "*.batch")).size
-    where = (Thread.current != @sender_thread) ? " on a request thread" : ""
-    EVENTS.add("replaying #{files} spool files#{where}")
-    started = monotonic
+  # The spool is replayed one file at a time between live batches, so count instead of logging.
+  def replay_one
+    before = DeviceInstrumentation.snapshot[:delivered]
     super
-    left = @spool.empty? ? "all delivered" : "stopped at first failure"
-    EVENTS.add(format("spool replay took %.2fs, %s", monotonic - started, left))
+    DeviceInstrumentation.record(:replayed) if DeviceInstrumentation.snapshot[:delivered] > before
   end
 end
 Onlylogs::HttpDevice.prepend(DeviceInstrumentation)
@@ -446,8 +441,8 @@ while state[:running]
     paint(bar((spool_max.positive? ? spool_bytes.to_f / spool_max : 0), 10), :yellow),
     stats[:spool_writes], stats[:request_thread_spool_writes], stats[:last_spool_write_ms], stats[:max_spool_write_ms])
   lines << format("           %s", paint(spool_label, :grey))
-  lines << format(" %s %4.1f batches/s   ok %d   failed %d   %s shipped   HTTP calls on request threads: %s",
-    label("DRAIN"), drain_rps, stats[:delivered], stats[:failed], megabytes(stats[:delivered_bytes]),
+  lines << format(" %s %4.1f batches/s   ok %d (%d replayed)   failed %d   %s shipped   HTTP calls on request threads: %s",
+    label("DRAIN"), drain_rps, stats[:delivered], stats[:replayed], stats[:failed], megabytes(stats[:delivered_bytes]),
     paint(stats[:request_thread_deliveries], (stats[:request_thread_deliveries] > 0) ? :yellow : :green))
   lines << format("           last success %s   last error %s%s",
     ago(stats[:last_success_at]), ago(stats[:last_error_at]),

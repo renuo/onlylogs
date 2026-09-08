@@ -53,21 +53,30 @@ module Onlylogs
       Kernel.warn "Onlylogs::Spool write error: #{e.class}: #{e.message}"
     end
 
-    # Replay pending batches oldest-first. Yields each body; if the block returns truthy the file
-    # is deleted (delivered), otherwise replay stops and the remaining files are kept for later.
-    def replay
-      return if empty?
+    # Replay pending batches oldest-first, at most `limit` of them. Yields each body; if the block
+    # returns truthy the file is deleted (delivered, or given up on), otherwise replay stops and the
+    # remaining files are kept for later.
+    #
+    # Works off the ledger rather than listing the directory: with a large backlog replayed one file
+    # at a time, a glob per call would cost more than the delivery itself.
+    def replay(limit: nil)
+      paths = @mutex.synchronize do
+        refresh_ledger if ledger_stale?
+        @ledger.first(limit || @ledger.size).map(&:first)
+      end
 
-      pending_files.each do |path|
+      paths.each do |path|
         body = read(path)
-        next if body.nil? # already claimed/deleted by another process
+        if body.nil? # already claimed/deleted by another process
+          forget(path)
+          next
+        end
 
         break unless yield(body)
 
         delete(path)
+        forget(path)
       end
-    ensure
-      @mutex.synchronize { @ledger = nil }
     end
 
     def empty?
@@ -100,6 +109,18 @@ module Onlylogs
       ::File.mtime(path)
     rescue Errno::ENOENT
       Time.at(0)
+    end
+
+    # Replay is oldest-first and so is the ledger, so the path is nearly always the head.
+    def forget(path)
+      @mutex.synchronize do
+        next if @ledger.nil?
+
+        index = (@ledger.first&.first == path) ? 0 : @ledger.index { |candidate, _| candidate == path }
+        next unless index
+
+        @ledger_bytes -= @ledger.delete_at(index).last
+      end
     end
 
     def read(path)

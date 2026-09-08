@@ -20,6 +20,18 @@
   loop iteration is rescued, and should the thread die anyway the next write restarts it.
 - `bin/fake_drain` and `bin/fake_app` simulate a drain outage locally and show what it does to the
   app.
+- **`HttpLogger` no longer retries batches the drain will never accept.** Every non-2xx used to be
+  treated alike: a batch answered with 404 (unknown token), 403 (paused project) or 413 was spooled
+  and, since replay stopped at the first failure, sat at the head of the spool blocking everything
+  behind it until 128 MB of newer logs had been evicted. Now a 4xx drops the batch with one warning
+  per cooldown period (and deletes it on replay), 429 pauses the sender for `Retry-After` and keeps
+  the batch, and only 5xx, timeouts and connection errors count as an outage. Batch bodies and single
+  lines are capped at `ONLYLOGS_MAX_BATCH_BYTES` (1 MB), so a 413 cannot happen by construction.
+- **Recovery no longer floods the drain nor drops the live logs.** After an outage the spool was
+  replayed in full, at full speed, before the sender returned to the live queue, which overflowed
+  meanwhile; every client did so at the same moment. The backlog is now replayed one file per live
+  batch (continuously while the app is idle), and the circuit cooldown is jittered between 0.5x
+  and 1.5x so clients do not retry in lockstep.
 
 ## 0.9.0
 

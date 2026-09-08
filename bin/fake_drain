@@ -11,6 +11,9 @@
 #   5  500    up but failing, what onlylogs.io did on 2026-09-07 (answers "error")
 #   3  503    overloaded
 #   4  413    batch rejected as too large
+#   n  404    unknown drain token, what onlylogs.io answers to a wrong or deleted token
+#   p  403    project paused on onlylogs.io
+#   t  429    throttled: slow down (Retry-After: 5)
 #   h  hang   accept the connection but never answer: the client blocks until its read timeout
 #   s  slow   answer 200 after 2s, longer than the client's read timeout
 #   r  reset  accept, then close the connection without answering
@@ -23,12 +26,15 @@ require "io/console"
 
 class FakeDrain
   STATES = {
-    "2" => 200, "5" => 500, "3" => 503, "4" => 413,
+    "2" => 200, "5" => 500, "3" => 503, "4" => 413, "n" => 404, "p" => 403, "t" => 429,
     "h" => :hang, "s" => :slow, "r" => :reset, "d" => :down
   }.freeze
   REASONS = {
-    200 => "OK", 413 => "Content Too Large", 500 => "Internal Server Error", 503 => "Service Unavailable"
+    200 => "OK", 403 => "Forbidden", 404 => "Not Found", 413 => "Content Too Large", 429 => "Too Many Requests",
+    500 => "Internal Server Error", 503 => "Service Unavailable"
   }.freeze
+  # What onlylogs.io writes in the body for each answer.
+  BODIES = {200 => "ok\n", 403 => "drain paused\n", 404 => "Project not found\n", 429 => "slow down\n"}.freeze
   SLOW_DELAY = 2
 
   attr_reader :state
@@ -136,8 +142,9 @@ class FakeDrain
       path, body = request
       if (match = path.match(%r{\A/__state/(\w+)}))
         wanted = FakeDrain.parse_state(match[1])
+        # Answer before switching: the switch closes every client socket, this one included.
+        respond(sock, 200, "state will be #{describe(wanted || state)}#{@newline}")
         self.state = wanted if wanted
-        respond(sock, 200, "state is now #{describe(state)}#{@newline}")
         next
       end
 
@@ -157,7 +164,7 @@ class FakeDrain
         sleep SLOW_DELAY
         respond(sock, 200, "ok\n")
       else
-        respond(sock, current, (current == 200) ? "ok\n" : "error\n")
+        respond(sock, current, BODIES.fetch(current, "error\n"), (current == 429) ? "Retry-After: 5\r\n" : "")
       end
     end
   rescue Errno::ECONNRESET, Errno::EPIPE, IOError
@@ -182,8 +189,8 @@ class FakeDrain
     [path, content_length.positive? ? sock.read(content_length) : ""]
   end
 
-  def respond(sock, code, body)
-    sock.write "HTTP/1.1 #{code} #{REASONS.fetch(code, "Whatever")}\r\nContent-Type: text/plain\r\n" \
+  def respond(sock, code, body, extra_headers = "")
+    sock.write "HTTP/1.1 #{code} #{REASONS.fetch(code, "Whatever")}\r\nContent-Type: text/plain\r\n#{extra_headers}" \
                "Content-Length: #{body.bytesize}\r\nConnection: keep-alive\r\n\r\n#{body}"
   end
 
@@ -210,7 +217,7 @@ end
 newline = raw_mode ? "\r\n" : "\n"
 drain = FakeDrain.new(port, initial, newline)
 
-drain.log "fake drain on http://127.0.0.1:#{port}/   keys: 2=200 5=500 3=503 4=413 h=hang s=slow r=reset d=down q=quit"
+drain.log "fake drain on http://127.0.0.1:#{port}/   keys: 2=200 5=500 3=503 4=413 n=404 p=403 t=429 h=hang s=slow r=reset d=down q=quit"
 
 Thread.new do
   if raw_mode

@@ -72,6 +72,26 @@ module Onlylogs
       assert_equal ["two", "three"], remaining
     end
 
+    test "replays only the oldest batches when a limit is given, keeping the ledger current" do
+      @spool.write("one")
+      @spool.write("two")
+
+      seen = []
+      @spool.replay(limit: 1) do |body|
+        seen << body
+        true
+      end
+      assert_equal ["one"], seen
+      refute @spool.empty?
+
+      @spool.replay(limit: 1) do |body|
+        seen << body
+        true
+      end
+      assert_equal ["one", "two"], seen
+      assert @spool.empty?
+    end
+
     test "rolls the oldest batches off when the byte cap is exceeded" do
       spool = Onlylogs::Spool.new(dir: @dir, max_bytes: 20)
 

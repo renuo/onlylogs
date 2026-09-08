@@ -9,9 +9,11 @@ require "socket"
 #   * an Integer (default 200) -> answer every request with that HTTP status
 #   * :hang                    -> accept the connection but never reply, so the client blocks
 #                                 until its read timeout
+# `headers:` are sent back with every response (e.g. "Retry-After" => "1").
 class MockDrain
-  def initialize(status: 200)
+  def initialize(status: 200, headers: {})
     @status = status
+    @headers = headers
     @bodies = []
     @hanging = []
     @connections = 0
@@ -34,7 +36,12 @@ class MockDrain
   end
 
   def received
-    @mutex.synchronize { @bodies.compact.join("\n") }
+    bodies.join("\n")
+  end
+
+  # One entry per request, in arrival order.
+  def bodies
+    @mutex.synchronize { @bodies.compact }
   end
 
   def connection_count
@@ -92,7 +99,8 @@ class MockDrain
     @mutex.synchronize { @bodies << body } if body
 
     code = status
-    conn.print "HTTP/1.1 #{code} #{Rack::Utils::HTTP_STATUS_CODES.fetch(code, "Status")}\r\nContent-Length: 0\r\n\r\n"
+    extra = @headers.map { |name, value| "#{name}: #{value}\r\n" }.join
+    conn.print "HTTP/1.1 #{code} #{Rack::Utils::HTTP_STATUS_CODES.fetch(code, "Status")}\r\n#{extra}Content-Length: 0\r\n\r\n"
     true
   end
 
