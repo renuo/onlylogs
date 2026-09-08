@@ -413,10 +413,10 @@ module Onlylogs
       ::FileUtils.remove_entry(dir) if dir && ::File.directory?(dir)
     end
 
-    # An undeletable spool file must not turn into a tight loop that re-sends the same batch and
-    # warns on every turn.
-    test "sends a spooled batch it cannot delete once instead of looping on it" do
-      skip "root can delete anything" if Process.uid.zero?
+    # A spool file this process cannot claim (and so could not delete after sending) must not turn
+    # into a tight loop that re-sends the same batch and warns on every turn.
+    test "skips a spooled batch it cannot claim instead of looping on it" do
+      skip "root can rename anything" if Process.uid.zero?
       dir = ::Dir.mktmpdir
       Onlylogs::Spool.new(dir: dir).write("stuck batch")
       ::File.chmod(0o555, dir)
@@ -425,16 +425,32 @@ module Onlylogs
       logger = build_logger(drain, batch_size: 1, flush_interval: 0.01, spool_dir: dir)
 
       warnings = capture_stderr do
-        assert wait_until { drain.received.include?("stuck batch") }
+        assert wait_until { $stderr.string.include?("cannot claim") }
         sleep 0.3
         $stderr.string
       end
-      assert_equal 1, drain.bodies.count { |body| body.include?("stuck batch") },
-        "an undeletable spool file should be delivered once, not re-sent in a loop"
-      assert_equal 1, warnings.scan("cannot delete").size, "one warning for the stuck file, not one per turn"
+      assert_empty drain.bodies, "an unclaimable spool file should be skipped"
+      assert_equal 1, warnings.scan("cannot claim").size, "one warning for the stuck file, not one per turn"
     ensure
       logger&.close
       ::File.chmod(0o755, dir) if dir && ::File.directory?(dir)
+      ::FileUtils.remove_entry(dir) if dir && ::File.directory?(dir)
+    end
+
+    # Puma workers share one spool directory; after an outage each of them replays it. A batch
+    # must reach the drain once, not once per worker.
+    test "workers sharing a spool directory deliver each batch once" do
+      dir = ::Dir.mktmpdir
+      previous = Onlylogs::Spool.new(dir: dir)
+      50.times { |i| previous.write("spooled #{i}") }
+
+      drain = build_drain
+      2.times { build_logger(drain, batch_size: 1, flush_interval: 0.01, spool_dir: dir) }
+
+      assert wait_until(timeout: 10) { ::Dir.glob(::File.join(dir, "*.batch")).empty? }, "the spool should drain"
+      sleep 0.1
+      assert_equal 50, drain.bodies.size, "duplicates: #{drain.bodies.tally.select { |_, n| n > 1 }.keys.first(5)}"
+    ensure
       ::FileUtils.remove_entry(dir) if dir && ::File.directory?(dir)
     end
 

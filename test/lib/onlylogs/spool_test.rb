@@ -126,18 +126,18 @@ module Onlylogs
       assert_equal ["b" * 8, "c" * 8], bodies
     end
 
-    # A file this process cannot delete (wrong owner, read-only volume) must not be replayed again
-    # and again: the sender would re-send the same batch in a tight loop.
-    test "delivers a batch it cannot delete once, then skips it" do
-      skip "root can delete anything" if Process.uid.zero?
+    # A file this process cannot claim (wrong owner, read-only volume) could not be deleted after
+    # delivery either, so replaying it would re-send the same batch in a tight loop.
+    test "skips a batch it cannot claim" do
+      skip "root can rename anything" if Process.uid.zero?
       @spool.write("stuck")
       ::File.chmod(0o555, @dir)
 
       delivered = []
       capture_stderr { 3.times { @spool.replay { |body| delivered << body } } }
 
-      assert_equal ["stuck"], delivered
-      assert @spool.empty?, "an undeletable batch should be skipped, not replayed forever"
+      assert_empty delivered
+      assert @spool.empty?, "an unclaimable batch should be skipped, not retried forever"
       assert_equal 1, ::Dir.glob(::File.join(@dir, "*.batch")).size
     end
 
@@ -152,6 +152,46 @@ module Onlylogs
 
       assert_equal ["fine"], delivered
       assert @spool.empty?
+    end
+
+    # Puma workers share the directory: a batch must be delivered by one of them, not by each.
+    test "two instances replaying the same directory deliver each batch once" do
+      100.times { |i| @spool.write("batch #{i}") }
+      sibling = Onlylogs::Spool.new(dir: @dir)
+
+      delivered = []
+      until @spool.empty? && sibling.empty?
+        [@spool, sibling].each { |spool| spool.replay(limit: 1) { |body| delivered << body } }
+      end
+
+      assert_equal 100, delivered.size, "expected each batch once, got #{delivered.tally.select { |_, n| n > 1 }}"
+    end
+
+    test "hands a batch back when delivery fails so any worker can retry it" do
+      @spool.write("retry me")
+
+      @spool.replay { |_body| false }
+
+      assert_equal 1, ::Dir.glob(::File.join(@dir, "*.batch")).size
+      assert_empty ::Dir.glob(::File.join(@dir, "*.sending"))
+    end
+
+    test "reclaims a claim left behind by a dead worker, but not a fresh one" do
+      @spool.write("abandoned")
+      @spool.write("in flight")
+      abandoned, in_flight = ::Dir.glob(::File.join(@dir, "*.batch")).sort
+      ::File.rename(abandoned, "#{abandoned}.sending")
+      ::File.rename(in_flight, "#{in_flight}.sending")
+      stale = Time.now - Onlylogs::Spool::STALE_CLAIM_AFTER - 1
+      ::File.utime(stale, stale, "#{abandoned}.sending")
+
+      delivered = []
+      Onlylogs::Spool.new(dir: @dir).replay do |body|
+        delivered << body
+        true
+      end
+
+      assert_equal ["abandoned"], delivered
     end
 
     test "a fresh instance replays files left behind by a previous one (survives restart)" do
