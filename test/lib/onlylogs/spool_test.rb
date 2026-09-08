@@ -12,6 +12,7 @@ module Onlylogs
     end
 
     teardown do
+      ::File.chmod(0o755, @dir) if ::File.directory?(@dir)
       ::FileUtils.remove_entry(@dir) if ::File.directory?(@dir)
     end
 
@@ -125,6 +126,34 @@ module Onlylogs
       assert_equal ["b" * 8, "c" * 8], bodies
     end
 
+    # A file this process cannot delete (wrong owner, read-only volume) must not be replayed again
+    # and again: the sender would re-send the same batch in a tight loop.
+    test "delivers a batch it cannot delete once, then skips it" do
+      skip "root can delete anything" if Process.uid.zero?
+      @spool.write("stuck")
+      ::File.chmod(0o555, @dir)
+
+      delivered = []
+      capture_stderr { 3.times { @spool.replay { |body| delivered << body } } }
+
+      assert_equal ["stuck"], delivered
+      assert @spool.empty?, "an undeletable batch should be skipped, not replayed forever"
+      assert_equal 1, ::Dir.glob(::File.join(@dir, "*.batch")).size
+    end
+
+    test "skips a batch it cannot read" do
+      skip "root can read anything" if Process.uid.zero?
+      @spool.write("unreadable")
+      @spool.write("fine")
+      ::File.chmod(0o000, ::Dir.glob(::File.join(@dir, "*.batch")).min)
+
+      delivered = []
+      capture_stderr { @spool.replay { |body| delivered << body } }
+
+      assert_equal ["fine"], delivered
+      assert @spool.empty?
+    end
+
     test "a fresh instance replays files left behind by a previous one (survives restart)" do
       @spool.write("survivor")
 
@@ -136,6 +165,16 @@ module Onlylogs
       end
 
       assert_equal ["survivor"], bodies
+    end
+
+    private
+
+    def capture_stderr
+      original = $stderr
+      $stderr = StringIO.new
+      yield
+    ensure
+      $stderr = original
     end
   end
 end

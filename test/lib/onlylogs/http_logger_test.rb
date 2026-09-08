@@ -413,6 +413,51 @@ module Onlylogs
       ::FileUtils.remove_entry(dir) if dir && ::File.directory?(dir)
     end
 
+    # An undeletable spool file must not turn into a tight loop that re-sends the same batch and
+    # warns on every turn.
+    test "sends a spooled batch it cannot delete once instead of looping on it" do
+      skip "root can delete anything" if Process.uid.zero?
+      dir = ::Dir.mktmpdir
+      Onlylogs::Spool.new(dir: dir).write("stuck batch")
+      ::File.chmod(0o555, dir)
+
+      drain = build_drain
+      logger = build_logger(drain, batch_size: 1, flush_interval: 0.01, spool_dir: dir)
+
+      warnings = capture_stderr do
+        assert wait_until { drain.received.include?("stuck batch") }
+        sleep 0.3
+        $stderr.string
+      end
+      assert_equal 1, drain.bodies.count { |body| body.include?("stuck batch") },
+        "an undeletable spool file should be delivered once, not re-sent in a loop"
+      assert_equal 1, warnings.scan("cannot delete").size, "one warning for the stuck file, not one per turn"
+    ensure
+      logger&.close
+      ::File.chmod(0o755, dir) if dir && ::File.directory?(dir)
+      ::FileUtils.remove_entry(dir) if dir && ::File.directory?(dir)
+    end
+
+    # Whatever the spool itself raises on replay counts as a failure, so a broken spool is retried
+    # at the circuit's pace and not in a tight loop.
+    test "opens the circuit when replaying from the spool keeps failing" do
+      dir = ::Dir.mktmpdir
+      Onlylogs::Spool.new(dir: dir).write("cursed batch")
+
+      drain = build_drain
+      logger = build_logger(drain, batch_size: 1, flush_interval: 0.01, spool_dir: dir)
+      spool = logger.device.instance_variable_get(:@spool)
+      spool.define_singleton_method(:replay) { |**| raise "spool exploded" }
+
+      capture_stderr do
+        assert wait_until { logger.device.instance_variable_get(:@circuit_open_until) },
+          "repeated replay errors should open the circuit"
+      end
+    ensure
+      logger&.close
+      ::FileUtils.remove_entry(dir) if dir && ::File.directory?(dir)
+    end
+
     # A 429 is the drain asking us to slow down: honour Retry-After, keep the batch, and try again
     # later, without counting it as an outage.
     test "pauses for Retry-After and keeps the batch when the drain answers 429" do

@@ -29,6 +29,7 @@ module Onlylogs
       @ledger = nil
       @ledger_bytes = 0
       @ledger_at = nil
+      @quarantined = Set.new
       ::FileUtils.mkdir_p(@dir)
     end
 
@@ -50,7 +51,7 @@ module Onlylogs
         @ledger_bytes += body.bytesize
       end
     rescue => e
-      Kernel.warn "Onlylogs::Spool write error: #{e.class}: #{e.message}"
+      safe_warn "Onlylogs::Spool write error: #{e.class}: #{e.message}"
     end
 
     # Replay pending batches oldest-first, at most `limit` of them. Yields each body; if the block
@@ -67,7 +68,7 @@ module Onlylogs
 
       paths.each do |path|
         body = read(path)
-        if body.nil? # already claimed/deleted by another process
+        if body.nil? # claimed/deleted by another process, or quarantined
           forget(path)
           next
         end
@@ -102,7 +103,8 @@ module Onlylogs
     # Oldest-first. mtime is the primary key; the zero-padded sequence in the filename breaks
     # ties (and preserves per-process write order when mtimes collide at coarse FS resolution).
     def pending_files
-      ::Dir.glob(::File.join(@dir, "*.batch")).sort_by { |path| [mtime(path), path] }
+      ::Dir.glob(::File.join(@dir, "*.batch")).reject { |path| @quarantined.include?(path) }
+        .sort_by { |path| [mtime(path), path] }
     end
 
     def mtime(path)
@@ -127,11 +129,36 @@ module Onlylogs
       ::File.binread(path)
     rescue Errno::ENOENT
       nil
+    rescue SystemCallError => e
+      quarantine(path, "read", e)
+      nil
     end
 
     def delete(path)
       ::File.delete(path)
     rescue Errno::ENOENT
+      nil
+    rescue SystemCallError => e
+      quarantine(path, "delete", e)
+    end
+
+    # A file this process cannot read or delete (a directory, another owner, a read-only volume)
+    # is left alone for the rest of the process: retrying it would fail the same way, in a tight
+    # loop. May run with or without @mutex held (evict vs replay).
+    def quarantine(path, action, error)
+      if @mutex.owned?
+        @quarantined << path
+      else
+        @mutex.synchronize { @quarantined << path }
+      end
+      safe_warn "Onlylogs::Spool: cannot #{action} #{path} (#{error.class}: #{error.message}), skipping it"
+    end
+
+    # Kernel.warn itself raises on a closed or detached $stderr, and that must not escape the
+    # sender thread.
+    def safe_warn(message)
+      Kernel.warn(message)
+    rescue
       nil
     end
 
