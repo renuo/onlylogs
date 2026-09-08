@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.10.0
 
 - **`HttpLogger` no longer burns a CPU core and stalls every request.** The sender thread polled
   its queue in a tight loop whenever a partial batch waited for `flush_interval`, holding the GVL for
