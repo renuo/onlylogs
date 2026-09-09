@@ -1,0 +1,70 @@
+# frozen_string_literal: true
+
+module Onlylogs
+  class QueriesController < ApplicationController
+    before_action :set_log_file
+
+    rescue_from(ActiveRecord::RecordInvalid) { |e| render_invalid(e.record) }
+    # The unique index catches what the uniqueness validation loses to a race.
+    # Same answer either way, so the client cannot tell which one fired.
+    rescue_from(ActiveRecord::RecordNotUnique) { render_error("Name has already been taken", :unprocessable_entity) }
+    rescue_from(ActiveRecord::RecordNotFound) { render_error("Query not found", :not_found) }
+    rescue_from(Onlylogs::Error) { render_error("Log file not found", :not_found) }
+    rescue_from(QueryDatabase::UnavailableError) { |e| render_error(e.message, :service_unavailable) }
+    rescue_from(ForbiddenPathError) { |e| render_error(e.message, :forbidden) }
+    rescue_from(SecureFilePath::SecurityError) { |e| render_error(e.message, :bad_request) }
+
+    def index
+      render json: {queries: @log_file.queries}
+    end
+
+    def show
+      render json: query
+    end
+
+    def create
+      render json: @log_file.queries.create!(query_params), status: :created
+    end
+
+    def update
+      query.update!(query_params)
+
+      render json: query
+    end
+
+    def destroy
+      query.destroy!
+
+      head :no_content
+    end
+
+    private
+
+    def query
+      @query ||= @log_file.queries.find(params[:id])
+    end
+
+    def query_params
+      params.expect(query: [:name, :filter, :regexp_mode])
+    end
+
+    def set_log_file
+      path = SecureFilePath.decrypt(params.require(:log_file_path))
+
+      raise ForbiddenPathError, "Access denied to this log file" unless Onlylogs.file_path_permitted?(path)
+
+      @log_file = File.new(path)
+    end
+
+    def render_invalid(record)
+      render json: {
+        error: record.errors.full_messages.to_sentence,
+        errors: record.errors.to_hash
+      }, status: :unprocessable_entity
+    end
+
+    def render_error(message, status)
+      render json: {error: message}, status: status
+    end
+  end
+end

@@ -21,4 +21,7 @@ Gem::Specification.new do |spec|
   spec.executables = ["onlylogs_sidecar", "super_grep", "super_ripgrep"]
 
   spec.add_dependency "rails", "~> 8.0"
+  # Saved queries live in a SQLite database beside the log files, independent of
+  # whatever database the host application uses.
+  spec.add_dependency "sqlite3", "~> 2.0"
 end
