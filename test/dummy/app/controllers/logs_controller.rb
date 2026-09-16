@@ -24,5 +24,6 @@ class LogsController < ApplicationController
     @filter = params[:filter]
     @autoscroll = params[:autoscroll] != "false"
     @mode = @filter.blank? ? (params[:mode] || "live") : "static"
+    @live_enabled = params[:live] != "false"
   end
 end

@@ -7,6 +7,8 @@ export default class LogStreamerController extends Controller {
     autoScroll: { type: Boolean, default: true },
     filter: { type: String, default: '' },
     mode: { type: String, default: 'live' },
+    // false for a file nothing writes to any more: the viewer only searches, never tails.
+    liveEnabled: { type: Boolean, default: true },
     regexpMode: { type: Boolean, default: false },
     fileSize: { type: Number, default: 0 },
     startPosition: { type: Number, default: 0 },
@@ -125,7 +127,7 @@ export default class LogStreamerController extends Controller {
   }
 
   switchToLive() {
-    if (this.isLiveMode()) return;
+    if (this.isLiveMode() || !this.liveEnabledValue) return;
 
     this.#clearHighlighting();
     this.#setMode('live');
@@ -178,8 +180,11 @@ export default class LogStreamerController extends Controller {
   // The only writer of modeValue. Everything that changes the mode goes through
   // here so the switch, the URL and the toolbar layout can never disagree.
   #setMode(mode) {
+    if (mode === 'live' && !this.liveEnabledValue) return;
+
     this.modeValue = mode;
-    this.#updateUrlParam('mode', mode === 'live' ? null : 'static');
+    // Search is the only mode when live is disabled, so the URL need not say so.
+    this.#updateUrlParam('mode', mode === 'live' || !this.liveEnabledValue ? null : 'static');
     this.#liveFilterStartedAt = mode === 'live' ? new Date() : null;
     this.#syncModeControls();
   }
@@ -435,8 +440,9 @@ export default class LogStreamerController extends Controller {
     const end = endParam ? parseInt(endParam) : this.fileSizeValue;
     this.#setRange(start, end);
 
-    // Calculate mode: check mode param, default to live
-    this.modeValue = params.get('mode') === 'static' ? 'static' : 'live';
+    // Calculate mode: check mode param, default to live unless live is disabled
+    const wantsStatic = params.get('mode') === 'static' || !this.liveEnabledValue;
+    this.modeValue = wantsStatic ? 'static' : 'live';
     this.#liveFilterStartedAt = this.isLiveMode() ? new Date() : null;
     this.#syncModeControls();
   }

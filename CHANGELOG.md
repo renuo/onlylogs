@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Live mode can be switched off per file.** The `log_container` partial accepts
+  `live_enabled: false`, which removes the live/search switch and opens the viewer in search mode.
+  Meant for files nothing writes to any more, such as rotated or archived logs, where following
+  the file makes no sense. Presentation only: the WebSocket is not restricted.
 - **`HttpLogger` validates its configuration instead of trusting it.** A non-numeric or zero
   `ONLYLOGS_OPEN_TIMEOUT` used to become `0`, which Net::HTTP reads as "no timeout", so the sender
   could block on connect forever; an `ONLYLOGS_MAX_BATCH_BYTES` smaller than the truncation marker

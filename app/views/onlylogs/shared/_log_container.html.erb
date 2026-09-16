@@ -1,4 +1,4 @@
-<%# locals: (log_file_path:) %>
+<%# locals: (log_file_path:, live_enabled: true) %>
 <script nonce="<%= request.content_security_policy_nonce %>"
         src="<%= asset_path('onlylogs/clusterize.js') %>"></script>
 <link rel="stylesheet" href="<%= asset_path('onlylogs/clusterize.css') %>" />
@@ -8,7 +8,9 @@
     autoscroll = local_assigns[:autoscroll] != false
     filter = local_assigns[:filter] || ""
     regexp_mode = local_assigns[:regexp_mode] == true
-    mode = local_assigns[:mode] || "live"
+    # A file nothing writes to any more (no drain attached, a rotated log) has nothing
+    # to follow, so live mode is not offered at all and the viewer opens in search.
+    mode = live_enabled ? (local_assigns[:mode] || "live") : "static"
     file_size = File.size(log_file_path)
     start_position = local_assigns[:start_position]
     end_position = local_assigns[:end_position]
@@ -27,6 +29,7 @@
      data-log-streamer-auto-scroll-value="<%= autoscroll %>"
      data-log-streamer-regexp-mode-value="<%= regexp_mode %>"
      data-log-streamer-mode-value="<%= mode %>"
+     data-log-streamer-live-enabled-value="<%= live_enabled %>"
      data-log-streamer-file-size-value="<%= file_size %>"
      data-action="text-selection:start->log-streamer#pauseForSelection text-selection:search->log-streamer#switchToSearch"
      class="onlylogs-log-container" >
@@ -39,7 +42,13 @@
         at all until something is typed. This says so instead of looking idle. %>
     <div class="onlylogs-search-placeholder" data-log-streamer-target="searchPlaceholder" hidden>
       <p class="onlylogs-search-placeholder__title">Nothing to search for yet</p>
-      <p class="onlylogs-search-placeholder__hint">Type a query to search this file, or switch to Live to follow it as it is written.</p>
+      <p class="onlylogs-search-placeholder__hint">
+        <% if live_enabled %>
+          Type a query to search this file, or switch to Live to follow it as it is written.
+        <% else %>
+          Type a query to search this file.
+        <% end %>
+      </p>
     </div>
 
     <button type="button"
@@ -52,6 +61,7 @@
 
     <div class="onlylogs-log-toolbar">
       <div class="onlylogs-toolbar-row onlylogs-toolbar-row--controls">
+        <% if live_enabled %>
         <div class="onlylogs-mode-switch" role="group" aria-label="Log mode">
           <button type="button"
                   class="onlylogs-mode-switch__button"
@@ -74,6 +84,7 @@
             <span>🔍 <u>S</u>earch</span>
           </button>
         </div>
+        <% end %>
         <div>
           <label class="toolbar-label">
             <span data-onlylogs-mode="live">Follow:</span>
