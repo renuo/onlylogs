@@ -58,6 +58,33 @@ Here you can grep your logs with regular expressions.
 > If ripgrep is not installed, onlylogs falls back to `grep`. 
 > A warning icon (⚠️) will be displayed in the toolbar when using `grep` to indicate slower search performance.
 
+## Logging in production
+
+Rails apps log to `STDOUT` in production and let the platform collect the stream.
+onlylogs keeps that default: `Onlylogs::HttpLogger.new` writes every line to `$stdout` and, when
+`ONLYLOGS_DRAIN_URL` is set, ships it to https://onlylogs.io as well. Nothing is written to disk.
+
+```ruby
+# config/environments/production.rb
+config.logger = Onlylogs::HttpLogger.new
+```
+
+Keep this default on an **ephemeral filesystem** (Heroku, Deploio, Docker, Kubernetes). A log file
+there is lost on every deploy and, while it grows, its page cache counts towards the container's
+memory limit: it shows up as a memory leak that resets on each release.
+
+If you have a **persistent disk** and want the files, for instance to browse them with the engine,
+pass a rotating log device as the local fallback. Rails rotates at 100 MB in development, which is a
+good size here too:
+
+```ruby
+# config/environments/production.rb
+log_file = Logger::LogDevice.new(Rails.root.join("log", "production.log"), shift_age: 5, shift_size: 100.megabytes)
+config.logger = Onlylogs::HttpLogger.new(local_fallback: log_file)
+```
+
+Any IO or log device works and is used as is. `Onlylogs::SocketLogger` accepts the same argument.
+
 ## Authentication
 
 Yes, we should do this right away, because this engine gives access to your log files, so you want to be sure.
@@ -294,7 +321,7 @@ The `Onlylogs::Formatter` supports a denylist: an array of regular expressions t
 
 ```ruby
 # config/environments/production.rb
-config.logger = Onlylogs::Logger.new(Rails.root.join("log", "production.log"))
+config.logger = Onlylogs::HttpLogger.new
 config.logger.formatter.denylist = [/health_check/, /ping/, /\.css\z/]
 ```
 
