@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **A live tail notices when its file is rotated.** The follower used to go silent for good once
+  the file under the name was replaced (rename rotation) or made smaller than what it had already
+  read (copytruncate). It now stops, and the viewer shows "The file was rotated" with a Reload
+  button that reopens the file at its current tail.
 - **Live mode can be switched off per file.** The `log_container` partial accepts
   `live_enabled: false`, which removes the live/search switch and opens the viewer in search mode.
   Meant for files nothing writes to any more, such as rotated or archived logs, where following

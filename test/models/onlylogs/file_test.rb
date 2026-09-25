@@ -88,6 +88,41 @@ class Onlylogs::FileTest < ActiveSupport::TestCase
     end
   end
 
+  test "watch returns once another file sits under the name" do
+    with_temp_file("Line 0\n") do |path|
+      log_file = Onlylogs::File.new(path, last_position: 0)
+      File.rename(path, "#{path}.rotated")
+      File.write(path, "Line 0 of the new file\n")
+
+      Timeout.timeout(3) { log_file.watch { |lines| flunk "yielded #{lines.inspect} from the new file" } }
+      assert log_file.rotated?
+    ensure
+      File.delete("#{path}.rotated") if File.exist?("#{path}.rotated")
+    end
+  end
+
+  test "watch returns once the file is smaller than what was read" do
+    with_temp_file("Line 0\nLine 1\n") do |path|
+      log_file = Onlylogs::File.new(path, last_position: 0)
+      log_file.send(:read_new_lines)
+      File.write(path, "")
+
+      Timeout.timeout(3) { log_file.watch { |lines| flunk "yielded #{lines.inspect} after truncation" } }
+      assert log_file.rotated?
+    end
+  end
+
+  test "a file that only grows is not rotated" do
+    with_temp_file("Line 0\n") do |path|
+      log_file = Onlylogs::File.new(path, last_position: 0)
+      log_file.send(:read_new_lines)
+      File.write(path, "Line 1\n", mode: "a")
+
+      assert_not log_file.rotated?
+      assert_equal ["Line 1"], log_file.send(:read_new_lines)
+    end
+  end
+
   test "text_file? returns true for text files" do
     assert @log_file.text_file?
   end
@@ -134,5 +169,15 @@ class Onlylogs::FileTest < ActiveSupport::TestCase
     ensure
       File.delete(test_file_path) if File.exist?(test_file_path)
     end
+  end
+
+  private
+
+  def with_temp_file(content)
+    path = File.expand_path("../../fixtures/files/test_#{SecureRandom.hex(4)}.txt", __dir__)
+    File.write(path, content)
+    yield path
+  ensure
+    File.delete(path) if path && File.exist?(path)
   end
 end

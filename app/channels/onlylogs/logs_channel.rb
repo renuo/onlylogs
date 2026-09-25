@@ -92,6 +92,10 @@ module Onlylogs
     # an explicit cursor (matches the default whole-file live-mode page load).
     LIVE_TAIL_BYTES = 10_000
 
+    # The button re-runs the viewer's own reset, which reopens the file at its current tail.
+    ROTATED_MESSAGE = 'The file was rotated. <button type="button" class="reload-button" ' \
+      'data-action="click->log-streamer#reset">Reload</button>'
+
     def start_log_watcher(file_path, filter = nil, regexp_mode = false)
       return if @log_watcher_running
 
@@ -130,6 +134,10 @@ module Onlylogs
               })
             end
           end
+
+          # watch returns on its own only when the file was rotated: nothing more will
+          # arrive under this name from where we are, so the viewer has to start over.
+          transmit({action: "finish", content: ROTATED_MESSAGE}) if @log_watcher_running
         end
       rescue => e
         Rails.logger.error "Log watcher error: #{e.message}"

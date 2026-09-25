@@ -8,6 +8,7 @@ module Onlylogs
       self.path = path
       self.last_position = last_position
       validate!
+      @inode = ::File.stat(path).ino
     end
 
     def go_to_position(position)
@@ -16,17 +17,27 @@ module Onlylogs
       self.last_position = position
     end
 
+    # Yields new lines until the file is rotated away from under its name; then
+    # returns, since the position no longer means anything on the file now there.
     def watch(&block)
-      # return enum_for(:watch) unless block
-
       loop do
         sleep 0.5
+        return if rotated?
 
         new_lines = read_new_lines
         next if new_lines.empty?
 
         yield new_lines
       end
+    end
+
+    # A rename rotation puts another inode under the name, a copytruncate rotation
+    # keeps the inode but makes the file smaller than what was already read.
+    def rotated?
+      return true unless exist?
+
+      stat = ::File.stat(path)
+      stat.ino != @inode || stat.size < last_position
     end
 
     def size

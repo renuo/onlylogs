@@ -97,6 +97,20 @@ module Onlylogs
 
     # Expand-around-line feature tests
 
+    test "a live tail finishes with a reload button when the file is rotated" do
+      subscribe
+      perform :initialize_watcher, initialize_data(mode: "live")
+
+      ::File.rename(@temp_file.path, "#{@temp_file.path}.rotated")
+      ::File.write(@temp_file.path, "line 1 of the new file\n")
+
+      finish = wait_for_transmission("finish")
+      assert_includes finish["content"], "rotated"
+      assert_includes finish["content"], 'data-action="click->log-streamer#reset"'
+    ensure
+      ::File.delete("#{@temp_file.path}.rotated") if ::File.exist?("#{@temp_file.path}.rotated")
+    end
+
     test "render_log_line includes byte_offset and expand button for static searches" do
       subscribe
       result = subscription.send(:render_log_line, "test log line", byte_offset: 1000, show_expand_button: true)
@@ -163,6 +177,15 @@ module Onlylogs
       yield
     ensure
       singleton.define_method(:search_command, original)
+    end
+
+    def wait_for_transmission(action, within: 3)
+      deadline = Time.now + within
+      until (found = transmissions.find { |t| t["action"] == action })
+        flunk "no #{action} transmission within #{within}s: #{transmissions.inspect}" if Time.now > deadline
+        sleep 0.05
+      end
+      found
     end
 
     def initialize_data(overrides = {})
