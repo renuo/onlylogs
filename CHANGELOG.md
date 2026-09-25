@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.11.0
 
 - **A live tail notices when its file is rotated.** The follower used to go silent for good once
   the file under the name was replaced (rename rotation) or made smaller than what it had already
