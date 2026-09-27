@@ -34,8 +34,8 @@ export default class RangeSliderController extends Controller {
     this.#paint(start, end);
   }
 
-  // Reads the handles, snapping to the ends and keeping start <= end, and
-  // writes back whatever it had to correct.
+  // Reads the handles, snapping the end to the file end and keeping
+  // start <= end, and writes back whatever it had to correct.
   #clampedValues() {
     let start = Number(this.startInputTarget.value);
     let end = Number(this.endInputTarget.value);
@@ -43,10 +43,11 @@ export default class RangeSliderController extends Controller {
     const sliderMax = Number(this.startInputTarget.max);
     const step = Number(this.startInputTarget.step);
 
-    // Snap to 100% if close to max (within 2% or one step)
+    // Snap the end to 100% if close to max (within 2% or one step). Only the end:
+    // a start that close to the end is a narrow window on the file's tail, and
+    // snapping it too would collapse the range to nothing.
     const threshold = Math.max(sliderMax * 0.02, step);
     if (end > sliderMax - threshold) end = sliderMax;
-    if (start > sliderMax - threshold) start = sliderMax;
 
     if (start > end) [start, end] = [end, start];
 

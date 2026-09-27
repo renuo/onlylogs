@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- **"Show around this line" works near the end of the file.** The range slider snapped both
+  handles to the file end when they were within 2% of it, so opening the context of a match in
+  the last stretch of a file collapsed the window to zero bytes and rendered nothing. Only the end
+  handle snaps now.
+
 ## 0.11.0
 
 - **A live tail notices when its file is rotated.** The follower used to go silent for good once
