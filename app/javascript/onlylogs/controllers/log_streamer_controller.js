@@ -10,12 +10,13 @@ export default class LogStreamerController extends Controller {
     // false for a file nothing writes to any more: the viewer only searches, never tails.
     liveEnabled: { type: Boolean, default: true },
     regexpMode: { type: Boolean, default: false },
+    caseInsensitive: { type: Boolean, default: false },
     fileSize: { type: Number, default: 0 },
     startPosition: { type: Number, default: 0 },
     endPosition: { type: Number, default: 0 }
   };
 
-  static targets = ["logLines", "filterInput", "results", "liveButton", "searchButton", "searchWholeFileButton", "message", "regexpMode", "websocketStatus", "stopButton", "clearButton", "autoscroll", "rangeSliderContainer", "startSlider", "endSlider", "searchPlaceholder"];
+  static targets = ["logLines", "filterInput", "results", "liveButton", "searchButton", "searchWholeFileButton", "message", "regexpMode", "caseInsensitive", "websocketStatus", "stopButton", "clearButton", "autoscroll", "rangeSliderContainer", "startSlider", "endSlider", "searchPlaceholder"];
 
   // When the current live query started, so "0 matches" can say since when.
   #liveFilterStartedAt = null;
@@ -121,6 +122,14 @@ export default class LogStreamerController extends Controller {
     this.regexpModeValue = this.regexpModeTarget.checked;
     this.#updateUrlParam('regexp_mode', this.regexpModeValue ? 'true' : null);
     // If we have a filter applied, reconnect to apply the new regexp mode
+    if (this.filterInputTarget.value && this.filterInputTarget.value.trim() !== '') {
+      this.reconnectWithNewMode();
+    }
+  }
+
+  toggleCaseInsensitive() {
+    this.caseInsensitiveValue = this.caseInsensitiveTarget.checked;
+    this.#updateUrlParam('case_insensitive', this.caseInsensitiveValue ? 'true' : null);
     if (this.filterInputTarget.value && this.filterInputTarget.value.trim() !== '') {
       this.reconnectWithNewMode();
     }
@@ -432,6 +441,10 @@ export default class LogStreamerController extends Controller {
       this.regexpModeTarget.checked = false;
     }
 
+    const caseInsensitive = params.get('case_insensitive') === 'true';
+    this.caseInsensitiveValue = caseInsensitive;
+    this.caseInsensitiveTarget.checked = caseInsensitive;
+
     // Restore range
     const startParam = params.get('start_position');
     const endParam = params.get('end_position');
@@ -520,7 +533,8 @@ export default class LogStreamerController extends Controller {
       file_path: this.filePathValue,
       filter: this.filterInputTarget.value,
       mode: this.modeValue,
-      regexp_mode: this.regexpModeValue
+      regexp_mode: this.regexpModeValue,
+      case_insensitive: this.caseInsensitiveValue
     };
 
     // Use range slider values if available and not at defaults

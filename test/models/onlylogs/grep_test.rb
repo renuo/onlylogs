@@ -166,6 +166,60 @@ class Onlylogs::GrepTest < ActiveSupport::TestCase
     assert Onlylogs::Grep.match_line?(line_with_numbers, "Error \\d+:", regexp_mode: true)
   end
 
+  test_both_engine_modes "it matches case-sensitively by default" do |engine_name|
+    assert_equal [], Onlylogs::Grep.grep("[debug]", @fixture_path), "Failed with #{engine_name}"
+  end
+
+  test_both_engine_modes "it ignores case in literal mode" do |engine_name|
+    lines = Onlylogs::Grep.grep("[debug]", @fixture_path, case_sensitive: false)
+    assert_equal 49, lines.length, "Failed with #{engine_name}"
+    assert_equal "[DEBUG] Initializing database connection - Line 2", lines.first[:content]
+  end
+
+  test_both_engine_modes "it ignores case in regexp mode" do |engine_name|
+    lines = Onlylogs::Grep.grep("\\[debug\\] .* line \\d+$", @fixture_path, regexp_mode: true, case_sensitive: false)
+    assert_equal 49, lines.length, "Failed with #{engine_name}"
+  end
+
+  test_both_engine_modes "it ignores case across ANSI colors and spaces" do |engine_name|
+    lines = Onlylogs::Grep.grep("(0.0MS) select", @special_lines_path, case_sensitive: false)
+    assert_equal 1, lines.length, "Failed with #{engine_name}"
+  end
+
+  test_both_engine_modes "it ignores case inside a byte window" do |engine_name|
+    path = write_fixed_width_log(BLOCK_BYTES)
+    start_position = 10 * LINE_WIDTH
+
+    lines = Onlylogs::Grep.grep("mark", path, start_position: start_position,
+      end_position: start_position + 5 * LINE_WIDTH, case_sensitive: false)
+
+    assert_equal 5, lines.length, "Failed with #{engine_name}"
+    assert_equal "MARK 0000000010 ", lines.first[:content][0, 16], "Failed with #{engine_name}"
+  end
+
+  test_both_engine_modes "only ripgrep folds non-ASCII case" do |engine_name|
+    path = ::File.join(@tmpdir, "umlauts.log")
+    ::File.write(path, "Überweisung fehlgeschlagen\nüberweisung ok\n")
+
+    lines = Onlylogs::Grep.grep("überweisung", path, case_sensitive: false).map { |line| line[:content] }
+
+    expected = if engine_name == "ripgrep"
+      ["Überweisung fehlgeschlagen", "überweisung ok"]
+    else
+      ["überweisung ok"]
+    end
+    assert_equal expected, lines, "Failed with #{engine_name}"
+  end
+
+  test "match_line? ignores case when asked to" do
+    line = "\e[1m\e[36mActiveRecord::SchemaMigration Load (0.0ms)\e[0m  \e[1m\e[34mSELECT ...\e[0m"
+
+    refute Onlylogs::Grep.match_line?(line, "(0.0MS) select")
+    assert Onlylogs::Grep.match_line?(line, "(0.0MS) select", case_sensitive: false)
+    assert Onlylogs::Grep.match_line?(line, "schemamigration load \\(\\d", regexp_mode: true, case_sensitive: false)
+    assert Onlylogs::Grep.match_line?("Überweisung fehlgeschlagen", "überweisung", case_sensitive: false)
+  end
+
   test_both_engine_modes "it respects max_line_matches configuration" do |engine_name|
     # Set a very low max_line_matches to test limiting
     original_max_matches = Onlylogs.max_line_matches

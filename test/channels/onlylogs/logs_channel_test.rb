@@ -111,6 +111,27 @@ module Onlylogs
       ::File.delete("#{@temp_file.path}.rotated") if ::File.exist?("#{@temp_file.path}.rotated")
     end
 
+    test "a search matches case-sensitively unless told to ignore case" do
+      subscribe
+      perform :initialize_watcher, initialize_data(filter: "LINE 2")
+      assert_empty sent_contents
+
+      perform :initialize_watcher, initialize_data(filter: "LINE 2", case_insensitive: true)
+      assert_equal ["line 2"], sent_contents
+    end
+
+    test "a live tail ignores case when told to" do
+      subscribe
+      perform :initialize_watcher, initialize_data(mode: "live", filter: "APPENDED", case_insensitive: "true")
+
+      ::File.write(@temp_file.path, "an appended line\n", mode: "a")
+
+      appended = wait_for_transmission("append_logs")
+      assert_includes appended["lines"].map { |line| line["content"] }.join, "an appended line"
+    ensure
+      subscription.send(:cleanup_existing_operations)
+    end
+
     test "render_log_line includes byte_offset and expand button for static searches" do
       subscribe
       result = subscription.send(:render_log_line, "test log line", byte_offset: 1000, show_expand_button: true)
@@ -186,6 +207,10 @@ module Onlylogs
         sleep 0.05
       end
       found
+    end
+
+    def sent_contents
+      transmissions.select { |t| t["action"] == "append_logs" }.flat_map { |t| t["lines"] }.map { |line| line["content"] }
     end
 
     def initialize_data(overrides = {})

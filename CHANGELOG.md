@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Searches can ignore case.** `Grep.grep`, `Grep.search_command` and `Grep.match_line?` accept
+  `case_sensitive: false`, which passes the new `--case-insensitive` flag to `bin/super_ripgrep` and
+  `bin/super_grep`. It works in literal and regexp mode. The default stays case-sensitive. The
+  scripts run under `LC_ALL=C`, where ripgrep still folds Unicode but grep folds ASCII only: `error`
+  finds `ERROR` with both engines, `über` finds `Über` only with ripgrep. `match_line?` folds
+  Unicode, like ripgrep. The viewer has an "Ignore case" checkbox next to "Regexp", for live and
+  search mode, kept in the URL as `case_insensitive=true`.
 - **"Show around this line" works near the end of the file.** The range slider snapped both
   handles to the file end when they were within 2% of it, so opening the context of a match in
   the last stretch of a file collapsed the window to zero bytes and rendered nothing. Only the end

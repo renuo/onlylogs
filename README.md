@@ -1,13 +1,13 @@
 <img alt="w:100px" src="app/assets/images/onlylogs/logo.png" width="400px"/>
 
-We believe logs are enough. 
+We believe logs are enough.
 
 We believe logs in human-readable format are enough.
 
 Stop streaming your logs to very expensive external services: just store your logs on disk.
 
-When your application grows and you don't want to self-host your log files anymore, you can
-stream them to https://onlylogs.io and continue enjoying the same features.
+When your application grows and you don't want to self-host your log files anymore, you can stream them
+to https://onlylogs.io and continue enjoying the same features.
 
 > [!IMPORTANT]
 > https://onlylogs.io is still in beta. Send us an email to a@renuo.ch if you want access to the platform.
@@ -18,7 +18,8 @@ If you already have a disk, you can just keep there also your log files (as well
 
 This section explains how to setup onlylogs to self host your logs and access them directly from your Rails app.
 
-If instead you want to stream your logs to https://onlylogs.io, head to [the onlylogs.io instructions page](https://onlylogs.io/instructions).
+If instead you want to stream your logs to https://onlylogs.io, head
+to [the onlylogs.io instructions page](https://onlylogs.io/instructions).
 
 Add this line to your application's Gemfile:
 
@@ -54,14 +55,15 @@ Head to `/onlylogs` and enjoy your logs streamed right into your face!
 Here you can grep your logs with regular expressions.
 
 > [!TIP]
-> Onlylogs automatically detects and uses [ripgrep (rg)](https://github.com/BurntSushi/ripgrep) if available, which provides significantly faster search experience. 
-> If ripgrep is not installed, onlylogs falls back to `grep`. 
+> Onlylogs automatically detects and uses [ripgrep (rg)](https://github.com/BurntSushi/ripgrep) if available, which
+provides significantly faster search experience.
+> If ripgrep is not installed, onlylogs falls back to `grep`.
 > A warning icon (⚠️) will be displayed in the toolbar when using `grep` to indicate slower search performance.
 
 ## Logging in production
 
-Rails apps log to `STDOUT` in production and let the platform collect the stream.
-onlylogs keeps that default: `Onlylogs::HttpLogger.new` writes every line to `$stdout` and, when
+Rails apps log to `STDOUT` in production and let the platform collect the stream. onlylogs keeps that default:
+`Onlylogs::HttpLogger.new` writes every line to `$stdout` and, when
 `ONLYLOGS_DRAIN_URL` is set, ships it to https://onlylogs.io as well. Nothing is written to disk.
 
 ```ruby
@@ -69,13 +71,12 @@ onlylogs keeps that default: `Onlylogs::HttpLogger.new` writes every line to `$s
 config.logger = Onlylogs::HttpLogger.new
 ```
 
-Keep this default on an **ephemeral filesystem** (Heroku, Deploio, Docker, Kubernetes). A log file
-there is lost on every deploy and, while it grows, its page cache counts towards the container's
-memory limit: it shows up as a memory leak that resets on each release.
+Keep this default on an **ephemeral filesystem** (Heroku, Deploio, Docker, Kubernetes). A log file there is lost on
+every deploy and, while it grows, its page cache counts towards the container's memory limit: it shows up as a memory
+leak that resets on each release.
 
-If you have a **persistent disk** and want the files, for instance to browse them with the engine,
-pass a rotating log device as the local fallback. Rails rotates at 100 MB in development, which is a
-good size here too:
+If you have a **persistent disk** and want the files, for instance to browse them with the engine, pass a rotating log
+device as the local fallback. Rails rotates at 100 MB in development, which is a good size here too:
 
 ```ruby
 # config/environments/production.rb
@@ -103,15 +104,15 @@ If your app is running in a Docker container, for example with Kamal, remember t
 ```yaml
 # config/deploy.yml
 volumes:
-- "storage:/rails/storage"
-- "cache:/rails/tmp/cache"
-- "logs:/rails/log"
+  - "storage:/rails/storage"
+  - "cache:/rails/tmp/cache"
+  - "logs:/rails/log"
 ```
 
 ### Basic Authentication Setup
 
-Credentials can be configured using environment variables, Rails credentials, or programmatically.
-Environment variables take precedence over Rails credentials.
+Credentials can be configured using environment variables, Rails credentials, or programmatically. Environment variables
+take precedence over Rails credentials.
 
 ```bash
 # env variables
@@ -134,11 +135,10 @@ Onlylogs.configure do |config|
 end
 ```
 
-
 ### Custom Authentication
 
-When you need custom authentication logic beyond basic auth, 
-you can override the default authentication by configuring a parent controller that defines the `authenticate_onlylogs_user!` method.
+When you need custom authentication logic beyond basic auth, you can override the default authentication by configuring
+a parent controller that defines the `authenticate_onlylogs_user!` method.
 
 Configure a custom parent controller in your initializer:
 
@@ -158,7 +158,7 @@ class ApplicationController < ActionController::Base
   private
 
   def authenticate_onlylogs_user!
-    raise unless current_user.can_access_logs?      
+    raise unless current_user.can_access_logs?
   end
 end
 ```
@@ -176,14 +176,14 @@ end
 
 ### WebSocket Authentication
 
-Logs are streamed through a WebSocket connection, the Websocket is not protected, but in order to stream a file,
-the file path must be white-listed (see section below) and the file path encrypted using `Onlylogs::SecureFilePath.encrypt`
-
+Logs are streamed through a WebSocket connection, the Websocket is not protected, but in order to stream a file, the
+file path must be white-listed (see section below) and the file path encrypted using `Onlylogs::SecureFilePath.encrypt`
 
 ## Customization
 
 Onlylogs provides two ways to customize the appearance of the log viewer: CSS Variables and a complete style override.
-Check the file [_log_container_styles.html.erb](app/views/onlylogs/shared/_log_container_styles.html.erb) for the complete list of CSS variables.
+Check the file [_log_container_styles.html.erb](app/views/onlylogs/shared/_log_container_styles.html.erb) for the
+complete list of CSS variables.
 
 ## Configuration
 
@@ -191,8 +191,8 @@ Check `configuration.rb` to see a list of all possible configuration.
 
 ### File Access Security
 
-Onlylogs includes a secure file access system that prevents unauthorized access to files on your server. 
-By default, onlylogs can access your Rails environment-specific log files (e.g., `log/development.log`, `log/production.log`).
+Onlylogs includes a secure file access system that prevents unauthorized access to files on your server. By default,
+onlylogs can access your Rails environment-specific log files (e.g., `log/development.log`, `log/production.log`).
 
 #### Configuring Allowed Files
 
@@ -206,15 +206,15 @@ Onlylogs.configure do |config|
     Rails.root.join("log/development.log"),
     Rails.root.join("log/production.log"),
     Rails.root.join("log/test.log"),
-    
+
     # Custom log files
     Rails.root.join("log/custom.log"),
     Rails.root.join("log/api.log"),
-    
+
     # Application-specific logs
     Rails.root.join("log/background_jobs.log"),
     Rails.root.join("log/imports.log"),
-    
+
     # Allow all .log files in a directory using glob patterns
     Rails.root.join("log/*.log"),
     Rails.root.join("tmp/logs/*.log")
@@ -223,6 +223,7 @@ end
 ```
 
 **Default Behavior:**
+
 - If not configured, onlylogs defaults to `Rails.root.join("log/#{Rails.env}.log").to_s`
 - This means it will use `log/development.log` in development, `log/production.log` in production, etc.
 
@@ -236,11 +237,11 @@ Onlylogs.configure do |config|
   config.log_file_patterns = [
     # Allow all .log files in the log directory
     Rails.root.join("log/*.log"),
-    
+
     # Allow specific pattern matches
     Rails.root.join("log/*production*.log"),
     Rails.root.join("log/*development*.log"),
-    
+
     # Allow files in subdirectories
     Rails.root.join("log/**/*.log"),
     Rails.root.join("tmp/**/*.log")
@@ -249,20 +250,23 @@ end
 ```
 
 **Supported Glob Patterns:**
+
 - `*.log` - Matches all files ending with `.log` in the specified directory
 - `*production*.log` - Matches files containing "production" and ending with `.log`
 - `**/*.log` - Matches all `.log` files in the directory and all subdirectories
 
 **Important Notes:**
+
 - Patterns are directory-specific - `log/*.log` only matches files in the `log/` directory
 - Multiple patterns can be combined in the same configuration
 
-
 ### Configuring Code Editor for File Path Links
 
-Onlylogs automatically detects file paths in log messages and converts them into clickable links that open in your preferred code editor.
+Onlylogs automatically detects file paths in log messages and converts them into clickable links that open in your
+preferred code editor.
 
-For a complete list of supported editors, see [app/models/onlylogs/file_path_parser.rb](app/models/onlylogs/file_path_parser.rb).
+For a complete list of supported editors,
+see [app/models/onlylogs/file_path_parser.rb](app/models/onlylogs/file_path_parser.rb).
 
 ```bash
 # env variables
@@ -286,14 +290,15 @@ end
 
 #### Configuring Maximum Search Results
 
-By default, onlylogs limits search results to 100,000 lines to prevent memory issues and ensure responsive performance. You can configure this limit based on your needs:
+By default, onlylogs limits search results to 100,000 lines to prevent memory issues and ensure responsive performance.
+You can configure this limit based on your needs:
 
 ```ruby
 # config/initializers/onlylogs.rb
 Onlylogs.configure do |config|
   # Set a custom limit (e.g., 50,000 lines)
   config.max_line_matches = 50_000
-  
+
   # Or remove the limit entirely (use with caution)
   config.max_line_matches = nil
 end
@@ -301,8 +306,8 @@ end
 
 #### Bounding How Long a Viewer Search Can Run
 
-Searches started from the log viewer stop after `search_timeout` seconds, keeping whatever they
-found and reporting that they did not reach the end of the file. The default is 120 seconds:
+Searches started from the log viewer stop after `search_timeout` seconds, keeping whatever they found and reporting that
+they did not reach the end of the file. The default is 120 seconds:
 
 ```ruby
 # config/initializers/onlylogs.rb
@@ -317,7 +322,8 @@ end
 
 ### Filtering Log Lines with a Denylist
 
-The `Onlylogs::Formatter` supports a denylist: an array of regular expressions that prevents matching lines from being logged. This is useful for filtering out noisy or irrelevant entries like health checks or asset requests.
+The `Onlylogs::Formatter` supports a denylist: an array of regular expressions that prevents matching lines from being
+logged. This is useful for filtering out noisy or irrelevant entries like health checks or asset requests.
 
 ```ruby
 # config/environments/production.rb
@@ -329,7 +335,7 @@ Any log message matching at least one pattern in the denylist will be silently d
 
 ## Development & Contributing
 
-You are more than welcome to help and contribute to this package.  
+You are more than welcome to help and contribute to this package.
 
 The app uses minitest and includes a dummy app, so getting started should be straightforward.
 
@@ -352,7 +358,8 @@ The dummy app will be available at `http://localhost:3000` and onlylogs at `http
 
 ### Generating Test Logs
 
-To test onlylogs with live log data, use the continuous log writer script. This is especially useful for testing real-time log streaming and UI behavior.
+To test onlylogs with live log data, use the continuous log writer script. This is especially useful for testing
+real-time log streaming and UI behavior.
 
 ```bash
 # Generate 1 log entry every 2 seconds (default)
@@ -365,9 +372,12 @@ bin/continuous_log_writer 5 1
 bin/continuous_log_writer 10 3
 ```
 
-The script will write logs to `test/dummy/log/development.log`, which will appear in real-time in the onlylogs UI at `http://localhost:3000/onlylogs`. 
+The script will write logs to `test/dummy/log/development.log`, which will appear in real-time in the onlylogs UI at
+`http://localhost:3000/onlylogs`.
 
-The lines are generated by `Onlylogs::ContinuousLogWriter`, in the same format a Rails app logging through `Onlylogs::Logger` produces. The script is a thin wrapper, so applications embedding onlylogs can reuse the writer against any file of their own:
+The lines are generated by `Onlylogs::ContinuousLogWriter`, in the same format a Rails app logging through
+`Onlylogs::Logger` produces. The script is a thin wrapper, so applications embedding onlylogs can reuse the writer
+against any file of their own:
 
 ```ruby
 require "onlylogs/continuous_log_writer"
@@ -375,7 +385,8 @@ require "onlylogs/continuous_log_writer"
 Onlylogs::ContinuousLogWriter.new(some_log_path, logs_per_batch: 3, interval: 1).call
 ```
 
-It is plain Ruby (it does not need Rails to be booted) and is not loaded by `require "onlylogs"` — require it explicitly where you need it.
+It is plain Ruby (it does not need Rails to be booted) and is not loaded by `require "onlylogs"` — require it explicitly
+where you need it.
 
 **Example workflow:**
 
@@ -391,11 +402,14 @@ Open `http://localhost:3000/onlylogs` in your browser and watch logs appear as t
 
 ### Latency Simulation
 
-For testing how onlylogs behaves under production-like network conditions, you can simulate latency for HTTP requests and WebSocket connections using the included latency simulation tool.
+For testing how onlylogs behaves under production-like network conditions, you can simulate latency for HTTP requests
+and WebSocket connections using the included latency simulation tool.
 
 **Parameters:**
+
 - **Latency** (default: 120ms): The base network delay added to all traffic
-- **Jitter** (default: 30ms): Random variation (±) applied to the latency (changes every 2 seconds to simulate real network conditions)
+- **Jitter** (default: 30ms): Random variation (±) applied to the latency (changes every 2 seconds to simulate real
+  network conditions)
 - **Port** (default: 3000): The port to apply latency simulation to
 
 **Common scenarios:**
@@ -414,7 +428,6 @@ bin/simulate_latency enable 300/100
 bin/simulate_latency enable -p 8080
 ```
 
-
 **Testing and monitoring:**
 
 ```bash
@@ -428,11 +441,13 @@ bin/simulate_latency status
 bin/simulate_latency disable
 ```
 
-The `test` command will run 10 HTTP requests and 10 WebSocket connections, showing you the actual round-trip times and helping you verify the latency is working as expected.
+The `test` command will run 10 HTTP requests and 10 WebSocket connections, showing you the actual round-trip times and
+helping you verify the latency is working as expected.
 
 ### Performance Testing
 
-Performance tests require large log files that are not included in the repository. You can download them using the provided script:
+Performance tests require large log files that are not included in the repository. You can download them using the
+provided script:
 
 ```bash
 bin/download_performance_fixtures
@@ -449,8 +464,8 @@ bin/rails test test/models/onlylogs/grep_performance_test.rb
 
 ### Plans for the future
 
-We believe that by simply analysing your logs you can also have a fancy errors report.
-Yes, correct. You don't need Sentry either.
+We believe that by simply analysing your logs you can also have a fancy errors report. Yes, correct. You don't need
+Sentry either.
 
 And you know what? You can get also performance reports.
 
@@ -459,7 +474,6 @@ All of a sudden you are 100% free from external services for three more things:
 * logs
 * errors
 * performance
-
 
 ## License
 

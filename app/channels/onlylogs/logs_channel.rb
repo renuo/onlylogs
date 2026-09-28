@@ -28,6 +28,7 @@ module Onlylogs
       filter = data["filter"].presence
       mode = data["mode"] || "live"
       regexp_mode = data["regexp_mode"] == true || data["regexp_mode"] == "true"
+      case_sensitive = !(data["case_insensitive"] == true || data["case_insensitive"] == "true")
 
       file_size = ::File.size(file_path)
       start_position = (data["start_position"]&.to_i || 0).clamp(0, file_size)
@@ -35,10 +36,10 @@ module Onlylogs
 
       if mode == "static"
         # Read the entire file with filter and send all matching lines
-        read_static(file_path, filter, regexp_mode, start_position, end_position)
+        read_static(file_path, filter, regexp_mode, start_position, end_position, case_sensitive: case_sensitive)
       else
         # Follow the tail of the file indefinitely
-        start_log_watcher(file_path, filter, regexp_mode)
+        start_log_watcher(file_path, filter, regexp_mode, case_sensitive: case_sensitive)
       end
     end
 
@@ -96,12 +97,13 @@ module Onlylogs
     ROTATED_MESSAGE = 'The file was rotated. <button type="button" class="reload-button" ' \
       'data-action="click->log-streamer#reset">Reload</button>'
 
-    def start_log_watcher(file_path, filter = nil, regexp_mode = false)
+    def start_log_watcher(file_path, filter = nil, regexp_mode = false, case_sensitive: true)
       return if @log_watcher_running
 
       @log_watcher_running = true
       @filter = filter
       @regexp_mode = regexp_mode
+      @case_sensitive = case_sensitive
 
       transmit({action: "message", content: "Reading file. Please wait..."})
 
@@ -120,7 +122,8 @@ module Onlylogs
             lines_to_send = []
 
             new_lines.each do |log_line|
-              if @filter.present? && !Onlylogs::Grep.match_line?(log_line, @filter, regexp_mode: @regexp_mode)
+              if @filter.present? && !Onlylogs::Grep.match_line?(log_line, @filter, regexp_mode: @regexp_mode,
+                case_sensitive: @case_sensitive)
                 next
               end
 
@@ -169,7 +172,8 @@ module Onlylogs
       @log_file = nil
     end
 
-    def read_static(file_path, filter = nil, regexp_mode = false, start_position = 0, end_position = nil)
+    def read_static(file_path, filter = nil, regexp_mode = false, start_position = 0, end_position = nil,
+      case_sensitive: true)
       @log_watcher_running = true
       @log_file = Onlylogs::File.new(file_path, last_position: 0)
 
@@ -186,7 +190,8 @@ module Onlylogs
         show_expand_button = filter.present?
 
         Rails.logger.silence(Logger::ERROR) do
-          each_matching_line(file_path, filter, regexp_mode, start_position, end_position) do |log_line, byte_offset|
+          each_matching_line(file_path, filter, regexp_mode, start_position, end_position,
+            case_sensitive: case_sensitive) do |log_line, byte_offset|
             # Buffer previous line and skip it to avoid cut-off lines at boundaries
             if last_line
               @batch_sender.add_line(render_log_line(last_line, byte_offset: last_byte_offset,
@@ -232,12 +237,12 @@ module Onlylogs
     #
     # A range that starts mid-line opens with a fragment of a line, which is
     # dropped - but its bytes still count towards every offset after it.
-    def each_matching_line(file_path, filter, regexp_mode, start_position, end_position)
+    def each_matching_line(file_path, filter, regexp_mode, start_position, end_position, case_sensitive: true)
       skip_first = start_position > 0
 
       if filter.present?
-        @log_file.grep(filter, regexp_mode: regexp_mode, start_position: start_position,
-          end_position: end_position, timeout: Onlylogs.search_timeout) do |result|
+        @log_file.grep(filter, regexp_mode: regexp_mode, case_sensitive: case_sensitive,
+          start_position: start_position, end_position: end_position, timeout: Onlylogs.search_timeout) do |result|
           break if reading_stopped?
 
           if skip_first

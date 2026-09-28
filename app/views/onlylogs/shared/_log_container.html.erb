@@ -8,6 +8,7 @@
     autoscroll = local_assigns[:autoscroll] != false
     filter = local_assigns[:filter] || ""
     regexp_mode = local_assigns[:regexp_mode] == true
+    case_insensitive = local_assigns[:case_insensitive] == true
     # A file nothing writes to any more (no drain attached, a rotated log) has nothing
     # to follow, so live mode is not offered at all and the viewer opens in search.
     mode = live_enabled ? (local_assigns[:mode] || "live") : "static"
@@ -28,6 +29,7 @@
      data-log-streamer-filter-value="<%= filter %>"
      data-log-streamer-auto-scroll-value="<%= autoscroll %>"
      data-log-streamer-regexp-mode-value="<%= regexp_mode %>"
+     data-log-streamer-case-insensitive-value="<%= case_insensitive %>"
      data-log-streamer-mode-value="<%= mode %>"
      data-log-streamer-live-enabled-value="<%= live_enabled %>"
      data-log-streamer-file-size-value="<%= file_size %>"
@@ -110,6 +112,12 @@
           <label class="toolbar-label">
             <input id="regexpMode" type="checkbox" <%= regexp_mode ? "checked" : "" %> name="regexpMode" data-log-streamer-target="regexpMode" data-text-selection-target="regexpMode" data-action="change->log-streamer#toggleRegexpMode">
             <span><u>R</u>egexp</span>
+          </label>
+        </div>
+        <div>
+          <label class="toolbar-label">
+            <input id="caseInsensitive" type="checkbox" <%= case_insensitive ? "checked" : "" %> name="caseInsensitive" data-log-streamer-target="caseInsensitive" data-action="change->log-streamer#toggleCaseInsensitive">
+            <span>Ignore case</span>
           </label>
         </div>
         <div data-onlylogs-mode="live">

@@ -13,9 +13,10 @@ module Onlylogs
     # can afford to hold the thread it runs on. Anything serving a request
     # should pass one.
     def self.grep(pattern, file_path, start_position: 0, end_position: nil, regexp_mode: false,
-      max_matches: Onlylogs.max_line_matches, timeout: nil, &block)
+      case_sensitive: true, max_matches: Onlylogs.max_line_matches, timeout: nil, &block)
       command_args = search_command(pattern, file_path, start_position: start_position,
-        end_position: end_position, regexp_mode: regexp_mode, max_matches: max_matches)
+        end_position: end_position, regexp_mode: regexp_mode, case_sensitive: case_sensitive,
+        max_matches: max_matches)
 
       results = []
 
@@ -32,7 +33,7 @@ module Onlylogs
       matches = 0
 
       ActiveSupport::Notifications.instrument("search.onlylogs", file_path: file_path,
-        query: pattern, regexp: regexp_mode, start_position: start_position,
+        query: pattern, regexp: regexp_mode, case_sensitive: case_sensitive, start_position: start_position,
         end_position: end_position, max_matches: max_matches) do |payload|
         each_output_line(command_args, timeout: timeout) do |line|
           byte_offset, content = parse_line.call(line.chomp)
@@ -61,14 +62,18 @@ module Onlylogs
       block_given? ? nil : results
     end
 
+    # The scripts run under LC_ALL=C. ripgrep folds case over Unicode anyway,
+    # grep then folds ASCII only: "error" finds "ERROR" with both engines, but
+    # "über" finds "Über" with ripgrep only.
     def self.search_command(pattern, file_path, start_position: 0, end_position: nil, regexp_mode: false,
-      max_matches: Onlylogs.max_line_matches)
+      case_sensitive: true, max_matches: Onlylogs.max_line_matches)
       script_name = Onlylogs.ripgrep_enabled? ? "super_ripgrep" : "super_grep"
       super_grep_path = ::File.expand_path("../../../bin/#{script_name}", __dir__)
 
       command_args = [super_grep_path]
       command_args += ["--max-matches", max_matches.to_s] if max_matches.present?
       command_args << "--regexp" if regexp_mode
+      command_args << "--case-insensitive" unless case_sensitive
 
       # Add byte range parameters if specified
       if start_position > 0 || end_position
@@ -170,14 +175,16 @@ module Onlylogs
 
     MATCH_TIMEOUT = 0.1 # seconds
 
-    def self.match_line?(line, string, regexp_mode: false)
+    # Folds case over Unicode, like ripgrep. See search_command for grep.
+    def self.match_line?(line, string, regexp_mode: false, case_sensitive: true)
       # Strip ANSI color codes from the line before matching
       stripped_line = line.gsub(/\e\[[0-9;]*m/, "")
       # Normalize multiple spaces to single spaces
       normalized_line = stripped_line.gsub(/\s+/, " ")
 
       pattern = regexp_mode ? string : Regexp.escape(string)
-      normalized_line.match?(Regexp.new(pattern, timeout: MATCH_TIMEOUT))
+      options = case_sensitive ? nil : Regexp::IGNORECASE
+      normalized_line.match?(Regexp.new(pattern, options, timeout: MATCH_TIMEOUT))
     rescue ::RegexpError
       false
     end
