@@ -11,7 +11,8 @@
 #   --drain URL          drain to post to (default http://127.0.0.1:9999/)
 #   --threads N          concurrent "Puma threads" (default 5)
 #   --think-ms MS        simulated work per request (default 50)
-#   --spool-dir DIR      where the device spools undeliverable batches (default tmp/onlylogs/fake_app_spool)
+#   --spool               enable the on-disk spool for undeliverable batches (off by default, like the logger)
+#   --spool-dir DIR      where the spool lives (default tmp/onlylogs/fake_app_spool)
 #
 # Each request thread does what a Rails request does: logs a handful of lines and then calls
 # Rails.logger.flush (ActiveSupport::LogSubscriber.flush_all! runs after every request).
@@ -36,12 +37,14 @@ options = {
   drain: "http://127.0.0.1:9999/",
   threads: 5,
   think_ms: 50,
+  spool: false,
   spool_dir: File.expand_path("../tmp/onlylogs/fake_app_spool", __dir__)
 }
 OptionParser.new do |parser|
   parser.on("--drain URL") { |value| options[:drain] = value }
   parser.on("--threads N", Integer) { |value| options[:threads] = value }
   parser.on("--think-ms MS", Integer) { |value| options[:think_ms] = value }
+  parser.on("--spool") { options[:spool] = true }
   parser.on("--spool-dir DIR") { |value| options[:spool_dir] = value }
 end.parse!
 
@@ -104,6 +107,8 @@ module DeviceInstrumentation
   end
 
   def spool_write(body)
+    return super unless @spool
+
     started = monotonic
     super
     ms = (monotonic - started) * 1000
@@ -144,7 +149,8 @@ $stderr = WarningCapture.new
 
 FileUtils.rm_rf(options[:spool_dir])
 logger = Onlylogs::HttpLogger.new(
-  local_fallback: File.open(File::NULL, "w"), drain_url: options[:drain], spool_dir: options[:spool_dir]
+  local_fallback: File.open(File::NULL, "w"), drain_url: options[:drain],
+  spool_enabled: options[:spool], spool_dir: options[:spool_dir]
 )
 logger.level = Logger::INFO
 device = logger.device
@@ -330,7 +336,7 @@ end
 
 spool = device.instance_variable_get(:@spool)
 spool_max = spool&.instance_variable_get(:@max_bytes) || 0
-spool_label = options[:spool_dir].delete_prefix("#{File.expand_path("..", __dir__)}/")
+spool_label = spool ? options[:spool_dir].delete_prefix("#{File.expand_path("..", __dir__)}/") : "off (pass --spool to enable it)"
 circuit_was_open = false
 started_at = monotonic
 last_wall = started_at
