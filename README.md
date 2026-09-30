@@ -83,6 +83,13 @@ Rails apps log to `STDOUT` in production and let the platform collect the stream
 config.logger = Onlylogs::HttpLogger.new
 ```
 
+Shipping is fire and forget. Lines are batched in memory and sent in the background; when onlylogs.io is down or
+does not answer within the timeouts, the sender backs off for a while and the lines of that period are lost. Your
+`$stdout` stream still has them. If you would rather keep them, set `ONLYLOGS_SPOOL_ENABLED=true`: batches that could
+not be delivered are then written to `ONLYLOGS_SPOOL_DIR` (default `tmp/onlylogs/spool`, up to
+`ONLYLOGS_SPOOL_MAX_BYTES`, 128 MB) and replayed once the drain is back, also after a restart when the directory is on
+a persistent disk.
+
 Keep this default on an **ephemeral filesystem** (Heroku, Deploio, Docker, Kubernetes). A log file there is lost on
 every deploy and, while it grows, its page cache counts towards the container's memory limit: it shows up as a memory
 leak that resets on each release.
