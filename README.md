@@ -52,7 +52,7 @@ Finally, you **must secure the engine**. Read the section dedicated to the [Auth
 
 Head to `/onlylogs` and enjoy your logs streamed right into your face!
 
-Here you can grep your logs with regular expressions.
+Here you can grep your logs with regular expressions. What the query matched is highlighted on every line.
 
 > [!TIP]
 > Onlylogs automatically detects and uses [ripgrep (rg)](https://github.com/BurntSushi/ripgrep) if available, which

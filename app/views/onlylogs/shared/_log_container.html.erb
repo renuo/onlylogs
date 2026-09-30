@@ -25,7 +25,7 @@
     shortcut_modifier_label = shortcut_modifier == "control" ? "⌃ Control" : "Alt"
 %>
 
-<div data-controller="log-streamer text-selection keyboard-shortcuts log-cursor"
+<div data-controller="log-streamer text-selection keyboard-shortcuts log-cursor match-highlight"
      data-keyboard-shortcuts-modifier-value="<%= shortcut_modifier %>"
      data-log-streamer-file-path-value="<%= encrypted_log_file_path %>"
      <% if start_position.present? %>data-log-streamer-start-position-value="<%= start_position %>"<% end %>
@@ -42,7 +42,7 @@
                   log-cursor:move->log-streamer#pauseForSelection log-cursor:select->text-selection#showForSelection
                   log-cursor:search->text-selection#searchSelectedText keyboard-shortcuts:lines->log-cursor#focus"
      class="onlylogs-log-container" >
-    <div data-log-streamer-target="logLines" data-text-selection-target="logLines" data-log-cursor-target="lines"
+    <div data-log-streamer-target="logLines" data-text-selection-target="logLines" data-log-cursor-target="lines" data-match-highlight-target="lines"
          data-action="keydown->log-cursor#navigate mousedown->log-cursor#pointAt focusin->log-cursor#activate"
          id="scrollArea" class="onlylogs-log-lines clusterize-scroll">
       <div id="contentArea" class="clusterize-content">
@@ -108,6 +108,7 @@
                      data-log-streamer-target="filterInput"
                      data-text-selection-target="filterInput"
                      data-keyboard-shortcuts-target="filterInput"
+                     data-match-highlight-target="filterInput"
                      data-action="input->log-streamer#applyFilter keydown.enter->log-cursor#focus keydown.esc->log-cursor#focus">
               <button type="button"
                       data-action="click->log-streamer#clearFilter"
@@ -121,13 +122,13 @@
         </div>
         <div>
           <label class="toolbar-label" data-onlylogs-shortcut="r">
-            <input id="regexpMode" type="checkbox" <%= regexp_mode ? "checked" : "" %> name="regexpMode" data-log-streamer-target="regexpMode" data-text-selection-target="regexpMode" data-action="change->log-streamer#toggleRegexpMode">
+            <input id="regexpMode" type="checkbox" <%= regexp_mode ? "checked" : "" %> name="regexpMode" data-log-streamer-target="regexpMode" data-text-selection-target="regexpMode" data-match-highlight-target="regexpMode" data-action="change->log-streamer#toggleRegexpMode">
             <span>Regexp</span>
           </label>
         </div>
         <div>
           <label class="toolbar-label" data-onlylogs-shortcut="i">
-            <input id="caseInsensitive" type="checkbox" <%= case_insensitive ? "checked" : "" %> name="caseInsensitive" data-log-streamer-target="caseInsensitive" data-action="change->log-streamer#toggleCaseInsensitive">
+            <input id="caseInsensitive" type="checkbox" <%= case_insensitive ? "checked" : "" %> name="caseInsensitive" data-log-streamer-target="caseInsensitive" data-match-highlight-target="caseInsensitive" data-action="change->log-streamer#toggleCaseInsensitive">
             <span>Ignore case</span>
           </label>
         </div>

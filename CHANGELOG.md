@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Matches are highlighted.** What the query matched is marked on every line, in search and in live mode, honouring
+  Regexp and Ignore case. The query is re-compiled as a JavaScript RegExp in the browser; ripgrep syntax JavaScript
+  does not understand leaves the lines unmarked. Moving the keyboard cursor scrolls sideways to the match of the line
+  when it is past the edge of the pane.
+
 - **The viewer can be driven from the keyboard.** Holding Control (macOS) or Alt (Windows, Linux) shows a letter on
   every toolbar control, and modifier + letter triggers it, also while typing a query. Option is not used on a Mac
   because it types characters regexes need (`@`, `|`, `[` on a Swiss layout); Ctrl+Alt (AltGr) is ignored for the

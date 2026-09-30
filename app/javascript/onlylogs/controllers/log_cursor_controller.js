@@ -88,6 +88,10 @@ export default class LogCursorController extends Controller {
     this.dispatch("move")
     this.#reveal()
     this.#paint()
+
+    // Long lines hide their match past the right edge; keep it in view.
+    const match = this.#currentRow()?.querySelector("mark.onlylogs-match")
+    if (match) this.#revealHorizontally(match)
   }
 
   // Enter acts on what is in front of you: the selected text if there is some,
