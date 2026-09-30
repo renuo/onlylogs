@@ -20,9 +20,13 @@
     raise SecurityError, "File path not allowed" unless Onlylogs.file_path_permitted?(log_file_path)
 
     encrypted_log_file_path = Onlylogs::SecureFilePath.encrypt(log_file_path)
+
+    shortcut_modifier = request.user_agent.to_s.match?(/Macintosh|iPhone|iPad/) ? "control" : "alt"
+    shortcut_modifier_label = shortcut_modifier == "control" ? "⌃ Control" : "Alt"
 %>
 
-<div data-controller="log-streamer text-selection keyboard-shortcuts"
+<div data-controller="log-streamer text-selection keyboard-shortcuts log-cursor"
+     data-keyboard-shortcuts-modifier-value="<%= shortcut_modifier %>"
      data-log-streamer-file-path-value="<%= encrypted_log_file_path %>"
      <% if start_position.present? %>data-log-streamer-start-position-value="<%= start_position %>"<% end %>
      <% if end_position.present? %>data-log-streamer-end-position-value="<%= end_position %>"<% end %>
@@ -33,9 +37,14 @@
      data-log-streamer-mode-value="<%= mode %>"
      data-log-streamer-live-enabled-value="<%= live_enabled %>"
      data-log-streamer-file-size-value="<%= file_size %>"
-     data-action="text-selection:start->log-streamer#pauseForSelection text-selection:search->log-streamer#switchToSearch"
+     data-action="text-selection:start->log-streamer#pauseForSelection text-selection:search->log-streamer#switchToSearch
+                  log-streamer:cleared->log-cursor#reset log-streamer:context-line->log-cursor#placeAt
+                  log-cursor:move->log-streamer#pauseForSelection log-cursor:select->text-selection#showForSelection
+                  log-cursor:search->text-selection#searchSelectedText keyboard-shortcuts:lines->log-cursor#focus"
      class="onlylogs-log-container" >
-    <div data-log-streamer-target="logLines" data-text-selection-target="logLines" id="scrollArea" class="onlylogs-log-lines clusterize-scroll">
+    <div data-log-streamer-target="logLines" data-text-selection-target="logLines" data-log-cursor-target="lines"
+         data-action="keydown->log-cursor#navigate mousedown->log-cursor#pointAt focusin->log-cursor#activate"
+         id="scrollArea" class="onlylogs-log-lines clusterize-scroll">
       <div id="contentArea" class="clusterize-content">
       </div>
     </div>
@@ -57,8 +66,8 @@
             data-text-selection-target="button"
             class="onlylogs-context-menu hidden-button"
             data-action="click->text-selection#searchSelectedText"
-            title="Search selected text">
-      🔍 Search
+            title="Search selected text (Enter)">
+      🔍 Search <kbd>↵</kbd>
     </button>
 
     <div class="onlylogs-log-toolbar">
@@ -68,22 +77,22 @@
           <button type="button"
                   class="onlylogs-mode-switch__button"
                   data-onlylogs-mode-button="live"
+                  data-onlylogs-shortcut="l"
                   data-log-streamer-target="liveButton"
-                  data-keyboard-shortcuts-target="liveButton"
                   data-action="click->log-streamer#switchToLive"
                   aria-pressed="<%= mode == "live" %>"
-                  title="Follow the file as it is written (L)">
-            <span>▶ <u>L</u>ive</span>
+                  title="Follow the file as it is written">
+            <span>▶ Live</span>
           </button>
           <button type="button"
                   class="onlylogs-mode-switch__button"
                   data-onlylogs-mode-button="static"
+                  data-onlylogs-shortcut="s"
                   data-log-streamer-target="searchButton"
-                  data-keyboard-shortcuts-target="searchButton"
                   data-action="click->log-streamer#switchToSearch"
                   aria-pressed="<%= mode != "live" %>"
-                  title="Search what is already in the file (S)">
-            <span>🔍 <u>S</u>earch</span>
+                  title="Search what is already in the file">
+            <span>🔍 Search</span>
           </button>
         </div>
         <% end %>
@@ -91,16 +100,18 @@
           <label class="toolbar-label">
             <span data-onlylogs-mode="live">Follow:</span>
             <span data-onlylogs-mode="static">Query:</span>
-            <div class="filter-input-wrapper">
+            <div class="filter-input-wrapper" data-onlylogs-shortcut="q">
               <input type="text"
                      name="filter"
                      value="<%= filter %>"
                      placeholder="<%= mode == "live" ? "follow lines matching…" : "search the whole file…" %>"
                      data-log-streamer-target="filterInput"
                      data-text-selection-target="filterInput"
-                     data-action="input->log-streamer#applyFilter">
+                     data-keyboard-shortcuts-target="filterInput"
+                     data-action="input->log-streamer#applyFilter keydown.enter->log-cursor#focus keydown.esc->log-cursor#focus">
               <button type="button"
                       data-action="click->log-streamer#clearFilter"
+                      data-onlylogs-shortcut="x"
                       class="clear-filter-button"
                       title="Clear filter">
                 ×
@@ -109,33 +120,34 @@
           </label>
         </div>
         <div>
-          <label class="toolbar-label">
+          <label class="toolbar-label" data-onlylogs-shortcut="r">
             <input id="regexpMode" type="checkbox" <%= regexp_mode ? "checked" : "" %> name="regexpMode" data-log-streamer-target="regexpMode" data-text-selection-target="regexpMode" data-action="change->log-streamer#toggleRegexpMode">
-            <span><u>R</u>egexp</span>
+            <span>Regexp</span>
           </label>
         </div>
         <div>
-          <label class="toolbar-label">
+          <label class="toolbar-label" data-onlylogs-shortcut="i">
             <input id="caseInsensitive" type="checkbox" <%= case_insensitive ? "checked" : "" %> name="caseInsensitive" data-log-streamer-target="caseInsensitive" data-action="change->log-streamer#toggleCaseInsensitive">
             <span>Ignore case</span>
           </label>
         </div>
         <div data-onlylogs-mode="live">
-          <label class="toolbar-label">
-            <input id="autoscroll" type="checkbox" <%= autoscroll ? "checked" : "" %> name="autoscroll" data-log-streamer-target="autoscroll" data-keyboard-shortcuts-target="autoscroll" data-action="change->log-streamer#toggleAutoScroll">
-            <span><u>A</u>utoscroll</span>
+          <label class="toolbar-label" data-onlylogs-shortcut="a">
+            <input id="autoscroll" type="checkbox" <%= autoscroll ? "checked" : "" %> name="autoscroll" data-log-streamer-target="autoscroll" data-action="change->log-streamer#toggleAutoScroll">
+            <span>Autoscroll</span>
           </label>
         </div>
         <div data-onlylogs-mode="live">
           <button type="button"
                   data-log-streamer-target="searchWholeFileButton"
                   class="search-whole-file-button"
+                  data-onlylogs-shortcut="w"
                   data-action="click->log-streamer#searchWholeFile"
                   title="Search this text across the whole file">
             Search whole file →
           </button>
         </div>
-        <div class="range-slider-wrapper" data-onlylogs-mode="static">
+        <div class="range-slider-wrapper" data-onlylogs-mode="static" data-onlylogs-shortcut="g">
           <%= render "onlylogs/shared/range_slider",
                      start_name: "start_position",
                      end_name: "end_position",
@@ -148,6 +160,7 @@
           <button type="button"
                   data-action="click->log-streamer#resetRange"
                   class="reset-range-button"
+                  data-onlylogs-shortcut="0"
                   title="Reset to full file">
             ↻
           </button>
@@ -156,6 +169,7 @@
           <button type="button"
                   data-log-streamer-target="stopButton"
                   class="stop-search-button hidden-button"
+                  data-onlylogs-shortcut="."
                   data-action="click->log-streamer#stopSearch"
                   title="Stop current search">
             ■ Stop
@@ -164,7 +178,8 @@
     </div>
 
     <div class="onlylogs-toolbar-row onlylogs-toolbar-row--status">
-        <span data-log-streamer-target="results" class="results-text">Results: 0</span>
+        <span data-log-streamer-target="results" class="results-text" data-onlylogs-shortcut="j"
+              data-action="click->log-cursor#focus">Results: 0</span>
         <span data-log-streamer-target="message" class="status-message"></span>
         <div class="onlylogs-toolbar-row__end">
           <% unless Onlylogs.ripgrep_enabled? %>
@@ -176,12 +191,21 @@
           <button type="button"
                   data-log-streamer-target="clearButton"
                   class="clear-logs-button"
+                  data-onlylogs-shortcut="c"
                   data-action="click->log-streamer#clearLogs"
                   aria-label="Clear all log lines"
                   title="Clear all log lines">
             🗑
           </button>
+          <button type="button"
+                  class="shortcuts-button"
+                  data-action="keyboard-shortcuts#openHelp"
+                  aria-label="Keyboard shortcuts"
+                  title="Keyboard shortcuts (?) · hold <%= shortcut_modifier_label %> to see the letters">
+            ⌨
+          </button>
           <span data-log-streamer-target="websocketStatus" class="websocket-status websocket-status--disconnected" title="WebSocket Disconnected">🔴</span>
+          <%= render "onlylogs/shared/shortcuts_dialog", modifier_label: shortcut_modifier_label %>
         </div>
     </div>
 </div>

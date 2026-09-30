@@ -203,7 +203,6 @@
             display: inline-flex;
             border: 1px solid var(--ol-control-border);
             border-radius: 4px;
-            overflow: hidden;
             background-color: var(--ol-surface);
             flex-shrink: 0;
           }
@@ -220,6 +219,14 @@
             align-items: center;
             gap: 0.3rem;
             transition: background-color 0.15s, color 0.15s;
+
+            &:first-child {
+              border-radius: 3px 0 0 3px;
+            }
+
+            &:last-child {
+              border-radius: 0 3px 3px 0;
+            }
 
             & + & {
               border-left: 1px solid var(--ol-border);
@@ -596,5 +603,165 @@
               background-color: var(--ol-hover);
             }
           }
+        }
+
+        .onlylogs-log-container {
+          .clusterize-content > .onlylogs-cursor-line {
+            transition: background-color 0.1s;
+          }
+
+          .onlylogs-log-lines:focus-within .clusterize-content > .onlylogs-cursor-line {
+            background-color: var(--ol-accent-soft);
+            box-shadow: inset 3px 0 0 var(--ol-accent);
+          }
+
+          .clusterize-content > .onlylogs-line-copied {
+            animation: onlylogs-copied 0.6s ease-out;
+          }
+
+          .onlylogs-context-menu kbd {
+            font: inherit;
+            font-size: 0.85em;
+            padding: 0 0.3em;
+            border: 1px solid #90caf9;
+            border-radius: 3px;
+            background-color: #fff;
+          }
+
+          .shortcuts-button {
+            font: inherit;
+            line-height: 1;
+            background: none;
+            border: 0;
+            color: var(--ol-ink-3);
+            padding: 0.15rem 0.3rem;
+            border-radius: var(--ol-radius);
+            cursor: pointer;
+
+            &:hover {
+              background-color: var(--ol-hover);
+            }
+          }
+
+          .onlylogs-shortcuts-dialog {
+            max-width: min(46rem, calc(100vw - 2rem));
+            max-height: calc(100vh - 3rem);
+            padding: 1rem 1.25rem 1.25rem;
+            border: 1px solid var(--ol-border);
+            border-radius: 6px;
+            box-shadow: 0 12px 40px rgba(18, 23, 31, 0.25);
+            color: var(--ol-ink-2);
+            background-color: var(--ol-surface);
+            font: inherit;
+
+            &::backdrop {
+              background-color: rgba(18, 23, 31, 0.35);
+            }
+
+            h2 {
+              margin: 0;
+              font-size: 1rem;
+              color: var(--ol-ink);
+            }
+
+            h3 {
+              margin: 0 0 0.4rem;
+              font-size: 0.8rem;
+              font-weight: 600;
+              color: var(--ol-ink-3);
+            }
+
+            dl {
+              margin: 0;
+              display: grid;
+              gap: 0.25rem;
+            }
+
+            dl > div {
+              display: grid;
+              grid-template-columns: 8.5rem 1fr;
+              gap: 0.75rem;
+              align-items: baseline;
+            }
+
+            dt {
+              display: flex;
+              flex-wrap: wrap;
+              gap: 0.2rem;
+            }
+
+            dd {
+              margin: 0;
+            }
+
+            kbd {
+              font: inherit;
+              font-size: 0.85em;
+              min-width: 1.1em;
+              text-align: center;
+              padding: 0.05em 0.35em;
+              border: 1px solid var(--ol-control-border);
+              border-bottom-width: 2px;
+              border-radius: 3px;
+              background-color: var(--ol-toolbar-bg);
+              color: var(--ol-ink);
+            }
+          }
+
+          .onlylogs-shortcuts-dialog__header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 0.9rem;
+
+            button {
+              font: inherit;
+              font-size: 1.2rem;
+              line-height: 1;
+              background: none;
+              border: 0;
+              color: var(--ol-muted);
+              cursor: pointer;
+            }
+          }
+
+          .onlylogs-shortcuts-dialog__sections {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr));
+            gap: 1.1rem 1.75rem;
+          }
+        }
+
+        @keyframes onlylogs-copied {
+          from { background-color: rgba(22, 163, 74, 0.35); }
+        }
+
+        /* Not scoped to the viewer: host apps can put the attribute on their own controls. */
+        :where([data-onlylogs-shortcut]) {
+          position: relative;
+        }
+
+        .onlylogs-shortcuts-visible [data-onlylogs-shortcut]::after {
+          content: attr(data-onlylogs-shortcut);
+          position: absolute;
+          top: -0.6rem;
+          left: -0.45rem;
+          z-index: 1001;
+          min-width: 0.8rem;
+          padding: 0.1rem 0.28rem;
+          border-radius: 3px;
+          background-color: #12171f;
+          color: #fff;
+          box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+          font: 600 0.68rem/1 "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+          text-align: center;
+          text-transform: uppercase;
+          text-decoration: none;
+          pointer-events: none;
+          animation: onlylogs-hint-in 0.12s ease-out;
+        }
+
+        @keyframes onlylogs-hint-in {
+          from { opacity: 0; transform: scale(0.7); }
         }
 </style>

@@ -60,6 +60,18 @@ provides significantly faster search experience.
 > If ripgrep is not installed, onlylogs falls back to `grep`.
 > A warning icon (⚠️) will be displayed in the toolbar when using `grep` to indicate slower search performance.
 
+### Keyboard shortcuts
+
+Hold **⌃ Control** on macOS or **Alt** on Windows and Linux: a letter appears on every control of the toolbar, and
+modifier + letter triggers it from anywhere, also while typing a query. Press `?` (or the ⌨ button) for the full list.
+
+Inside the log lines, `↑` `↓` (or `j` `k`) move a line cursor, `←` `→` select words of that line (`Shift` grows the
+selection) and `Enter` searches the selection, or shows the lines around the current one. `/` jumps to the query,
+`Enter` or `Esc` in the query jumps back into the lines.
+
+A host app can give its own controls a letter with the same attribute, e.g.
+`<button data-onlylogs-shortcut="f">Fullscreen</button>`.
+
 ## Logging in production
 
 Rails apps log to `STDOUT` in production and let the platform collect the stream. onlylogs keeps that default:

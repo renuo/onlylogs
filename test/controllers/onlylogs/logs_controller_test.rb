@@ -58,6 +58,18 @@ module Onlylogs
       assert_select "a[href*='download']"
     end
 
+    test "index uses Control for shortcuts on a Mac" do
+      get "/onlylogs", headers: {"User-Agent" => "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"}
+      assert_select "[data-keyboard-shortcuts-modifier-value='control']"
+      assert_select ".onlylogs-shortcuts-dialog h3", text: /Hold ⌃ Control/
+    end
+
+    test "index uses Alt for shortcuts on Windows and Linux" do
+      get "/onlylogs", headers: {"User-Agent" => "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36"}
+      assert_select "[data-keyboard-shortcuts-modifier-value='alt']"
+      assert_select ".onlylogs-shortcuts-dialog h3", text: /Hold Alt/
+    end
+
     test "download is basic auth protected when basic auth is enabled" do
       Onlylogs.configure do |config|
         config.disable_basic_authentication = false

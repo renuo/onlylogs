@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- **The viewer can be driven from the keyboard.** Holding Control (macOS) or Alt (Windows, Linux) shows a letter on
+  every toolbar control, and modifier + letter triggers it, also while typing a query. Option is not used on a Mac
+  because it types characters regexes need (`@`, `|`, `[` on a Swiss layout); Ctrl+Alt (AltGr) is ignored for the
+  same reason. The log lines have a line cursor: arrows or `j`/`k`, PageUp/PageDown, Home/End; `←`/`→` select words
+  of the line and `Enter` searches the selection or shows the lines around the current one, landing the cursor on
+  that line. `y` copies the line, `/` focuses the query, `?` lists every shortcut. Host apps can add letters to their
+  own controls with `data-onlylogs-shortcut`. The single-key `l`, `s` and `a` shortcuts are gone; they are
+  modifier + L, S and A now.
+
 - **Searches can ignore case.** `Grep.grep`, `Grep.search_command` and `Grep.match_line?` accept
   `case_sensitive: false`, which passes the new `--case-insensitive` flag to `bin/super_ripgrep` and
   `bin/super_grep`. It works in literal and regexp mode. The default stays case-sensitive. The

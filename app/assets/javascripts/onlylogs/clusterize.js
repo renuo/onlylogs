@@ -231,6 +231,7 @@
         rows_len = rows.length;
       if (rows_len < opts.rows_in_block) {
         return {
+          items_start: 0,
           top_offset: 0,
           bottom_offset: 0,
           rows_above: 0,
@@ -250,6 +251,7 @@
         rows[i] && this_cluster_rows.push(rows[i]);
       }
       return {
+        items_start: items_start,
         top_offset: top_offset,
         bottom_offset: bottom_offset,
         rows_above: rows_above,
@@ -286,6 +288,7 @@
         data.bottom_offset && layout.push(this.renderExtraTag('bottom-space', data.bottom_offset));
         callbacks.clusterWillChange && callbacks.clusterWillChange();
         this.html(layout.join(''));
+        this.rendered_start = data.items_start;
         this.options.content_tag == 'ol' && this.content_elem.setAttribute('start', data.rows_above);
         this.content_elem.style['counter-increment'] = 'clusterize-counter ' + (data.rows_above-1);
         callbacks.clusterChanged && callbacks.clusterChanged();
@@ -309,6 +312,10 @@
       } else {
         content_elem.innerHTML = data;
       }
+    },
+    // index in rows of the first row currently in the DOM
+    getRenderedStart: function() {
+      return this.rendered_start || 0;
     },
     getChildNodes: function(tag) {
         var child_nodes = tag.children, nodes = [];

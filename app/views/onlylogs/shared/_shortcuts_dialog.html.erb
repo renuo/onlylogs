@@ -1,0 +1,60 @@
+<%# locals: (modifier_label:) %>
+<%
+  sections = [
+    ["Hold #{modifier_label} and press – anywhere, also while typing", [
+      [%w[L], "Live"],
+      [%w[S], "Search"],
+      [%w[Q], "Go to the query"],
+      [%w[X], "Clear the query"],
+      [%w[R], "Regexp on/off"],
+      [%w[I], "Ignore case on/off"],
+      [%w[A], "Autoscroll on/off (live)"],
+      [%w[W], "Search the whole file (live)"],
+      [%w[G], "Range slider (search), then ← →"],
+      [%w[0], "Reset the range (search)"],
+      [%w[.], "Stop the search"],
+      [%w[C], "Clear the lines"],
+      [%w[J], "Jump into the lines"]
+    ]],
+    ["When not typing", [
+      [%w[/], "Go to the query"],
+      [%w[↓ j], "Jump into the lines"],
+      [%w[?], "This help"]
+    ]],
+    ["In the query", [
+      [%w[Enter Esc], "Jump into the lines"]
+    ]],
+    ["In the lines", [
+      [%w[↑ ↓ k j], "Previous / next line"],
+      [%w[PgUp PgDn], "A page up / down"],
+      [%w[Home End g G], "First / last line"],
+      [%w[← →], "Select the previous / next word"],
+      [["Shift ← →"], "Grow the selection by a word"],
+      [%w[Enter], "Search the selection, or show around this line"],
+      [%w[y], "Copy the line"],
+      [%w[Esc], "Clear the selection, then leave the lines"]
+    ]]
+  ]
+%>
+<dialog class="onlylogs-shortcuts-dialog" data-keyboard-shortcuts-target="dialog" closedby="any"
+        aria-labelledby="onlylogs-shortcuts-title">
+  <form method="dialog" class="onlylogs-shortcuts-dialog__header">
+    <h2 id="onlylogs-shortcuts-title">Keyboard shortcuts</h2>
+    <button aria-label="Close" autofocus>×</button>
+  </form>
+  <div class="onlylogs-shortcuts-dialog__sections">
+    <% sections.each do |title, shortcuts| %>
+      <section>
+        <h3><%= title %></h3>
+        <dl>
+          <% shortcuts.each do |keys, description| %>
+            <div>
+              <dt><% keys.each do |key| %><kbd><%= key %></kbd><% end %></dt>
+              <dd><%= description %></dd>
+            </div>
+          <% end %>
+        </dl>
+      </section>
+    <% end %>
+  </div>
+</dialog>

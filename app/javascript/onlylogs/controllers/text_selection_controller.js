@@ -33,22 +33,32 @@ export default class TextSelectionController extends Controller {
     
     // Check if there's actually a text selection
     if (selectedText.length > 0 && selection.rangeCount > 0) {
-      this.showButton(event, selectedText)
+      this.showButton(event.clientX, event.clientY, selectedText)
     } else {
       this.hideButton()
     }
   }
 
-  showButton(event, selectedText) {
+  // Bound to log-cursor:select, a selection made with the keyboard.
+  showForSelection() {
+    const selection = window.getSelection()
+    const selectedText = selection.toString().trim()
+    if (selectedText.length === 0 || selection.rangeCount === 0) return
+
+    const rect = selection.getRangeAt(0).getBoundingClientRect()
+    this.showButton(rect.left + 40, rect.bottom, selectedText)
+  }
+
+  showButton(clientX, clientY, selectedText) {
     if (!this.buttonTarget) {
       return
     }
-    
+
     const containerRect = this.element.getBoundingClientRect()
-    
+
     // Position button below mouse cursor
-    const left = event.clientX - containerRect.left - 40 // Roughly center the button
-    const top = event.clientY - containerRect.top + 10
+    const left = clientX - containerRect.left - 40 // Roughly center the button
+    const top = clientY - containerRect.top + 10
     
     this.buttonTarget.style.left = Math.max(0, left) + 'px'
     this.buttonTarget.style.top = Math.max(0, top) + 'px'

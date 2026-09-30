@@ -99,6 +99,7 @@ export default class LogStreamerController extends Controller {
   clear() {
     this.clusterize.clear();
     this.#updateResultsDisplay();
+    this.dispatch("cleared");
   }
 
   toggleAutoScroll() {
@@ -301,6 +302,7 @@ export default class LogStreamerController extends Controller {
 
     if (closestPre) {
       this.#scrollVerticallyToCenter(closestPre);
+      this.dispatch("context-line", { detail: { row: this.#rowElement(closestPre) } });
     }
   }
 
