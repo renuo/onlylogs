@@ -7,15 +7,16 @@ require_relative "spool"
 # A Logger log device that sends log lines to onlylogs.io (or any Vector-compatible sink) directly
 # via HTTP.
 #
+# Delivery is fire and forget: a batch the drain does not accept within the timeouts is lost.
 # When the drain is unreachable or unresponsive, we do two things to protect the app:
 # * an upper bound to the in-memory queue: log lines can never accumulate without limit and exhaust memory
 # * cooldown: once the drain is known to be failing we stop attempting
 #   requests for a cooldown period instead of blocking on every send for the full
 #   read timeout (a down host accepts the TCP/TLS connection but never answers).
 #
-# By default an on-disk Spool buffers any batch we could not deliver and replays it once the
-# drain recovers, so a transient outage or a restart does not lose logs. It is on by default
-# (set ONLYLOGS_SPOOL_DIR empty to disable) and bounded by bytes; see Onlylogs::Spool.
+# ONLYLOGS_SPOOL_ENABLED=true (only that value, in any case) opts into an on-disk Spool that buffers any batch we could not
+# deliver and replays it once the drain recovers, so a transient outage or a restart does not
+# lose logs. It lives in ONLYLOGS_SPOOL_DIR and is bounded by bytes; see Onlylogs::Spool.
 #
 # Every write checks that a sender thread is alive in the current process and starts one if not:
 # * The device is usually built in the Puma master (production.rb runs before the workers are
@@ -28,11 +29,12 @@ require_relative "spool"
 #
 # Not every failure is worth retrying. The drain's answer decides what happens to a batch:
 # * 2xx: delivered.
-# * 429: the drain is overloaded and asks us to slow down. Pause for Retry-After (or a cooldown)
-#   and keep the batch on disk; nothing is lost, it is just late.
+# * 429: the drain is overloaded and asks us to slow down. Pause for Retry-After (or a cooldown);
+#   with a spool the batch is kept on disk and is just late, without one it is lost.
 # * other 4xx: the drain will never accept this batch (unknown token, paused project, body too
 #   big). Retrying cannot help, so the batch is dropped and a warning says why.
-# * 5xx, timeouts, connection errors: retryable. Count towards opening the circuit and spool.
+# * 5xx, timeouts, connection errors: an outage. Count towards opening the circuit; the batch
+#   goes to the spool if there is one.
 module Onlylogs
   class HttpDevice
     # The drain answered with a 4xx other than 429: the batch itself is the problem, not the drain.
@@ -85,6 +87,7 @@ module Onlylogs
       read_timeout: ENV.fetch("ONLYLOGS_READ_TIMEOUT", DEFAULT_READ_TIMEOUT),
       circuit_cooldown: ENV.fetch("ONLYLOGS_CIRCUIT_COOLDOWN", CIRCUIT_COOLDOWN),
       keep_alive_timeout: ENV.fetch("ONLYLOGS_KEEP_ALIVE_TIMEOUT", DEFAULT_KEEP_ALIVE_TIMEOUT),
+      spool_enabled: ENV.fetch("ONLYLOGS_SPOOL_ENABLED", false),
       spool_dir: ENV.fetch("ONLYLOGS_SPOOL_DIR", default_spool_dir),
       spool_max_bytes: ENV.fetch("ONLYLOGS_SPOOL_MAX_BYTES", Spool::DEFAULT_MAX_BYTES)
     )
@@ -99,6 +102,7 @@ module Onlylogs
       @read_timeout = float_setting("ONLYLOGS_READ_TIMEOUT", read_timeout, DEFAULT_READ_TIMEOUT)
       @circuit_cooldown = float_setting("ONLYLOGS_CIRCUIT_COOLDOWN", circuit_cooldown, CIRCUIT_COOLDOWN)
       @keep_alive_timeout = float_setting("ONLYLOGS_KEEP_ALIVE_TIMEOUT", keep_alive_timeout, DEFAULT_KEEP_ALIVE_TIMEOUT)
+      @spool_enabled = spool_enabled.to_s.strip.casecmp?("true")
       @spool_dir = spool_dir
       @spool_max_bytes = integer_setting("ONLYLOGS_SPOOL_MAX_BYTES", spool_max_bytes, Spool::DEFAULT_MAX_BYTES)
       @supervisor_mutex = Mutex.new
@@ -230,7 +234,7 @@ module Onlylogs
       @http_mutex = Mutex.new
       @http = nil
       @sender_thread = nil
-      @spool = build_spool(@spool_dir, @spool_max_bytes) if @drain_url
+      @spool = build_spool(@spool_dir, @spool_max_bytes) if @drain_url && @spool_enabled
       @consecutive_failures = 0
       @circuit_open_until = nil
       @dropped = 0
@@ -326,8 +330,7 @@ module Onlylogs
       body = lines.join("\n")
 
       # Drain is known to be down: skip the request entirely so we don't block for the full read
-      # timeout on every batch. Buffer the batch so the cooldown does not cost us data (without a
-      # spool configured, spool_write is a no-op and the batch is dropped — best-effort logging).
+      # timeout on every batch. The batch is dropped, unless a spool is configured to keep it.
       if circuit_open?
         spool_write(body)
         return
@@ -373,8 +376,9 @@ module Onlylogs
       end
     end
 
+    # A spool that cannot be set up must not stop the app from logging: it is disabled with a warning.
     def build_spool(dir, max_bytes)
-      return if dir.nil? || dir.to_s.strip.empty?
+      raise ArgumentError, "ONLYLOGS_SPOOL_DIR is empty" if blank?(dir)
 
       Spool.new(dir: dir, max_bytes: max_bytes)
     rescue => e
@@ -382,9 +386,8 @@ module Onlylogs
       nil
     end
 
-    # The spool is on by default. It lives under the app's tmp dir, which survives a drain outage
-    # while the app keeps running; point ONLYLOGS_SPOOL_DIR at a persistent volume to also survive
-    # redeploys, or set it empty to disable.
+    # Under the app's tmp dir, which survives a drain outage while the app keeps running; point
+    # ONLYLOGS_SPOOL_DIR at a persistent volume to also survive redeploys.
     def default_spool_dir
       base = if defined?(Rails) && Rails.respond_to?(:root) && Rails.root
         Rails.root.to_s

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **`HttpLogger` is fire and forget by default.** The on-disk spool that kept undeliverable
+  batches and replayed them after an outage was on by default and wrote under `tmp/onlylogs/spool`,
+  while the README promised that nothing is written to disk. It is opt-in now: unless
+  `ONLYLOGS_SPOOL_ENABLED` is `true`, a batch the drain does not accept within the timeouts is
+  lost. `ONLYLOGS_SPOOL_DIR` still says where the spool lives, `tmp/onlylogs/spool` by default.
 - **Matches are highlighted.** What the query matched is marked on every line, in search and in live mode, honouring
   Regexp and Ignore case. The query is re-compiled as a JavaScript RegExp in the browser; ripgrep syntax JavaScript
   does not understand leaves the lines unmarked. Moving the keyboard cursor scrolls sideways to the match of the line
