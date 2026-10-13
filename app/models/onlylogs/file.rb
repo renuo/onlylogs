@@ -10,7 +10,7 @@ module Onlylogs
     end
 
     def queries
-      QueryDatabase.model_for(path).order(created_at: :desc, id: :desc)
+      QueryDatabase.model(Query, path).order(created_at: :desc, id: :desc)
     end
 
     def go_to_position(position)

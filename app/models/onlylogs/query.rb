@@ -1,9 +1,10 @@
 # frozen_string_literal: true
 
 module Onlylogs
-  # Abstract: QueryDatabase builds one connected subclass per log directory.
+  # Abstract: QueryDatabase connects one subclass per log directory.
   class Query < ActiveRecord::Base
     self.abstract_class = true
+    self.table_name = "queries"
 
     normalizes :name, with: ->(name) { name.strip }
 
