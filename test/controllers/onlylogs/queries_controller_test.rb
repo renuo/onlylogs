@@ -19,7 +19,8 @@ module Onlylogs
           log_file_patterns: current.log_file_patterns,
           disable_basic_authentication: current.disable_basic_authentication,
           basic_auth_user: current.basic_auth_user,
-          basic_auth_password: current.basic_auth_password
+          basic_auth_password: current.basic_auth_password,
+          authorize_log_file: current.authorize_log_file
         }
       end
 
@@ -217,6 +218,33 @@ module Onlylogs
 
       assert_response :forbidden
       assert_predicate response.parsed_body["error"], :present?
+    end
+
+    test "returns forbidden when the authorization hook refuses the log file" do
+      Onlylogs.configuration.authorize_log_file = ->(_path) { false }
+
+      get "/onlylogs/queries", params: {log_file_path: @encrypted_path}
+
+      assert_response :forbidden
+    end
+
+    test "the authorization hook runs in the controller with the decrypted path" do
+      seen = nil
+      Onlylogs.configuration.authorize_log_file = ->(path) { seen = [self.class, path] }
+
+      get "/onlylogs/queries", params: {log_file_path: @encrypted_path}
+
+      assert_response :success
+      assert_equal [QueriesController, @log_file_path], seen
+    end
+
+    test "create is refused when the authorization hook refuses the log file" do
+      Onlylogs.configuration.authorize_log_file = ->(_path) { false }
+
+      assert_no_difference -> { File.new(@log_file_path).queries.count } do
+        post_query(name: "Errors", filter: "ERROR")
+      end
+      assert_response :forbidden
     end
 
     test "create is refused for a path outside the permitted patterns" do

@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module Onlylogs
-  class QueriesController < ApplicationController
+  class QueriesController < ViewerController
     before_action :set_log_file
 
     rescue_from(ActiveRecord::RecordInvalid) { |e| render_invalid(e.record) }
@@ -49,7 +49,9 @@ module Onlylogs
     def set_log_file
       path = SecureFilePath.decrypt(params.require(:log_file_path))
 
-      raise ForbiddenPathError, "Access denied to this log file" unless Onlylogs.file_path_permitted?(path)
+      unless Onlylogs.file_path_permitted?(path) && Onlylogs.log_file_authorized?(self, path)
+        raise ForbiddenPathError, "Access denied to this log file"
+      end
 
       @log_file = File.new(path)
     end
