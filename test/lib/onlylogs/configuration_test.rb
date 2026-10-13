@@ -261,6 +261,28 @@ module Onlylogs
       assert_equal "AdminController", Onlylogs.parent_controller
     end
 
+    test "viewer_parent_controller can be configured" do
+      Onlylogs.configure do |config|
+        config.viewer_parent_controller = "ApplicationController"
+      end
+
+      assert_equal "ApplicationController", Onlylogs.viewer_parent_controller
+    end
+
+    test "log files are authorized when no hook is configured" do
+      assert Onlylogs.log_file_authorized?(Object.new, "/var/log/app.log")
+    end
+
+    test "authorize_log_file decides with the controller as self" do
+      controller = Struct.new(:allowed).new("/var/log/allowed.log")
+      Onlylogs.configure do |config|
+        config.authorize_log_file = ->(path) { path == allowed }
+      end
+
+      assert Onlylogs.log_file_authorized?(controller, "/var/log/allowed.log")
+      assert_not Onlylogs.log_file_authorized?(controller, "/var/log/other.log")
+    end
+
     test "disable_basic_authentication can be configured" do
       assert_equal false, Onlylogs.disable_basic_authentication?
 

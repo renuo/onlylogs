@@ -4,7 +4,7 @@ module Onlylogs
   class Configuration
     attr_accessor :log_file_patterns, :default_log_file_path, :basic_auth_user, :basic_auth_password,
       :parent_controller, :disable_basic_authentication, :ripgrep_enabled, :editor,
-      :max_line_matches, :search_timeout
+      :max_line_matches, :search_timeout, :database_dir, :viewer_parent_controller, :authorize_log_file
 
     # Seconds a viewer search may run before it is stopped. Bounded by default:
     # a search holds a CPU for as long as it runs, and an unbounded one over a
@@ -19,11 +19,14 @@ module Onlylogs
       @basic_auth_user = default_basic_auth_user
       @basic_auth_password = default_basic_auth_password
       @parent_controller = nil
+      @viewer_parent_controller = nil
+      @authorize_log_file = nil
       @disable_basic_authentication = false
       @ripgrep_enabled = default_ripgrep_enabled
       @editor = nil
       @max_line_matches = 100000
       @search_timeout = DEFAULT_SEARCH_TIMEOUT
+      @database_dir = ".onlylogs"
     end
 
     def configure
@@ -127,6 +130,16 @@ module Onlylogs
 
   def self.parent_controller
     configuration.parent_controller
+  end
+
+  def self.viewer_parent_controller
+    configuration.viewer_parent_controller
+  end
+
+  # Runs in the controller, so it can reach the host's current user.
+  def self.log_file_authorized?(controller, file_path)
+    hook = configuration.authorize_log_file
+    hook.nil? || controller.instance_exec(file_path, &hook).present?
   end
 
   def self.disable_basic_authentication?

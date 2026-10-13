@@ -183,6 +183,25 @@ export default class LogStreamerController extends Controller {
     this.reconnectWithNewMode();
   }
 
+  currentSearch() {
+    return {
+      filter: this.filterInputTarget.value,
+      regexpMode: this.regexpModeTarget.checked,
+      caseInsensitive: this.caseInsensitiveTarget.checked
+    };
+  }
+
+  applySearch({ filter, regexpMode, caseInsensitive }) {
+    this.filterInputTarget.value = filter;
+    this.regexpModeTarget.checked = this.regexpModeValue = regexpMode;
+    this.caseInsensitiveTarget.checked = this.caseInsensitiveValue = caseInsensitive;
+    this.#updateUrlParams({
+      regexp_mode: regexpMode ? 'true' : null,
+      case_insensitive: caseInsensitive ? 'true' : null
+    });
+    this.applyFilter();
+  }
+
   isLiveMode() {
     return this.modeValue === 'live';
   }
