@@ -9,7 +9,7 @@ export default class MatchHighlightController extends Controller {
   static targets = ["lines", "filterInput", "regexpMode", "caseInsensitive"]
 
   connect() {
-    this.observer = new MutationObserver(() => this.highlight())
+    this.observer = new MutationObserver(records => this.highlight(records))
     this.observer.observe(this.#content, { childList: true })
   }
 
@@ -17,11 +17,14 @@ export default class MatchHighlightController extends Controller {
     this.observer.disconnect()
   }
 
-  highlight() {
+  highlight(records) {
     const pattern = this.#pattern()
     if (!pattern) return
 
-    this.#content.querySelectorAll(":scope > pre, :scope > div > pre").forEach(line => this.#mark(line, pattern))
+    records.flatMap(record => [...record.addedNodes])
+      .filter(node => node.nodeType === Node.ELEMENT_NODE)
+      .flatMap(row => row.matches("pre") ? [row] : [...row.querySelectorAll(":scope > pre")])
+      .forEach(line => this.#mark(line, pattern))
   }
 
   #pattern() {
