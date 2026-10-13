@@ -18,6 +18,9 @@ require "onlylogs/http_logger"
 # loader.setup
 
 module Onlylogs
+  # Not autoloaded: referenced from class bodies (rescue_from, subclassing).
+  class Error < StandardError; end
+
   class ForbiddenPathError < StandardError; end
 
   if defined?(Importmap)

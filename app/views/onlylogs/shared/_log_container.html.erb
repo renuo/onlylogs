@@ -120,6 +120,36 @@
             </div>
           </label>
         </div>
+        <div class="saved-searches"
+             data-controller="queries"
+             data-queries-log-file-path-value="<%= encrypted_log_file_path %>"
+             data-queries-endpoint-value="<%= onlylogs.queries_path %>"
+             data-action="keydown->queries#navigate">
+          <button type="button"
+                  class="saved-searches__toggle"
+                  data-queries-target="toggle"
+                  data-onlylogs-shortcut="v"
+                  data-action="queries#toggle"
+                  aria-haspopup="true"
+                  aria-expanded="false"
+                  aria-controls="onlylogs-saved-searches-panel"
+                  title="Saved searches: save this query or apply a saved one">
+            ★ Saved <span class="saved-searches__count" data-queries-target="count"></span>
+          </button>
+          <div id="onlylogs-saved-searches-panel" class="saved-searches__panel" data-queries-target="panel" hidden>
+            <form class="saved-searches__save" data-action="queries#save">
+              <input type="text"
+                     maxlength="255"
+                     placeholder="name this search…"
+                     aria-label="Name of the saved search"
+                     data-queries-target="name"
+                     data-action="input->queries#nameChanged">
+              <button type="submit" data-queries-target="saveButton" disabled>Save</button>
+            </form>
+            <p class="saved-searches__hint" data-queries-target="hint"></p>
+            <ul class="saved-searches__list" data-queries-target="list" aria-label="Saved searches"></ul>
+          </div>
+        </div>
         <div>
           <label class="toolbar-label" data-onlylogs-shortcut="r">
             <input id="regexpMode" type="checkbox" <%= regexp_mode ? "checked" : "" %> name="regexpMode" data-log-streamer-target="regexpMode" data-text-selection-target="regexpMode" data-match-highlight-target="regexpMode" data-action="change->log-streamer#toggleRegexpMode">
