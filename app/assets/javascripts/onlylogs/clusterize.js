@@ -273,13 +273,19 @@
       }
       var data = this.generate(rows),
         this_cluster_rows = data.rows.join(''),
+        previous_cluster_rows = cache.data,
         this_cluster_content_changed = this.checkChanges('data', this_cluster_rows, cache),
         top_offset_changed = this.checkChanges('top', data.top_offset, cache),
         only_bottom_offset_changed = this.checkChanges('bottom', data.bottom_offset, cache),
         callbacks = this.options.callbacks,
         layout = [];
 
-      if(this_cluster_content_changed || top_offset_changed) {
+      if(this_cluster_content_changed && ! top_offset_changed
+        && typeof previous_cluster_rows == 'string'
+        && this_cluster_rows.indexOf(previous_cluster_rows) === 0) {
+        this.appendToDOM(this_cluster_rows.slice(previous_cluster_rows.length), data.bottom_offset);
+        callbacks.clusterChanged && callbacks.clusterChanged();
+      } else if(this_cluster_content_changed || top_offset_changed) {
         if(data.top_offset) {
           this.options.keep_parity && layout.push(this.renderExtraTag('keep-parity'));
           layout.push(this.renderExtraTag('top-space', data.top_offset));
@@ -294,6 +300,18 @@
         callbacks.clusterChanged && callbacks.clusterChanged();
       } else if(only_bottom_offset_changed) {
         this.content_elem.lastChild.style.height = data.bottom_offset + 'px';
+      }
+    },
+    appendToDOM: function(new_rows, bottom_offset) {
+      var content_elem = this.content_elem,
+        bottom_space = content_elem.lastElementChild;
+      if(bottom_space && bottom_space.classList.contains('clusterize-bottom-space')) {
+        bottom_space.insertAdjacentHTML('beforebegin', new_rows);
+        if(bottom_offset) bottom_space.style.height = bottom_offset + 'px';
+        else content_elem.removeChild(bottom_space);
+      } else {
+        content_elem.insertAdjacentHTML('beforeend', new_rows);
+        bottom_offset && content_elem.insertAdjacentHTML('beforeend', this.renderExtraTag('bottom-space', bottom_offset));
       }
     },
     // unfortunately ie <= 9 does not allow to use innerHTML for table elements, so make a workaround

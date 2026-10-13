@@ -38,7 +38,8 @@
      data-log-streamer-live-enabled-value="<%= live_enabled %>"
      data-log-streamer-file-size-value="<%= file_size %>"
      data-action="text-selection:start->log-streamer#pauseForSelection text-selection:search->log-streamer#switchToSearch
-                  log-streamer:cleared->log-cursor#reset log-streamer:context-line->log-cursor#placeAt
+                  log-streamer:cleared->log-cursor#reset log-streamer:cleared->text-selection#forgetSelection log-streamer:context-line->log-cursor#placeAt
+                  log-streamer:rendering->text-selection#saveSelection log-streamer:rendered->text-selection#restoreSelection
                   log-cursor:move->log-streamer#pauseForSelection log-cursor:select->text-selection#showForSelection
                   log-cursor:search->text-selection#searchSelectedText keyboard-shortcuts:lines->log-cursor#focus"
      class="onlylogs-log-container" >

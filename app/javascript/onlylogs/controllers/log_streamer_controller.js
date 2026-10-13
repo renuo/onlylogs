@@ -747,7 +747,12 @@ export default class LogStreamerController extends Controller {
       no_data_class: 'clusterize-no-data',
       keep_parity: true,
       callbacks: {
+        clusterWillChange: () => {
+          this.dispatch("rendering", { detail: { start: this.clusterize?.getRenderedStart() ?? 0 } });
+        },
         clusterChanged: () => {
+          this.dispatch("rendered", { detail: { start: this.clusterize?.getRenderedStart() ?? 0 } });
+
           // Re-apply highlighting when cluster changes (for virtual scrolling).
           // The byte_offset URL param is the highlight anchor for an explore window.
           // Only re-highlight if we've already done initial highlight.
