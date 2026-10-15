@@ -4,9 +4,9 @@
     {
       "name": "onlylogs-dummy",
       "runtimeExecutable": "bin/rails",
-      "runtimeArgs": ["server"],
-      "port": 3000,
-      "url": "http://onlylogs.localhost:3000"
+      "runtimeArgs": ["server", "-p", "3100"],
+      "port": 3100,
+      "url": "http://onlylogs.localhost:3100"
     }
   ]
 }
