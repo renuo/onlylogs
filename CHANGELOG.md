@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Saved searches live inside the query field.** Next to the query sit a clear button, a list of the saved searches
+  and a star that saves the current query, fills in when it is already saved and offers rename or removal. The list
+  marks the search you are on, shows when you have edited it since applying it, and renames and deletes in place.
+  Control/Alt + F opens the star.
+
 - **Matches are highlighted.** What the query matched is marked on every line, in search and in live mode, honouring
   Regexp and Ignore case. The query is re-compiled as a JavaScript RegExp in the browser; ripgrep syntax JavaScript
   does not understand leaves the lines unmarked. Moving the keyboard cursor scrolls sideways to the match of the line

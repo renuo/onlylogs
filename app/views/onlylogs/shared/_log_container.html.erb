@@ -25,7 +25,9 @@
     shortcut_modifier_label = shortcut_modifier == "control" ? "⌃ Control" : "Alt"
 %>
 
-<div data-controller="log-streamer text-selection keyboard-shortcuts log-cursor match-highlight"
+<div data-controller="log-streamer text-selection keyboard-shortcuts log-cursor match-highlight queries"
+     data-queries-log-file-path-value="<%= encrypted_log_file_path %>"
+     data-queries-endpoint-value="<%= onlylogs.queries_path %>"
      data-keyboard-shortcuts-modifier-value="<%= shortcut_modifier %>"
      data-log-streamer-file-path-value="<%= encrypted_log_file_path %>"
      <% if start_position.present? %>data-log-streamer-start-position-value="<%= start_position %>"<% end %>
@@ -41,7 +43,8 @@
                   log-streamer:cleared->log-cursor#reset log-streamer:cleared->text-selection#forgetSelection log-streamer:context-line->log-cursor#placeAt
                   log-streamer:rendering->text-selection#saveSelection log-streamer:rendered->text-selection#restoreSelection
                   log-cursor:move->log-streamer#pauseForSelection log-cursor:select->text-selection#showForSelection
-                  log-cursor:search->text-selection#searchSelectedText keyboard-shortcuts:lines->log-cursor#focus"
+                  log-cursor:search->text-selection#searchSelectedText keyboard-shortcuts:lines->log-cursor#focus
+                  log-streamer:context-line->queries#cleared"
      class="onlylogs-log-container" >
     <div data-log-streamer-target="logLines" data-text-selection-target="logLines" data-log-cursor-target="lines" data-match-highlight-target="lines"
          data-action="keydown->log-cursor#navigate mousedown->log-cursor#pointAt focusin->log-cursor#activate"
@@ -97,69 +100,140 @@
           </button>
         </div>
         <% end %>
-        <div>
-          <label class="toolbar-label">
+        <div class="onlylogs-query">
+          <label class="toolbar-label" for="onlylogs-filter">
             <span data-onlylogs-mode="live">Follow:</span>
             <span data-onlylogs-mode="static">Query:</span>
+          </label>
+          <div class="saved-searches" data-queries-target="box" data-action="keydown->queries#navigate">
             <div class="filter-input-wrapper" data-onlylogs-shortcut="q">
               <input type="text"
+                     id="onlylogs-filter"
                      name="filter"
                      value="<%= filter %>"
                      placeholder="<%= mode == "live" ? "follow lines matching…" : "search the whole file…" %>"
+                     spellcheck="false"
+                     autocomplete="off"
                      data-log-streamer-target="filterInput"
                      data-text-selection-target="filterInput"
                      data-keyboard-shortcuts-target="filterInput"
                      data-match-highlight-target="filterInput"
-                     data-action="input->log-streamer#applyFilter keydown.enter->log-cursor#focus keydown.esc->log-cursor#focus">
+                     data-action="input->log-streamer#applyFilter input->queries#refresh keydown.enter->log-cursor#focus keydown.esc->log-cursor#focus">
               <button type="button"
-                      data-action="click->log-streamer#clearFilter"
+                      data-action="click->log-streamer#clearFilter click->queries#cleared"
                       data-onlylogs-shortcut="x"
-                      class="clear-filter-button"
-                      title="Clear filter">
-                ×
+                      class="filter-input-button clear-filter-button"
+                      aria-label="Clear the query"
+                      title="Clear the query">
+                <svg width="10" height="10" viewBox="0 0 10 10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M2 2l6 6M8 2l-6 6"/></svg>
+              </button>
+              <button type="button"
+                      class="filter-input-button saved-searches__toggle"
+                      data-queries-target="toggle"
+                      data-onlylogs-shortcut="v"
+                      data-action="queries#toggle"
+                      aria-haspopup="true"
+                      aria-expanded="false"
+                      aria-controls="onlylogs-saved-searches-panel"
+                      aria-label="Saved searches"
+                      title="Saved searches">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1" fill="currentColor"/><circle cx="4.5" cy="12" r="1" fill="currentColor"/><circle cx="4.5" cy="18" r="1" fill="currentColor"/></svg>
+                <span class="saved-searches__count" data-queries-target="count"></span>
+              </button>
+              <button type="button"
+                      class="filter-input-button saved-searches__star"
+                      data-queries-target="star"
+                      data-onlylogs-shortcut="f"
+                      data-action="queries#toggleSave"
+                      aria-haspopup="true"
+                      aria-expanded="false"
+                      aria-controls="onlylogs-save-search-panel"
+                      disabled>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg>
               </button>
             </div>
-          </label>
-        </div>
-        <div class="saved-searches"
-             data-controller="queries"
-             data-queries-log-file-path-value="<%= encrypted_log_file_path %>"
-             data-queries-endpoint-value="<%= onlylogs.queries_path %>"
-             data-action="keydown->queries#navigate">
-          <button type="button"
-                  class="saved-searches__toggle"
-                  data-queries-target="toggle"
-                  data-onlylogs-shortcut="v"
-                  data-action="queries#toggle"
-                  aria-haspopup="true"
-                  aria-expanded="false"
-                  aria-controls="onlylogs-saved-searches-panel"
-                  title="Saved searches: save this query or apply a saved one">
-            ★ Saved <span class="saved-searches__count" data-queries-target="count"></span>
-          </button>
-          <div id="onlylogs-saved-searches-panel" class="saved-searches__panel" data-queries-target="panel" hidden>
-            <form class="saved-searches__save" data-action="queries#save">
-              <input type="text"
-                     maxlength="255"
-                     placeholder="name this search…"
-                     aria-label="Name of the saved search"
-                     data-queries-target="name"
-                     data-action="input->queries#nameChanged">
-              <button type="submit" data-queries-target="saveButton" disabled>Save</button>
-            </form>
-            <p class="saved-searches__hint" data-queries-target="hint"></p>
-            <ul class="saved-searches__list" data-queries-target="list" aria-label="Saved searches"></ul>
+
+            <div id="onlylogs-saved-searches-panel" class="saved-searches__panel" data-queries-target="panel" hidden>
+              <div class="saved-searches__header">
+                <span class="saved-searches__title">Saved searches</span>
+                <span class="saved-searches__keys">↑↓ move · ↵ apply · esc</span>
+              </div>
+              <ul class="saved-searches__list" data-queries-target="list" aria-label="Saved searches"></ul>
+              <div class="saved-searches__empty" data-queries-target="empty" hidden>
+                <strong>No saved searches yet</strong>
+                <span>Type a pattern, then click the star in the field to keep it here.</span>
+              </div>
+              <div class="saved-searches__footer" data-queries-target="footer" hidden>
+                <button type="button" class="saved-searches__footer-button" data-action="queries#openSave">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg>
+                  <span data-queries-target="footerLabel"></span>
+                </button>
+              </div>
+            </div>
+
+            <div id="onlylogs-save-search-panel" class="saved-searches__panel saved-searches__panel--save" data-queries-target="savePanel" hidden>
+              <div class="save-search__summary">
+                <span class="save-search__title" data-queries-target="saveTitle"></span>
+                <div class="save-search__current">
+                  <code data-queries-target="saveFilter"></code>
+                  <span data-queries-target="saveFlags"></span>
+                </div>
+              </div>
+              <form class="save-search__form" data-action="queries#save">
+                <label for="onlylogs-save-search-name">Name</label>
+                <div class="save-search__row">
+                  <input type="text"
+                         id="onlylogs-save-search-name"
+                         maxlength="255"
+                         placeholder="e.g. Errors"
+                         autocomplete="off"
+                         data-queries-target="name"
+                         data-action="input->queries#nameChanged">
+                  <button type="submit" data-queries-target="saveButton" disabled>Save</button>
+                </div>
+                <p class="save-search__hint" data-queries-target="hint"></p>
+              </form>
+              <div class="save-search__saved" data-queries-target="savedRow" hidden>
+                <span>Already in your saved searches.</span>
+                <button type="button" data-action="queries#removeCurrent">Remove</button>
+              </div>
+            </div>
+
+            <template data-queries-target="rowTemplate">
+              <li class="saved-search">
+                <button type="button" class="saved-search__apply" data-action="queries#apply">
+                  <span class="saved-search__line">
+                    <span class="saved-search__name"></span>
+                    <svg class="saved-search__check" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-label="Current search"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+                    <span class="saved-search__edited">edited</span>
+                  </span>
+                  <span class="saved-search__line">
+                    <code class="saved-search__filter"></code>
+                    <span class="saved-search__flags"></span>
+                  </span>
+                </button>
+                <input type="text" class="saved-search__rename-input" maxlength="255" autocomplete="off" hidden
+                       data-action="keydown->queries#renameKey blur->queries#commitRename">
+                <button type="button" class="saved-search__action saved-search__rename" data-action="queries#rename">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>
+                </button>
+                <button type="button" class="saved-search__action saved-search__delete" data-action="queries#destroy">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13"/></svg>
+                  <span class="saved-search__delete-label">Delete?</span>
+                </button>
+              </li>
+            </template>
           </div>
         </div>
         <div>
           <label class="toolbar-label" data-onlylogs-shortcut="r">
-            <input id="regexpMode" type="checkbox" <%= regexp_mode ? "checked" : "" %> name="regexpMode" data-log-streamer-target="regexpMode" data-text-selection-target="regexpMode" data-match-highlight-target="regexpMode" data-action="change->log-streamer#toggleRegexpMode">
+            <input id="regexpMode" type="checkbox" <%= regexp_mode ? "checked" : "" %> name="regexpMode" data-log-streamer-target="regexpMode" data-text-selection-target="regexpMode" data-match-highlight-target="regexpMode" data-action="change->log-streamer#toggleRegexpMode change->queries#refresh">
             <span>Regexp</span>
           </label>
         </div>
         <div>
           <label class="toolbar-label" data-onlylogs-shortcut="i">
-            <input id="caseInsensitive" type="checkbox" <%= case_insensitive ? "checked" : "" %> name="caseInsensitive" data-log-streamer-target="caseInsensitive" data-match-highlight-target="caseInsensitive" data-action="change->log-streamer#toggleCaseInsensitive">
+            <input id="caseInsensitive" type="checkbox" <%= case_insensitive ? "checked" : "" %> name="caseInsensitive" data-log-streamer-target="caseInsensitive" data-match-highlight-target="caseInsensitive" data-action="change->log-streamer#toggleCaseInsensitive change->queries#refresh">
             <span>Ignore case</span>
           </label>
         </div>
