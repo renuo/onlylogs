@@ -15,9 +15,6 @@ Then open http://onlylogs.localhost:3000/onlylogs.
 The viewer is mounted at `/onlylogs`;
 The root path is just an index of test log files.
 
-The `onlylogs-dummy` preview in `.claude/launch.json` runs on port 3100 instead
-(http://onlylogs.localhost:3100/onlylogs), so it never collides with other apps on 3000.
-
 ## Testing "live" mode
 
 Live mode tails a file over a websocket, so it needs something appending to that file. 
