@@ -213,8 +213,11 @@ module Onlylogs
         sleep 0.4
         logger.add(Logger::INFO, "recovery trigger")
 
-        assert wait_until { ::Dir.glob(::File.join(dir, "*.batch")).empty? },
-          "the spool should drain once the drain recovers"
+        # The sender may replay the spool on its own before the trigger is sent, so wait for both.
+        spool_drained = wait_until do
+          ::Dir.glob(::File.join(dir, "*.batch")).empty? && drain.received.include?("recovery trigger")
+        end
+        assert spool_drained, "the spool should drain once the drain recovers"
       end
 
       assert_includes drain.received, "buffered 0"
