@@ -11,7 +11,7 @@
 #   --drain URL          drain to post to (default http://127.0.0.1:9999/)
 #   --threads N          concurrent "Puma threads" (default 5)
 #   --think-ms MS        simulated work per request (default 50)
-#   --spool               enable the on-disk spool for undeliverable batches (off by default, like the logger)
+#   --spool              enable the on-disk spool for undeliverable batches (off by default, like the logger)
 #   --spool-dir DIR      where the spool lives (default tmp/onlylogs/fake_app_spool)
 #
 # Each request thread does what a Rails request does: logs a handful of lines and then calls
@@ -336,7 +336,11 @@ end
 
 spool = device.instance_variable_get(:@spool)
 spool_max = spool&.instance_variable_get(:@max_bytes) || 0
-spool_label = spool ? options[:spool_dir].delete_prefix("#{File.expand_path("..", __dir__)}/") : "off (pass --spool to enable it)"
+spool_label = if spool
+  options[:spool_dir].delete_prefix("#{File.expand_path("..", __dir__)}/")
+else
+  "off (pass --spool to enable it)"
+end
 circuit_was_open = false
 started_at = monotonic
 last_wall = started_at

@@ -14,9 +14,10 @@ require_relative "spool"
 #   requests for a cooldown period instead of blocking on every send for the full
 #   read timeout (a down host accepts the TCP/TLS connection but never answers).
 #
-# ONLYLOGS_SPOOL_ENABLED=true (only that value, in any case) opts into an on-disk Spool that buffers any batch we could not
-# deliver and replays it once the drain recovers, so a transient outage or a restart does not
-# lose logs. It lives in ONLYLOGS_SPOOL_DIR and is bounded by bytes; see Onlylogs::Spool.
+# ONLYLOGS_SPOOL_ENABLED=true (also 1, yes or on, in any case) opts into an on-disk Spool that
+# buffers any batch we could not deliver and replays it once the drain recovers, so a transient
+# outage or a restart does not lose logs. It lives in ONLYLOGS_SPOOL_DIR and is bounded by bytes;
+# see Onlylogs::Spool.
 #
 # Every write checks that a sender thread is alive in the current process and starts one if not:
 # * The device is usually built in the Puma master (production.rb runs before the workers are
@@ -102,7 +103,7 @@ module Onlylogs
       @read_timeout = float_setting("ONLYLOGS_READ_TIMEOUT", read_timeout, DEFAULT_READ_TIMEOUT)
       @circuit_cooldown = float_setting("ONLYLOGS_CIRCUIT_COOLDOWN", circuit_cooldown, CIRCUIT_COOLDOWN)
       @keep_alive_timeout = float_setting("ONLYLOGS_KEEP_ALIVE_TIMEOUT", keep_alive_timeout, DEFAULT_KEEP_ALIVE_TIMEOUT)
-      @spool_enabled = spool_enabled.to_s.strip.casecmp?("true")
+      @spool_enabled = boolean_setting("ONLYLOGS_SPOOL_ENABLED", spool_enabled, false)
       @spool_dir = spool_dir
       @spool_max_bytes = integer_setting("ONLYLOGS_SPOOL_MAX_BYTES", spool_max_bytes, Spool::DEFAULT_MAX_BYTES)
       @supervisor_mutex = Mutex.new
@@ -161,6 +162,17 @@ module Onlylogs
 
     def blank?(value)
       value.nil? || value.to_s.strip.empty?
+    end
+
+    TRUTHY = %w[true 1 yes on].freeze
+    FALSY = %w[false 0 no off].freeze
+
+    def boolean_setting(name, value, default)
+      text = value.to_s.strip.downcase
+      return true if TRUTHY.include?(text)
+      return false if text.empty? || FALSY.include?(text)
+
+      fallback_setting(name, value, default, "true or false")
     end
 
     def integer_setting(name, value, default, min: 1)

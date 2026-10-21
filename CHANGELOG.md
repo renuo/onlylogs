@@ -12,6 +12,10 @@
   while the README promised that nothing is written to disk. It is opt-in now: unless
   `ONLYLOGS_SPOOL_ENABLED` is `true`, a batch the drain does not accept within the timeouts is
   lost. `ONLYLOGS_SPOOL_DIR` still says where the spool lives, `tmp/onlylogs/spool` by default.
+  **Upgrade note:** this changes behaviour. Apps that relied on the old default lose the outage buffering until they
+  set `ONLYLOGS_SPOOL_ENABLED=true` (also `1`, `yes`, `on`; any other value warns and leaves it off). Setting only
+  `ONLYLOGS_SPOOL_DIR` or passing only `spool_dir:` no longer enables the spool, and an empty `ONLYLOGS_SPOOL_DIR` is
+  no longer how to disable it.
 - **Matches are highlighted.** What the query matched is marked on every line, in search and in live mode, honouring
   Regexp and Ignore case. The query is re-compiled as a JavaScript RegExp in the browser; ripgrep syntax JavaScript
   does not understand leaves the lines unmarked. Moving the keyboard cursor scrolls sideways to the match of the line

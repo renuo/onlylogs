@@ -269,16 +269,23 @@ module Onlylogs
       end
       assert_match(/spool disabled/, warnings.string, "an empty spool dir cannot be used")
 
-      %w[false FALSE 0 1 yes on].each do |value|
+      %w[false FALSE 0 no off].each do |value|
         logger = Onlylogs::HttpLogger.new(drain_url: drain.url, spool_enabled: value)
         @loggers << logger
         assert_nil logger.device.instance_variable_get(:@spool), "ONLYLOGS_SPOOL_ENABLED=#{value} must not enable the spool"
       end
-      %w[TRUE True].each do |value|
+      %w[TRUE True 1 yes on].each do |value|
         logger = Onlylogs::HttpLogger.new(drain_url: drain.url, spool_enabled: value)
         @loggers << logger
         assert logger.device.instance_variable_get(:@spool), "ONLYLOGS_SPOOL_ENABLED=#{value} should enable the spool"
       end
+      warnings = StringIO.new
+      with_stderr(warnings) do
+        logger = Onlylogs::HttpLogger.new(drain_url: drain.url, spool_enabled: "ture")
+        @loggers << logger
+        assert_nil logger.device.instance_variable_get(:@spool)
+      end
+      assert_match(/ONLYLOGS_SPOOL_ENABLED is "ture"/, warnings.string, "a typo must not go unnoticed")
     ensure
       spool_dir = spool&.instance_variable_get(:@dir)
       ::FileUtils.remove_entry(spool_dir) if spool_dir && ::File.directory?(spool_dir)
