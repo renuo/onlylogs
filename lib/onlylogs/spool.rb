@@ -24,14 +24,11 @@ module Onlylogs
     def initialize(dir:, max_bytes: DEFAULT_MAX_BYTES)
       @root = dir
       @max_bytes = max_bytes
-      @dir = ::File.join(@root, SecureRandom.hex(8))
       @seq = 0
       @ledger = [] # [path, bytes], oldest first
       @bytes = 0
       ::FileUtils.mkdir_p(@root)
-      ::Dir.mkdir(@dir)
-      @lock = ::File.open(::File.join(@dir, "lock"), ::File::RDWR | ::File::CREAT)
-      raise "#{@dir} is locked by another process" unless @lock.flock(::File::LOCK_EX | ::File::LOCK_NB)
+      @dir = claim_directory
     end
 
     # Persist a batch body. Rolls the oldest batches off first if the byte cap would be exceeded.
@@ -64,10 +61,13 @@ module Onlylogs
           next
         end
 
-        unless yield(body)
-          @ledger.unshift(entry)
-          break
+        delivered = false
+        begin
+          delivered = yield(body)
+        ensure
+          @ledger.unshift(entry) unless delivered
         end
+        break unless delivered
 
         @bytes -= bytes
         delete(path)
@@ -80,14 +80,17 @@ module Onlylogs
 
     # Take over batches left behind by processes that are gone: up to ADOPTION_CHUNK from every
     # sibling directory whose lock can be taken, and as many from the top level, where versions that
-    # shared one directory left theirs. Symlinks are never followed.
+    # shared one directory left theirs. Symlinks are never followed. Returns whether anything was
+    # adopted.
     def adopt_orphans
+      before = @ledger.size
       ::Dir.glob(::File.join(@root, "*", "lock")).each do |lock_path|
         orphan = ::File.dirname(lock_path)
         adopt(orphan, lock_path) unless orphan == @dir || ::File.symlink?(orphan)
       end
-      legacy = ::Dir.glob(::File.join(@root, "*.batch{,.sending}")).reject { |path| ::File.symlink?(path) }
+      legacy = regular_files(::Dir.glob(::File.join(@root, "*.batch{,.sending}")))
       take(oldest_first(legacy).first(ADOPTION_CHUNK), @root)
+      @ledger.size > before
     end
 
     # A forked child inherits the parent's lock: closing our copy leaves the parent's intact.
@@ -102,13 +105,27 @@ module Onlylogs
 
     private
 
+    # The directory is built under a dot-prefixed name, which the orphan glob does not match, and
+    # renamed into place only once its lock is held: a sibling that found it unlocked in between
+    # would take it for a dead process's leftovers and remove it.
+    def claim_directory
+      name = SecureRandom.hex(8)
+      staging = ::File.join(@root, ".#{name}")
+      ::Dir.mkdir(staging)
+      @lock = ::File.open(::File.join(staging, "lock"), ::File::RDWR | ::File::CREAT)
+      @lock.flock(::File::LOCK_EX)
+      dir = ::File.join(@root, name)
+      ::File.rename(staging, dir)
+      dir
+    end
+
     # The directory is removed once its last batch is taken; until then other workers take their
     # share, and a torn `.tmp` a crash left behind goes with the directory, never to the drain.
     def adopt(orphan, lock_path)
       lock = ::File.open(lock_path, ::File::RDWR)
       return unless lock.flock(::File::LOCK_EX | ::File::LOCK_NB)
 
-      files = oldest_first(::Dir.glob(::File.join(orphan, "*.batch")))
+      files = oldest_first(regular_files(::Dir.glob(::File.join(orphan, "*.batch"))))
       taken = take(files.first(ADOPTION_CHUNK), orphan)
       ::FileUtils.rm_rf(orphan) if taken && files.size <= ADOPTION_CHUNK
     rescue Errno::ENOENT
@@ -118,14 +135,18 @@ module Onlylogs
     end
 
     # Move files into our directory. Rename keeps the mtime, so whoever adopts our directory later
-    # still sees their true age. Returns false when a file could not be moved.
+    # still sees their true age. Returns false when a file could not be moved, so that the caller
+    # leaves the rest where it is.
     def take(paths, from)
       paths.each do |path|
         dest = next_path
         begin
           ::File.rename(path, dest)
         rescue Errno::ENOENT
-          next # a sibling got there first
+          # A batch that is still there could not be moved because our own directory is gone; one
+          # that is not was taken by a sibling first.
+          raise if ::File.exist?(path)
+          next
         end
         bytes = ::File.size(dest)
         @ledger << [dest, bytes]
@@ -136,6 +157,10 @@ module Onlylogs
     rescue SystemCallError => e
       safe_warn "Onlylogs::Spool: cannot adopt #{from} (#{e.class}: #{e.message}), leaving it for a later attempt"
       false
+    end
+
+    def regular_files(paths)
+      paths.reject { |path| ::File.symlink?(path) }
     end
 
     def oldest_first(paths)
@@ -152,8 +177,12 @@ module Onlylogs
       ::File.join(@dir, format("%09d.batch", @seq += 1))
     end
 
+    # Not every platform has O_NOFOLLOW; where it exists a symlink that slipped past the listing
+    # fails to open instead of being read through.
+    NOFOLLOW = ::File.const_defined?(:NOFOLLOW) ? ::File::NOFOLLOW : 0
+
     def read(path)
-      ::File.binread(path)
+      ::File.open(path, ::File::RDONLY | ::File::BINARY | NOFOLLOW, &:read)
     rescue SystemCallError => e
       safe_warn "Onlylogs::Spool: cannot read #{path} (#{e.class}: #{e.message}), skipping it"
       nil

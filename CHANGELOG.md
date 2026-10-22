@@ -7,9 +7,12 @@
   file a worker could not delete was re-sent in a tight loop. Every process now writes under
   `ONLYLOGS_SPOOL_DIR/<token>/` and holds an `flock` on it for its lifetime. Live processes adopt
   the batches of any directory whose lock is free (its owner is gone) within 5 s, 100 at a time so
-  that a big backlog is shared between them, and replay them. `ONLYLOGS_SPOOL_MAX_BYTES` (128 MB)
-  is now a cap per process rather than per directory. The spool directory must be on a host-local
-  filesystem.
+  that a big backlog is shared between them, and replay them. Batches left at the top level by the
+  shared directory of earlier versions are adopted too. A spool that fails on replay pauses the
+  replay for a cooldown instead of opening the circuit: live batches keep going to a drain that is
+  up. `ONLYLOGS_SPOOL_MAX_BYTES` (128 MB) is now a cap per process rather than per directory, so
+  the spool as a whole can grow to that many bytes times the number of processes. The spool
+  directory must be on a host-local filesystem.
 
 - **Saved searches live inside the query field.** Next to the query sit a clear button, a list of the saved searches
   and a star that saves the current query, fills in when it is already saved and offers rename or removal. The list

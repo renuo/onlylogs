@@ -142,8 +142,8 @@ module Onlylogs
       @spool.close
 
       heir = Onlylogs::Spool.new(dir: @root)
-      heir.adopt_orphans
 
+      assert heir.adopt_orphans, "adopting something should be reported"
       assert_equal ["orphaned one", "orphaned two"], drain(heir)
       refute ::File.directory?(dead_dir), "the adopted directory should be removed"
     ensure
@@ -154,8 +154,8 @@ module Onlylogs
       @spool.write("mine")
 
       other = Onlylogs::Spool.new(dir: @root)
-      other.adopt_orphans
 
+      refute other.adopt_orphans, "adopting nothing should be reported"
       assert other.empty?
       assert_equal ["mine"], drain(@spool)
     ensure
@@ -329,6 +329,32 @@ module Onlylogs
       other&.close
     end
 
+    # The heir could not move anything, so the orphan is not what should be removed.
+    test "leaves a dead instance's batches alone when its own directory is gone" do
+      3.times { |i| @spool.write("batch #{i}") }
+      dead_dir = @spool.dir
+      @spool.close
+
+      heir = Onlylogs::Spool.new(dir: @root)
+      ::FileUtils.rm_rf(heir.dir)
+      warnings = capture_stderr { heir.adopt_orphans }
+
+      assert heir.empty?
+      assert_equal 3, batches(dead_dir).size, "the orphan must keep its batches"
+      assert_equal 1, warnings.scan("cannot adopt").size
+    ensure
+      heir&.close
+    end
+
+    test "keeps the batch at the head when the replay block raises" do
+      @spool.write("first")
+      @spool.write("second")
+
+      assert_raises(RuntimeError) { @spool.replay { raise "boom" } }
+
+      assert_equal ["first", "second"], drain(@spool)
+    end
+
     # Whoever can write the spool root could point a symlink at any file the app can read.
     test "does not follow symlinks planted in the spool root" do
       victim = ::Dir.mktmpdir
@@ -341,6 +367,22 @@ module Onlylogs
 
       assert @spool.empty?, "nothing behind a symlink should be adopted"
       assert ::File.exist?(::File.join(victim, "secret.batch"))
+    ensure
+      ::FileUtils.remove_entry(victim) if victim && ::File.directory?(victim)
+    end
+
+    test "does not follow symlinks planted inside an orphaned directory" do
+      victim = ::Dir.mktmpdir
+      ::File.write(::File.join(victim, "secret"), "SECRET")
+      evil = ::File.join(@root, "evil")
+      ::Dir.mkdir(evil)
+      ::File.write(::File.join(evil, "lock"), "")
+      ::File.symlink(::File.join(victim, "secret"), ::File.join(evil, "000000001.batch"))
+
+      @spool.adopt_orphans
+
+      assert @spool.empty?, "a symlinked batch must not be adopted"
+      assert ::File.exist?(::File.join(victim, "secret"))
     ensure
       ::FileUtils.remove_entry(victim) if victim && ::File.directory?(victim)
     end

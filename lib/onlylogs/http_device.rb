@@ -142,7 +142,8 @@ module Onlylogs
       @queue.close
       @sender_thread&.join(2)
       close_connection
-      @spool&.close
+      # A sender still running after the join owns the spool; the lock goes with the process.
+      @spool&.close unless @sender_thread&.alive?
     end
 
     private
@@ -257,6 +258,8 @@ module Onlylogs
       @dropped = 0
       @rejected = 0
       @rejection_warned_at = nil
+      @next_orphan_check = nil
+      @replay_paused_until = nil
     end
 
     def start_sender
@@ -275,7 +278,7 @@ module Onlylogs
       batch = []
       bytes = 0
       deadline = nil
-      guard { @spool&.adopt_orphans }
+      guard { adopt_orphans }
 
       loop do
         line = @queue.pop(timeout: pop_timeout(deadline))
@@ -308,17 +311,44 @@ module Onlylogs
     end
 
     # How long the sender may block waiting for the next line: until the partial batch is due,
-    # until the circuit closes if there is a backlog to replay, not at all if we can replay right
-    # now, or until the next look for orphaned spool directories when there is nothing to do.
+    # indefinitely without a spool, until the replay may resume if it is paused, until the circuit
+    # closes if there is a backlog to replay (not at all if we can replay right now), or until the
+    # next look for orphaned spool directories when there is nothing to do.
     def pop_timeout(deadline)
       return [deadline - monotonic_now, 0].max if deadline
+      return nil if @spool.nil?
+      return replay_pause_remaining if replay_paused?
       return circuit_remaining if spool_pending?
 
-      ORPHAN_CHECK_INTERVAL
+      orphan_check_remaining
     end
 
     def spool_pending?
       !@spool.nil? && !@spool.empty?
+    end
+
+    # With nothing of its own left, the sender takes a share of whatever dead siblings left behind.
+    # Looking costs two directory listings, so while nothing turns up it happens once per interval,
+    # not after every batch; while a backlog is being handed out in chunks the next chunk is taken
+    # right away.
+    def adopt_orphans
+      return if @spool.nil? || !@spool.empty?
+      return if orphan_check_remaining.positive?
+
+      @next_orphan_check = monotonic_now + ORPHAN_CHECK_INTERVAL
+      @next_orphan_check = nil if @spool.adopt_orphans
+    end
+
+    def orphan_check_remaining
+      @next_orphan_check ? [@next_orphan_check - monotonic_now, 0].max : 0
+    end
+
+    def replay_paused?
+      replay_pause_remaining.positive?
+    end
+
+    def replay_pause_remaining
+      @replay_paused_until ? [@replay_paused_until - monotonic_now, 0].max : 0
     end
 
     # Last line of defence for the sender thread: whatever escapes the per-batch handling is
@@ -373,12 +403,11 @@ module Onlylogs
 
     # Replay the oldest buffered batch, if the drain is believed to be up. A batch the drain rejects
     # for good is deleted too, otherwise it would sit at the head of the spool forever and block
-    # everything behind it. With nothing of its own left, the sender takes a share of whatever dead
-    # siblings left behind.
+    # everything behind it.
     def replay_one
-      return if @spool.nil? || circuit_open?
+      return if @spool.nil? || circuit_open? || replay_paused?
 
-      @spool.adopt_orphans if @spool.empty?
+      adopt_orphans
       @spool.replay(limit: 1) do |body|
         deliver(body)
         record_success
@@ -395,10 +424,10 @@ module Onlylogs
         false
       end
     rescue => e
-      # The spool itself failed (not the delivery). Counting it as a failure lets the circuit pace
-      # the retries instead of the sender loop spinning on it.
-      record_failure
-      safe_warn "Onlylogs::HttpDevice spool error: #{e.class}: #{e.message}"
+      # The spool itself failed, not the delivery. Pausing the replay keeps the sender from spinning
+      # on a broken spool while live batches keep going to a drain that is up.
+      @replay_paused_until = monotonic_now + @circuit_cooldown
+      safe_warn "Onlylogs::HttpDevice spool error: #{e.class}: #{e.message}, pausing replay for #{@circuit_cooldown.round}s"
     end
 
     # A spool that cannot be set up must not stop the app from logging: it is disabled with a warning.
