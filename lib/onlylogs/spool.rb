@@ -4,105 +4,167 @@ require "fileutils"
 require "securerandom"
 
 module Onlylogs
-  # A bounded, on-disk overflow buffer for log batches that could not be delivered.
+  # A bounded, on-disk overflow buffer for batches that could not be delivered.
   #
-  # HttpLogger keeps the happy path in memory: only when a send fails or the circuit is open does
-  # a batch get written here, to be replayed once the drain recovers (and on the next boot).
-  # This turns transient-failure / restart data loss into at-least-once delivery: a batch that was in
-  # fact received but whose response was lost will be replayed and show up as a duplicate
-  # downstream. Duplicates are an accepted trade for not losing data.
+  # Every process spools into its own directory under `dir` and holds an flock on it for as long as
+  # it lives, so no two processes ever touch the same file. The kernel releases the lock when the
+  # process dies; live processes adopt the batches of every directory whose lock is free, a chunk at
+  # a time so that a big backlog is shared between them, and replay them. Delivery is at least once:
+  # a batch that was received but whose response was lost is replayed and shows up downstream twice.
+  # Duplicates are an accepted trade for not losing data.
   #
-  # The byte cap is enforced from an in-memory ledger of the files in the directory, refreshed by
-  # listing the directory at most every LEDGER_TTL seconds (sibling processes such as other Puma
-  # workers write to the same directory), so a write costs one file and not a stat of every file.
+  # One thread owns an instance; it is not thread-safe. The directory must be on a host-local
+  # filesystem, flock over NFS is not reliable.
   class Spool
     DEFAULT_MAX_BYTES = 128 * 1024 * 1024 # 128 MB
-    LEDGER_TTL = 5
+    ADOPTION_CHUNK = 100
+
+    attr_reader :dir
 
     def initialize(dir:, max_bytes: DEFAULT_MAX_BYTES)
-      @dir = dir
+      @root = dir
       @max_bytes = max_bytes
-      # Unique per instance so two runs (even with a reused pid) never collide on a filename.
-      @token = SecureRandom.hex(4)
       @seq = 0
-      @mutex = Mutex.new
-      @ledger = nil
-      @ledger_bytes = 0
-      @ledger_at = nil
-      ::FileUtils.mkdir_p(@dir)
+      @ledger = [] # [path, bytes], oldest first
+      @bytes = 0
+      ::FileUtils.mkdir_p(@root)
+      @dir = claim_directory
     end
 
     # Persist a batch body. Rolls the oldest batches off first if the byte cap would be exceeded.
     def write(body)
       return if body.nil? || body.empty?
 
-      @mutex.synchronize do
-        refresh_ledger if ledger_stale?
-        evict(body.bytesize)
-        seq = (@seq += 1)
-        final = ::File.join(@dir, "#{@token}-#{format("%09d", seq)}.batch")
-        tmp = "#{final}.tmp"
-        # Write to a temp name then rename: rename is atomic, so replay never reads a
-        # half-written file (it only globs *.batch).
-        ::File.binwrite(tmp, body)
-        ::File.rename(tmp, final)
-        @ledger << [final, body.bytesize]
-        @ledger_bytes += body.bytesize
-      end
+      evict(body.bytesize)
+      path = next_path
+      tmp = "#{path}.tmp"
+      # Write to a temp name then rename, so a crash mid-write never leaves a torn batch for the
+      # process that adopts this directory.
+      ::File.binwrite(tmp, body)
+      ::File.rename(tmp, path)
+      @ledger << [path, body.bytesize]
+      @bytes += body.bytesize
     rescue => e
-      Kernel.warn "Onlylogs::Spool write error: #{e.class}: #{e.message}"
+      safe_warn "Onlylogs::Spool write error: #{e.class}: #{e.message}"
     end
 
     # Replay pending batches oldest-first, at most `limit` of them. Yields each body; if the block
     # returns truthy the file is deleted (delivered, or given up on), otherwise replay stops and the
-    # remaining files are kept for later.
-    #
-    # Works off the ledger rather than listing the directory: with a large backlog replayed one file
-    # at a time, a glob per call would cost more than the delivery itself.
+    # batch stays at the head for later.
     def replay(limit: nil)
-      paths = @mutex.synchronize do
-        refresh_ledger if ledger_stale?
-        @ledger.first(limit || @ledger.size).map(&:first)
-      end
-
-      paths.each do |path|
+      (limit || @ledger.size).times do
+        entry = @ledger.shift or break
+        path, bytes = entry
         body = read(path)
-        if body.nil? # already claimed/deleted by another process
-          forget(path)
+        if body.nil?
+          @bytes -= bytes
           next
         end
 
-        break unless yield(body)
+        delivered = false
+        begin
+          delivered = yield(body)
+        ensure
+          @ledger.unshift(entry) unless delivered
+        end
+        break unless delivered
 
+        @bytes -= bytes
         delete(path)
-        forget(path)
       end
     end
 
     def empty?
-      @mutex.synchronize do
-        refresh_ledger if ledger_stale?
-        @ledger.empty?
+      @ledger.empty?
+    end
+
+    # Take over batches left behind by processes that are gone: up to ADOPTION_CHUNK from every
+    # sibling directory whose lock can be taken, and as many from the top level, where versions that
+    # shared one directory left theirs. Symlinks are never followed. Returns whether anything was
+    # adopted.
+    def adopt_orphans
+      before = @ledger.size
+      ::Dir.glob(::File.join(@root, "*", "lock")).each do |lock_path|
+        orphan = ::File.dirname(lock_path)
+        adopt(orphan, lock_path) unless orphan == @dir || ::File.symlink?(orphan)
       end
+      legacy = regular_files(::Dir.glob(::File.join(@root, "*.batch{,.sending}")))
+      take(oldest_first(legacy).first(ADOPTION_CHUNK), @root)
+      @ledger.size > before
+    end
+
+    # A forked child inherits the parent's lock: closing our copy leaves the parent's intact.
+    def detach
+      @lock.close
+    end
+
+    def close
+      ::FileUtils.rm_rf(@dir) if @ledger.empty?
+      @lock.close
     end
 
     private
 
-    def ledger_stale?
-      @ledger.nil? || Process.clock_gettime(Process::CLOCK_MONOTONIC) - @ledger_at > LEDGER_TTL
+    # The directory is built under a dot-prefixed name, which the orphan glob does not match, and
+    # renamed into place only once its lock is held: a sibling that found it unlocked in between
+    # would take it for a dead process's leftovers and remove it.
+    def claim_directory
+      name = SecureRandom.hex(8)
+      staging = ::File.join(@root, ".#{name}")
+      ::Dir.mkdir(staging)
+      @lock = ::File.open(::File.join(staging, "lock"), ::File::RDWR | ::File::CREAT)
+      @lock.flock(::File::LOCK_EX)
+      dir = ::File.join(@root, name)
+      ::File.rename(staging, dir)
+      dir
     end
 
-    # Caller holds @mutex.
-    def refresh_ledger
-      @ledger = pending_files.map { |path| [path, size(path)] }
-      @ledger_bytes = @ledger.sum { |_, bytes| bytes }
-      @ledger_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    # The directory is removed once its last batch is taken; until then other workers take their
+    # share, and a torn `.tmp` a crash left behind goes with the directory, never to the drain.
+    def adopt(orphan, lock_path)
+      lock = ::File.open(lock_path, ::File::RDWR)
+      return unless lock.flock(::File::LOCK_EX | ::File::LOCK_NB)
+
+      files = oldest_first(regular_files(::Dir.glob(::File.join(orphan, "*.batch"))))
+      taken = take(files.first(ADOPTION_CHUNK), orphan)
+      ::FileUtils.rm_rf(orphan) if taken && files.size <= ADOPTION_CHUNK
+    rescue Errno::ENOENT
+      nil # another process adopted it first
+    ensure
+      lock&.close
     end
 
-    # Oldest-first. mtime is the primary key; the zero-padded sequence in the filename breaks
-    # ties (and preserves per-process write order when mtimes collide at coarse FS resolution).
-    def pending_files
-      ::Dir.glob(::File.join(@dir, "*.batch")).sort_by { |path| [mtime(path), path] }
+    # Move files into our directory. Rename keeps the mtime, so whoever adopts our directory later
+    # still sees their true age. Returns false when a file could not be moved, so that the caller
+    # leaves the rest where it is.
+    def take(paths, from)
+      paths.each do |path|
+        dest = next_path
+        begin
+          ::File.rename(path, dest)
+        rescue Errno::ENOENT
+          # A batch that is still there could not be moved because our own directory is gone; one
+          # that is not was taken by a sibling first.
+          raise if ::File.exist?(path)
+          next
+        end
+        bytes = ::File.size(dest)
+        @ledger << [dest, bytes]
+        @bytes += bytes
+      end
+      evict(0)
+      true
+    rescue SystemCallError => e
+      safe_warn "Onlylogs::Spool: cannot adopt #{from} (#{e.class}: #{e.message}), leaving it for a later attempt"
+      false
+    end
+
+    def regular_files(paths)
+      paths.reject { |path| ::File.symlink?(path) }
+    end
+
+    def oldest_first(paths)
+      paths.sort_by { |path| [mtime(path), path] }
     end
 
     def mtime(path)
@@ -111,21 +173,18 @@ module Onlylogs
       Time.at(0)
     end
 
-    # Replay is oldest-first and so is the ledger, so the path is nearly always the head.
-    def forget(path)
-      @mutex.synchronize do
-        next if @ledger.nil?
-
-        index = (@ledger.first&.first == path) ? 0 : @ledger.index { |candidate, _| candidate == path }
-        next unless index
-
-        @ledger_bytes -= @ledger.delete_at(index).last
-      end
+    def next_path
+      ::File.join(@dir, format("%09d.batch", @seq += 1))
     end
 
+    # Not every platform has O_NOFOLLOW; where it exists a symlink that slipped past the listing
+    # fails to open instead of being read through.
+    NOFOLLOW = ::File.const_defined?(:NOFOLLOW) ? ::File::NOFOLLOW : 0
+
     def read(path)
-      ::File.binread(path)
-    rescue Errno::ENOENT
+      ::File.open(path, ::File::RDONLY | ::File::BINARY | NOFOLLOW, &:read)
+    rescue SystemCallError => e
+      safe_warn "Onlylogs::Spool: cannot read #{path} (#{e.class}: #{e.message}), skipping it"
       nil
     end
 
@@ -133,21 +192,25 @@ module Onlylogs
       ::File.delete(path)
     rescue Errno::ENOENT
       nil
+    rescue SystemCallError => e
+      safe_warn "Onlylogs::Spool: cannot delete #{path} (#{e.class}: #{e.message}), it will be sent again after a restart"
     end
 
-    # Delete oldest batches until `incoming` more bytes fit under the cap. Caller holds @mutex.
+    # Delete oldest batches until `incoming` more bytes fit under the cap.
     def evict(incoming)
-      while @ledger_bytes + incoming > @max_bytes && (oldest = @ledger.shift)
+      while @bytes + incoming > @max_bytes && (oldest = @ledger.shift)
         path, bytes = oldest
         delete(path)
-        @ledger_bytes -= bytes
+        @bytes -= bytes
       end
     end
 
-    def size(path)
-      ::File.size(path)
-    rescue Errno::ENOENT
-      0
+    # Kernel.warn itself raises on a closed or detached $stderr, and that must not escape the
+    # sender thread.
+    def safe_warn(message)
+      Kernel.warn(message)
+    rescue
+      nil
     end
   end
 end
