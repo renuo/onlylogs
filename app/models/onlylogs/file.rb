@@ -9,7 +9,7 @@ module Onlylogs
       @inode = ::File.stat(path).ino
     end
 
-    QUERIES_DATABASE = "queries.db"
+    QUERIES_DATABASE = "queries.sqlite3"
 
     # The saved queries of this file's directory, shared by all log files in it, newest first.
     def queries = QueriesRecord.bound_to(queries_database_path) { Query.newest_first }

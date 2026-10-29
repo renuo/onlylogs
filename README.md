@@ -81,8 +81,8 @@ Click the star in the query field to save the current query. The list next to it
 apply it, rename it or remove it. A saved search is shared by everybody who opens the same log file.
 
 Saved searches are stored in a small SQLite database, in a hidden `.onlylogs` folder next to the log file
-(for example `log/.onlylogs/queries.db`). The folder must be writable. In Docker, keep it on a volume, like the logs
-(see [Notes about Docker](#notes-about-docker)). You can change the folder name with `config.database_dir`.
+(for example `log/.onlylogs/queries.sqlite3`). The folder must be writable. In Docker, keep it on a volume, like the
+logs (see [Notes about Docker](#notes-about-docker)). You can change the folder name with `config.database_dir`.
 
 ### Keyboard shortcuts
 
