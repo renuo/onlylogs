@@ -2,12 +2,11 @@
 
 module Onlylogs
   class QueriesController < ViewerController
-    # The viewer already sends its attributes under "query"; wrapping them would read Query's columns before
-    # around_action connects it to a database.
+    # The viewer already sends its attributes under "query"; wrapping them would read Query's columns outside
+    # of a database.
     wrap_parameters false
 
     before_action :set_log_file
-    around_action :connect_queries_database
 
     rescue_from(ActiveRecord::RecordInvalid) { |e| render_invalid(e.record) }
     rescue_from(ActiveRecord::RecordNotUnique) { render_error("Name has already been taken", :unprocessable_entity) }
@@ -18,7 +17,7 @@ module Onlylogs
     rescue_from(SecureFilePath::SecurityError) { |e| render_error(e.message, :bad_request) }
 
     def index
-      render json: {queries: Query.newest_first}
+      render json: {queries: @log_file.queries}
     end
 
     def show
@@ -26,7 +25,7 @@ module Onlylogs
     end
 
     def create
-      render json: Query.create!(query_params), status: :created
+      render json: @log_file.queries.create!(query_params), status: :created
     end
 
     def update
@@ -44,10 +43,8 @@ module Onlylogs
     private
 
     def query
-      @query ||= Query.find(params[:id])
+      @query ||= @log_file.queries.find(params[:id])
     end
-
-    def connect_queries_database(&) = @log_file.with_database(&)
 
     def query_params
       params.expect(query: [:name, :filter, :regexp_mode, :case_insensitive])

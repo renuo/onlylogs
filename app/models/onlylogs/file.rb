@@ -11,11 +11,13 @@ module Onlylogs
 
     QUERIES_DATABASE = "queries.db"
 
-    # Connects Query to the database of this file's directory, shared by all log files in it.
-    def with_database(create: true, &)
-      database_path = ::File.join(::File.dirname(path), Onlylogs.configuration.database_dir, QUERIES_DATABASE)
-      QueriesRecord.with_database(database_path, create: create, &)
-    end
+    # The saved queries of this file's directory, shared by all log files in it, newest first.
+    def queries = QueriesRecord.bound_to(queries_database_path) { Query.newest_first }
+
+    # Connects Query to the database of this file's directory.
+    def with_database(create: true, &) = QueriesRecord.with_database(queries_database_path, create: create, &)
+
+    def queries_database_path = ::File.join(::File.dirname(path), Onlylogs.configuration.database_dir, QUERIES_DATABASE)
 
     def go_to_position(position)
       return if position < 0

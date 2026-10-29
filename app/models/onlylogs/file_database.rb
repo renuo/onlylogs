@@ -20,6 +20,13 @@ module Onlylogs
   # Outside with_database the models have no connection, so Note.all raises. That includes anything reading their
   # columns early, like a controller's parameter wrapping: turn it off with wrap_parameters false.
   #
+  # bound_to gives a relation that can be kept and used outside a block: every call on it, and on the relations and
+  # records it returns, runs inside with_database.
+  #
+  #   notes = NotesRecord.bound_to("path/to/notes.db") { Note.all }
+  #   note = notes.create!(title: "Hello")
+  #   note.update!(title: "Hi")
+  #
   # Each file is a shard of the class, connected on first use. A file deleted or replaced since (a purged or renamed
   # directory, say) has another inode and so a shard of its own: the old shard's idle connections are reaped, and a
   # connection in use, like a test transaction's, is never pulled away.
@@ -32,6 +39,40 @@ module Onlylogs
     class UnavailableError < Onlylogs::Error; end
 
     CONNECTION_TIMEOUT = 5_000
+
+    # A relation or record whose every call runs inside its database; what those calls return is bound the same way.
+    class Bound < Delegator
+      def initialize(object, &connect)
+        super(object)
+        @connect = connect
+      end
+
+      def __getobj__ = @object
+
+      def __setobj__(object)
+        @object = object
+      end
+
+      def method_missing(name, *args, **kwargs, &block)
+        @connect.call { bind(@object.public_send(name, *args, **kwargs, &block)) }
+      end
+
+      def respond_to_missing?(name, include_private = false) = @object.respond_to?(name, include_private)
+
+      def ==(other)
+        @object == (other.is_a?(Bound) ? other.__getobj__ : other)
+      end
+
+      private
+
+      def bind(result)
+        case result
+        when ::ActiveRecord::Relation, ::ActiveRecord::Base then Bound.new(result, &@connect)
+        when ::Array then result.map { |element| bind(element) }
+        else result
+        end
+      end
+    end
 
     included do
       self.connection_class = true
@@ -57,6 +98,11 @@ module Onlylogs
         end
 
         connected_to(role: ActiveRecord.writing_role, shard: database_shard(path), &)
+      end
+
+      def bound_to(path, &scope)
+        connect = ->(&block) { with_database(path, &block) }
+        connect.call { Bound.new(scope.call, &connect) }
       end
 
       def clear_database_connections

@@ -247,7 +247,7 @@ module Onlylogs
     test "create is refused when the authorization hook refuses the log file" do
       Onlylogs.configuration.authorize_log_file = ->(_path) { false }
 
-      assert_no_difference -> { File.new(@log_file_path).with_database { Query.count } } do
+      assert_no_difference -> { File.new(@log_file_path).queries.count } do
         post_query(name: "Errors", filter: "ERROR")
       end
       assert_response :forbidden

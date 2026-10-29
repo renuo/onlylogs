@@ -6,8 +6,10 @@
   migrations with `database_migrations`, and gets `with_database(path) { ... }`: inside the block its models read and
   write that SQLite file, outside it they raise. All models of a file share one connection, so a transaction spans
   them; `create: false` yields nothing for a missing file instead of creating it; and a file replaced on disk gets a
-  fresh connection while the old one is left to the pool reaper. Saved searches use it through
-  `Onlylogs::File#with_database`, and `Query` is a regular model under `QueriesRecord`.
+  fresh connection while the old one is left to the pool reaper. `bound_to(path) { scope }` returns a relation that
+  can be kept outside a block: every call on it, and on the relations and records it returns, runs inside the
+  database. `Onlylogs::File#queries` is one, so saved searches read as before; `Query` is a regular model under
+  `QueriesRecord`.
 
 - **Saved searches live inside the query field.** Next to the query sit a clear button, a list of the saved searches
   and a star that saves the current query, fills in when it is already saved and offers rename or removal. The list

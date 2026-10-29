@@ -151,6 +151,30 @@ class Onlylogs::FileDatabaseTest < ActiveSupport::TestCase
     assert_empty NotesRecord.with_database(@path) { Note.pluck(:title) }
   end
 
+  test "a bound relation can be kept, chained and written through outside a block" do
+    notes = NotesRecord.bound_to(@path) { Note.order(:title) }
+
+    hello = notes.create!(title: "Hello")
+    notes.create!(title: "Bye")
+    hello.update!(title: "Hi")
+
+    assert_equal ["Bye", "Hi"], notes.pluck(:title)
+    assert_equal ["Hi"], notes.where(title: "Hi").map(&:title)
+    assert_equal hello, notes.find(hello.id)
+    assert_raises(ActiveRecord::ConnectionNotDefined) { Note.count }
+  end
+
+  test "bound relations of different files stay apart" do
+    mine = NotesRecord.bound_to(@path) { Note.all }
+    theirs = NotesRecord.bound_to(File.join(@temp_dir, "other", "notes.db")) { Note.all }
+
+    mine.create!(title: "Mine")
+    theirs.create!(title: "Theirs")
+
+    assert_equal ["Mine"], mine.pluck(:title)
+    assert_equal ["Theirs"], theirs.pluck(:title)
+  end
+
   test "raise unavailable when the file cannot be created" do
     File.write(File.join(@temp_dir, ".onlylogs"), "a file where the directory should be")
 
