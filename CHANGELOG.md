@@ -1,17 +1,24 @@
 # Changelog
 
-## Unreleased
+## 0.12.0
 
-- **Saved searches are stored with [sqlite_shards](https://github.com/renuo/sqlite_shards).** The SQLite file per
-  log directory that `DirectoryDatabase` managed is now handled by the new `sqlite_shards` gem, extracted from it:
-  `Query` is a regular model under `Onlylogs::QueriesRecord`, which includes `SqliteShards`, and
-  `Onlylogs::File#queries` keeps working as before. `DirectoryDatabase` and `QueryDatabase` are gone. The file is
-  now named `queries.sqlite3`; saved searches in an old `queries.db` are not carried over.
+- **Searches can be saved.** The star in the query field saves the current query with its Regexp and Ignore case
+  settings. The list next to it shows the saved searches, marks the one you are on, flags it as edited once you change
+  the query, and renames or deletes in place. Control/Alt + F opens the star. Saved searches are shared by everybody
+  who opens the same log file: they live in a small SQLite database in a hidden folder next to the log file
+  (`log/.onlylogs/queries.sqlite3`), handled by the new [sqlite_shards](https://github.com/renuo/sqlite_shards) gem.
+  `config.database_dir` changes the folder name, `".onlylogs"` by default.
+  **Upgrade note:** the gem now depends on `sqlite3` and `sqlite_shards`, and the folder must be writable. In Docker,
+  keep it on a volume, like the logs.
 
-- **Saved searches live inside the query field.** Next to the query sit a clear button, a list of the saved searches
-  and a star that saves the current query, fills in when it is already saved and offers rename or removal. The list
-  marks the search you are on, shows when you have edited it since applying it, and renames and deletes in place.
-  Control/Alt + F opens the star.
+- **Files can be authorized per user.** `config.authorize_log_file` takes a block that runs inside the controller with
+  the file path, so it can use the host's `current_user`; a falsy result refuses the file. The viewer's own endpoints
+  (the saved searches) ask it before touching a file. With `config.viewer_parent_controller` those endpoints inherit
+  from a different controller than the rest of the engine, for hosts that show the viewer to more people than the
+  engine's own pages.
+
+- **Text selection survives live mode.** Selected text in the log viewer used to be lost on every batch of new lines.
+  It stays selected now, comes back when you scroll away and return, and the Search popup follows the selected text.
 
 - **`HttpLogger` is fire and forget by default.** The on-disk spool that kept undeliverable
   batches and replayed them after an outage was on by default and wrote under `tmp/onlylogs/spool`,
