@@ -9,8 +9,12 @@ module Onlylogs
       @inode = ::File.stat(path).ino
     end
 
-    def queries
-      QueryDatabase.model(Query, path).order(created_at: :desc, id: :desc)
+    QUERIES_DATABASE = "queries.db"
+
+    # Connects Query to the database of this file's directory, shared by all log files in it.
+    def with_database(create: true, &)
+      database_path = ::File.join(::File.dirname(path), Onlylogs.configuration.database_dir, QUERIES_DATABASE)
+      QueriesRecord.with_database(database_path, create: create, &)
     end
 
     def go_to_position(position)

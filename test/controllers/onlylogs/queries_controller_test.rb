@@ -29,13 +29,13 @@ module Onlylogs
         config.log_file_patterns = [::File.join(@temp_dir, "*.log")]
       end
 
-      QueryDatabase.clear_connections
+      QueriesRecord.clear_database_connections
 
       @encrypted_path = SecureFilePath.encrypt(@log_file_path)
     end
 
     teardown do
-      QueryDatabase.clear_connections
+      QueriesRecord.clear_database_connections
       FileUtils.remove_entry(@temp_dir) if ::File.directory?(@temp_dir)
 
       Onlylogs.configure do |config|
@@ -241,7 +241,7 @@ module Onlylogs
     test "create is refused when the authorization hook refuses the log file" do
       Onlylogs.configuration.authorize_log_file = ->(_path) { false }
 
-      assert_no_difference -> { File.new(@log_file_path).queries.count } do
+      assert_no_difference -> { File.new(@log_file_path).with_database { Query.count } } do
         post_query(name: "Errors", filter: "ERROR")
       end
       assert_response :forbidden
