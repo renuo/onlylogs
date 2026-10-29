@@ -2,6 +2,10 @@
 
 module Onlylogs
   class QueriesController < ViewerController
+    # The viewer already sends its attributes under "query"; wrapping them would read Query's columns before
+    # around_action connects it to a database.
+    wrap_parameters false
+
     before_action :set_log_file
     around_action :connect_queries_database
 

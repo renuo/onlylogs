@@ -93,6 +93,12 @@ module Onlylogs
       assert_equal false, response.parsed_body["case_insensitive"]
     end
 
+    # Wrapping reads Query's columns before around_action connects it to a database, so the first JSON request of a
+    # process would fail.
+    test "parameters are not wrapped" do
+      assert_empty QueriesController._wrapper_options.format
+    end
+
     test "create returns bad request when the query attributes are missing" do
       post "/onlylogs/queries", params: {log_file_path: @encrypted_path}, as: :json
 

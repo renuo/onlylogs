@@ -17,7 +17,8 @@ module Onlylogs
   #
   #   NotesRecord.with_database("path/to/notes.db") { Note.all.to_a }
   #
-  # Outside with_database the models have no connection, so Note.all raises.
+  # Outside with_database the models have no connection, so Note.all raises. That includes anything reading their
+  # columns early, like a controller's parameter wrapping: turn it off with wrap_parameters false.
   #
   # Each file is a shard of the class, connected on first use. A file deleted or replaced since (a purged or renamed
   # directory, say) has another inode and so a shard of its own: the old shard's idle connections are reaped, and a
