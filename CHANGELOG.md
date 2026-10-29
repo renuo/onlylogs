@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Saved searches are stored with [sqlite_shards](https://github.com/renuo/sqlite_shards).** The SQLite file per
+  log directory that `DirectoryDatabase` managed is now handled by the new `sqlite_shards` gem, extracted from it:
+  `Query` is a regular model under `Onlylogs::QueriesRecord`, which includes `SqliteShards`, and
+  `Onlylogs::File#queries` keeps working as before. `DirectoryDatabase` and `QueryDatabase` are gone. Existing
+  `queries.db` files are used as they are.
+
 - **Saved searches live inside the query field.** Next to the query sit a clear button, a list of the saved searches
   and a star that saves the current query, fills in when it is already saved and offers rename or removal. The list
   marks the search you are on, shows when you have edited it since applying it, and renames and deletes in place.

@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
 module Onlylogs
-  # Abstract: QueryDatabase connects one subclass per log directory.
-  class Query < ActiveRecord::Base
-    self.abstract_class = true
+  class Query < QueriesRecord
     self.table_name = "queries"
+
+    scope :newest_first, -> { order(created_at: :desc, id: :desc) }
 
     normalizes :name, with: ->(name) { name.strip }
 

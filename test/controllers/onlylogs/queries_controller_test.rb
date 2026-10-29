@@ -29,13 +29,13 @@ module Onlylogs
         config.log_file_patterns = [::File.join(@temp_dir, "*.log")]
       end
 
-      QueryDatabase.clear_connections
+      QueriesRecord.clear_database_connections
 
       @encrypted_path = SecureFilePath.encrypt(@log_file_path)
     end
 
     teardown do
-      QueryDatabase.clear_connections
+      QueriesRecord.clear_database_connections
       FileUtils.remove_entry(@temp_dir) if ::File.directory?(@temp_dir)
 
       Onlylogs.configure do |config|

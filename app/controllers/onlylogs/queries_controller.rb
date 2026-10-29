@@ -8,7 +8,7 @@ module Onlylogs
     rescue_from(ActiveRecord::RecordNotUnique) { render_error("Name has already been taken", :unprocessable_entity) }
     rescue_from(ActiveRecord::RecordNotFound) { render_error("Query not found", :not_found) }
     rescue_from(Onlylogs::Error) { render_error("Log file not found", :not_found) }
-    rescue_from(DirectoryDatabase::UnavailableError) { |e| render_error("Saved queries are unavailable: #{e.message}", :service_unavailable) }
+    rescue_from(SqliteShards::UnavailableError) { |e| render_error("Saved queries are unavailable: #{e.message}", :service_unavailable) }
     rescue_from(ForbiddenPathError) { |e| render_error(e.message, :forbidden) }
     rescue_from(SecureFilePath::SecurityError) { |e| render_error(e.message, :bad_request) }
 

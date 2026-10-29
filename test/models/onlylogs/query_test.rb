@@ -11,13 +11,13 @@ class Onlylogs::QueryTest < ActiveSupport::TestCase
     @log_file_path = File.join(@temp_dir, "test.log")
     File.write(@log_file_path, "test log content")
 
-    Onlylogs::QueryDatabase.clear_connections
+    Onlylogs::QueriesRecord.clear_database_connections
 
     @log_file = Onlylogs::File.new(@log_file_path)
   end
 
   teardown do
-    Onlylogs::QueryDatabase.clear_connections
+    Onlylogs::QueriesRecord.clear_database_connections
     FileUtils.remove_entry(@temp_dir) if File.directory?(@temp_dir)
   end
 
@@ -122,7 +122,7 @@ class Onlylogs::QueryTest < ActiveSupport::TestCase
     Onlylogs::File.new(log_path).queries.create!(name: "New", filter: "WARN")
 
     assert_equal ["New"], Onlylogs::File.new(log_path).queries.pluck(:name)
-    Onlylogs::QueryDatabase.clear_connections
+    Onlylogs::QueriesRecord.clear_database_connections
     assert_equal ["New"], Onlylogs::File.new(log_path).queries.pluck(:name)
   end
 
@@ -253,7 +253,7 @@ class Onlylogs::QueryTest < ActiveSupport::TestCase
   end
 
   test "add the ignore case column to a database created by an older version" do
-    Onlylogs::QueryDatabase.clear_connections
+    Onlylogs::QueriesRecord.clear_database_connections
     database_path = File.join(@temp_dir, ".onlylogs", "queries.db")
     FileUtils.mkdir_p(File.dirname(database_path))
     SQLite3::Database.new(database_path) do |db|

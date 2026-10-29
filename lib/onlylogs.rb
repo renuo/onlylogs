@@ -1,3 +1,4 @@
+require "sqlite_shards"
 require "onlylogs/version"
 require "onlylogs/configuration"
 require "onlylogs/engine"
