@@ -254,7 +254,7 @@ class Onlylogs::QueryTest < ActiveSupport::TestCase
 
   test "add the ignore case column to a database created by an older version" do
     Onlylogs::QueriesRecord.clear_database_connections
-    database_path = File.join(@temp_dir, ".onlylogs", "queries.db")
+    database_path = File.join(@temp_dir, ".onlylogs", "queries.sqlite3")
     FileUtils.mkdir_p(File.dirname(database_path))
     SQLite3::Database.new(database_path) do |db|
       db.execute(<<~SQL)
@@ -278,7 +278,7 @@ class Onlylogs::QueryTest < ActiveSupport::TestCase
     @log_file.queries.create(name: "Test", filter: "ERROR")
 
     queries_dir = File.join(@temp_dir, ".onlylogs")
-    db_file = File.join(queries_dir, "queries.db")
+    db_file = File.join(queries_dir, "queries.sqlite3")
 
     assert File.directory?(queries_dir), "Queries directory should exist"
     assert File.exist?(db_file), "Database file should exist"
