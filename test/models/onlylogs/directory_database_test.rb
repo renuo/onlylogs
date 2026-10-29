@@ -11,6 +11,11 @@ class Onlylogs::DirectoryDatabaseTest < ActiveSupport::TestCase
     self.table_name = "notes"
   end
 
+  class Tag < ActiveRecord::Base
+    self.abstract_class = true
+    self.table_name = "tags"
+  end
+
   setup do
     @temp_dir = Dir.mktmpdir
     @log_file_path = File.join(@temp_dir, "test.log")
@@ -72,6 +77,56 @@ class Onlylogs::DirectoryDatabaseTest < ActiveSupport::TestCase
     assert_includes model.column_names, "body"
   end
 
+  test "the models of one directory share a connection, so a transaction spans them" do
+    @database = database(create_notes, create_tags)
+    notes = @database.model(Note, @log_file_path)
+    tags = @database.model(Tag, @log_file_path)
+
+    assert_raises(RuntimeError) do
+      notes.transaction do
+        notes.create!(title: "Hello")
+        tags.create!(label: "greeting")
+        raise "boom"
+      end
+    end
+
+    assert_equal 0, notes.count
+    assert_equal 0, tags.count
+    assert_same notes.connection_pool, tags.connection_pool
+  end
+
+  test "the same base in another directory gets a database of its own" do
+    other_dir = Dir.mktmpdir
+    @database = database(create_notes)
+    @database.model(Note, @log_file_path).create!(title: "Here")
+
+    assert_empty @database.model(Note, File.join(other_dir, "other.log")).pluck(:title)
+    assert_equal ["Here"], @database.model(Note, @log_file_path).pluck(:title)
+  ensure
+    @database.clear_connections
+    FileUtils.remove_entry(other_dir)
+  end
+
+  test "without create, a directory without a database returns nil and is left untouched" do
+    @database = database(create_notes)
+
+    assert_nil @database.model(Note, @log_file_path, create: false)
+    assert_not File.exist?(File.join(@temp_dir, ".onlylogs"))
+
+    @database.model(Note, @log_file_path).create!(title: "Hello")
+    assert_equal ["Hello"], @database.model(Note, @log_file_path, create: false).pluck(:title)
+  end
+
+  test "a database replaced on disk is connected afresh" do
+    @database = database(create_notes)
+    @database.model(Note, @log_file_path).create!(title: "Gone")
+
+    FileUtils.rm_rf(File.join(@temp_dir, ".onlylogs"))
+
+    assert_nil @database.model(Note, @log_file_path, create: false)
+    assert_empty @database.model(Note, @log_file_path).pluck(:title)
+  end
+
   test "raise unavailable when the directory cannot be created" do
     File.write(File.join(@temp_dir, ".onlylogs"), "a file where the directory should be")
 
@@ -91,6 +146,10 @@ class Onlylogs::DirectoryDatabaseTest < ActiveSupport::TestCase
       @calls << :create_notes
       connection.create_table(:notes) { |t| t.string :title }
     }
+  end
+
+  def create_tags
+    ->(connection) { connection.create_table(:tags) { |t| t.string :label } }
   end
 
   def add_body

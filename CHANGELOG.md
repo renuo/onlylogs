@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **`DirectoryDatabase` holds more than saved searches.** All models of one directory now share its connection, so a
+  transaction spans them; `model(base, path, create: false)` returns nil for a directory without a database instead
+  of creating one; and a database file replaced on disk gets a fresh connection while the old one is left to the
+  pool reaper, so a connection in use, such as a test transaction's, is never pulled away.
+
 - **Saved searches live inside the query field.** Next to the query sit a clear button, a list of the saved searches
   and a star that saves the current query, fills in when it is already saved and offers rename or removal. The list
   marks the search you are on, shows when you have edited it since applying it, and renames and deletes in place.
