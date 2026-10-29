@@ -1,9 +1,18 @@
+GIT
+  remote: https://github.com/renuo/sqlite_shards.git
+  revision: 0378e44d75bbe9f06f105c55a7c07f7040a187b6
+  specs:
+    sqlite_shards (0.1.0)
+      activerecord (~> 8.0)
+      sqlite3 (~> 2.0)
+
 PATH
   remote: .
   specs:
     onlylogs (0.11.0)
       rails (~> 8.0)
       sqlite3 (~> 2.0)
+      sqlite_shards (~> 0.1)
 
 GEM
   remote: https://rubygems.org/
@@ -313,6 +322,7 @@ DEPENDENCIES
   puma
   simplecov
   sqlite3
+  sqlite_shards!
   standard
   stimulus-rails
   web-console

@@ -5,7 +5,7 @@ module Onlylogs
   # see File#with_database.
   class QueriesRecord < ActiveRecord::Base
     self.abstract_class = true
-    include FileDatabase
+    include SqliteShards
 
     database_migrations(
       ->(connection) {

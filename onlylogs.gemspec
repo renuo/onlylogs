@@ -22,4 +22,5 @@ Gem::Specification.new do |spec|
 
   spec.add_dependency "rails", "~> 8.0"
   spec.add_dependency "sqlite3", "~> 2.0"
+  spec.add_dependency "sqlite_shards", "~> 0.1"
 end

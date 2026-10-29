@@ -7,6 +7,9 @@ gem "puma"
 
 gem "sqlite3"
 
+# Not on rubygems.org yet.
+gem "sqlite_shards", github: "renuo/sqlite_shards"
+
 gem "propshaft"
 
 gem "importmap-rails"
