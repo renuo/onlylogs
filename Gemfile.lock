@@ -1,6 +1,6 @@
 GIT
   remote: https://github.com/renuo/sqlite_shards.git
-  revision: 0378e44d75bbe9f06f105c55a7c07f7040a187b6
+  revision: c7cf3790da3ca9ff5707055f4682b5060f0fffc6
   specs:
     sqlite_shards (0.1.0)
       activerecord (~> 8.0)
