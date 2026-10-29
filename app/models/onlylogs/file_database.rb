@@ -17,8 +17,9 @@ module Onlylogs
   #
   #   NotesRecord.with_database("path/to/notes.db") { Note.all.to_a }
   #
-  # Outside with_database the models have no connection, so Note.all raises. That includes anything reading their
-  # columns early, like a controller's parameter wrapping: turn it off with wrap_parameters false.
+  # Outside with_database the models have no connection, so Note.all raises. Their columns are known anyway, since
+  # every file is migrated the same way: attribute_names reads them from an in-memory database migrated like the
+  # files, so Note.new and a controller's parameter wrapping work without a file.
   #
   # bound_to gives a relation that can be kept and used outside a block: every call on it, and on the relations and
   # records it returns, runs inside with_database.
@@ -83,6 +84,9 @@ module Onlylogs
       @database_lock = Mutex.new
     end
 
+    # Every file is migrated the same way, so the schema is known without one: see schema_cache.
+    SCHEMA_SHARD = :schema
+
     class_methods do
       def database_migrations(*migrations)
         @database_migrations = migrations
@@ -105,6 +109,17 @@ module Onlylogs
         connect.call { Bound.new(scope.call, &connect) }
       end
 
+      # Active Record reads a model's schema through these, all memoized on the class: the table and its primary key,
+      # the columns, and their types. Outside a file they read the in-memory schema database instead.
+      %i[schema_cache load_schema _default_attributes].each do |method|
+        define_method(method) do
+          return super() unless current_shard == default_shard
+
+          connection_class_for_self.send(:with_schema_database) { super() }
+        end
+      end
+      private :load_schema
+
       def clear_database_connections
         @database_lock.synchronize do
           @database_shards.each do |shard|
@@ -115,6 +130,25 @@ module Onlylogs
       end
 
       private
+
+      # An in-memory database is lost when the reaper closes its one connection, so it is migrated on every use;
+      # Active Record keeps the schema once read, so that is rare.
+      def with_schema_database(&)
+        @database_lock.synchronize do
+          unless @database_shards.include?(SCHEMA_SHARD)
+            connection_handler.establish_connection(
+              {adapter: "sqlite3", database: ":memory:", pool: 1},
+              owner_name: self, role: ActiveRecord.writing_role, shard: SCHEMA_SHARD
+            )
+            @database_shards << SCHEMA_SHARD
+          end
+        end
+
+        connected_to(role: ActiveRecord.writing_role, shard: SCHEMA_SHARD) do
+          connection_pool.with_connection { |connection| migrate_database(connection) }
+          yield
+        end
+      end
 
       def create_database_file(path)
         FileUtils.mkdir_p(::File.dirname(path))

@@ -175,6 +175,14 @@ class Onlylogs::FileDatabaseTest < ActiveSupport::TestCase
     assert_equal ["Theirs"], theirs.pluck(:title)
   end
 
+  test "columns are known outside with_database, while queries still raise" do
+    NotesRecord.with_database(@path) { Note.reset_column_information }
+
+    assert_equal ["id", "title", "body"], Note.attribute_names
+    assert_equal "Hi", Note.new(title: "Hi").title
+    assert_raises(ActiveRecord::ConnectionNotDefined) { Note.count }
+  end
+
   test "raise unavailable when the file cannot be created" do
     File.write(File.join(@temp_dir, ".onlylogs"), "a file where the directory should be")
 

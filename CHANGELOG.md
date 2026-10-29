@@ -4,7 +4,9 @@
 
 - **`Onlylogs::FileDatabase` replaces `DirectoryDatabase`.** An abstract model class includes it, lists its
   migrations with `database_migrations`, and gets `with_database(path) { ... }`: inside the block its models read and
-  write that SQLite file, outside it they raise. All models of a file share one connection, so a transaction spans
+  write that SQLite file, outside it their queries raise. Their columns are known anywhere, read from an in-memory
+  database migrated like the files, so `Query.new` and parameter wrapping work. All models of a file share one
+  connection, so a transaction spans
   them; `create: false` yields nothing for a missing file instead of creating it; and a file replaced on disk gets a
   fresh connection while the old one is left to the pool reaper. `bound_to(path) { scope }` returns a relation that
   can be kept outside a block: every call on it, and on the relations and records it returns, runs inside the

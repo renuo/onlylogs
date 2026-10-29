@@ -2,10 +2,6 @@
 
 module Onlylogs
   class QueriesController < ViewerController
-    # The viewer already sends its attributes under "query"; wrapping them would read Query's columns outside
-    # of a database.
-    wrap_parameters false
-
     before_action :set_log_file
 
     rescue_from(ActiveRecord::RecordInvalid) { |e| render_invalid(e.record) }
