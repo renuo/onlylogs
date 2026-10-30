@@ -12,22 +12,27 @@ module Onlylogs
     # is deliberately not a number, because only the caller knows how long it
     # can afford to hold the thread it runs on. Anything serving a request
     # should pass one.
+    # +context+ asks for that many lines before and after each match, yielded with
+    # <tt>context: true</tt>. It needs ripgrep: plain grep is run without byte
+    # offsets, so its context lines could not be told apart from matches, and
+    # +context+ is ignored there. Context never reaches outside the byte window.
     def self.grep(pattern, file_path, start_position: 0, end_position: nil, regexp_mode: false,
-      case_sensitive: true, max_matches: Onlylogs.max_line_matches, timeout: nil, &block)
+      case_sensitive: true, max_matches: Onlylogs.max_line_matches, context: 0, timeout: nil, &block)
+      context = 0 unless Onlylogs.ripgrep_enabled?
       command_args = search_command(pattern, file_path, start_position: start_position,
         end_position: end_position, regexp_mode: regexp_mode, case_sensitive: case_sensitive,
-        max_matches: max_matches)
+        max_matches: max_matches, context: context)
 
       results = []
 
-      # Set up parsing logic based on whether ripgrep includes byte offsets
+      # ripgrep prints "offset:line" for a match and "offset-line" for context
       parse_line = if Onlylogs.ripgrep_enabled?
         ->(line) {
-          parts = line.split(":", 2)
-          [parts[0].to_i + start_position, parts[1] || ""]
+          offset, separator, content = line.partition(/[:-]/)
+          [offset.to_i + start_position, content, separator == "-"]
         }
       else
-        ->(line) { [nil, line] }
+        ->(line) { [nil, line, false] }
       end
 
       matches = 0
@@ -36,13 +41,17 @@ module Onlylogs
         query: pattern, regexp: regexp_mode, case_sensitive: case_sensitive, start_position: start_position,
         end_position: end_position, max_matches: max_matches) do |payload|
         each_output_line(command_args, timeout: timeout) do |line|
-          byte_offset, content = parse_line.call(line.chomp)
+          line = line.chomp
+          next if context.positive? && line == GROUP_SEPARATOR
+
+          byte_offset, content, context_line = parse_line.call(line)
 
           # Use String.new to create a copy and prevent memory retention from IO buffers
           content = String.new(content, encoding: Encoding::UTF_8).scrub
 
           result = {byte_offset: byte_offset, content: content}
-          matches += 1
+          result[:context] = true if context_line
+          matches += 1 unless context_line
 
           if block_given?
             yield result
@@ -62,16 +71,19 @@ module Onlylogs
       block_given? ? nil : results
     end
 
+    GROUP_SEPARATOR = "--"
+
     # The scripts run under LC_ALL=C. ripgrep folds case over Unicode anyway,
     # grep then folds ASCII only: "error" finds "ERROR" with both engines, but
     # "über" finds "Über" with ripgrep only.
     def self.search_command(pattern, file_path, start_position: 0, end_position: nil, regexp_mode: false,
-      case_sensitive: true, max_matches: Onlylogs.max_line_matches)
+      case_sensitive: true, max_matches: Onlylogs.max_line_matches, context: 0)
       script_name = Onlylogs.ripgrep_enabled? ? "super_ripgrep" : "super_grep"
       super_grep_path = ::File.expand_path("../../../bin/#{script_name}", __dir__)
 
       command_args = [super_grep_path]
       command_args += ["--max-matches", max_matches.to_s] if max_matches.present?
+      command_args += ["--context", context.to_s] if context.positive?
       command_args << "--regexp" if regexp_mode
       command_args << "--case-insensitive" unless case_sensitive
 
