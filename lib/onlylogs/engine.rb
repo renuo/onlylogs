@@ -8,7 +8,16 @@ module Onlylogs
   class Engine < ::Rails::Engine
     isolate_namespace Onlylogs
 
+    # Load the viewer's code on first use instead of at boot, so apps that only use the
+    # loggers don't need the frameworks it builds on (e.g. Action Cable).
+    paths.all_paths.select(&:eager_load?).each do |path|
+      path.skip_eager_load!
+      path.autoload!
+    end
+
     initializer "onlylogs.assets" do |app|
+      next unless app.config.respond_to?(:assets)
+
       %w[images javascript stylesheets builds fonts].each do |subdir|
         path = root.join("app/assets", subdir)
         app.config.assets.paths << path if path.exist?
