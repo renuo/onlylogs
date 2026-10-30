@@ -1,10 +1,16 @@
 # Changelog
 
-## Unreleased
+## 0.13.0
 
 - **Searches can return context.** `Onlylogs::Grep.grep` takes `context:`, the number of lines before and after
   each match to return, like `grep -C`. Context lines carry `context: true` and their own byte offset, never reach
   outside the byte window, and do not count towards `max_matches`. It needs ripgrep and is ignored with plain grep.
+
+- **Boots in apps that don't load every Rails framework.** Apps that only use the loggers crashed at boot with eager
+  loading on (production, Solid Queue workers) when they did not load Action Cable, Active Record or an asset
+  pipeline. The engine's `app/` code is now loaded on first use of the viewer instead of at boot, `sqlite_shards` is
+  only required by the saved searches, and the assets initializer is skipped without Propshaft or Sprockets. The
+  unused `Onlylogs::ApplicationJob` is gone.
 
 ## 0.12.0
 

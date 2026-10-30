@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    onlylogs (0.12.0)
+    onlylogs (0.13.0)
       rails (~> 8.0)
       sqlite3 (~> 2.0)
       sqlite_shards (~> 0.1)
