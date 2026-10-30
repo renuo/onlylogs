@@ -211,6 +211,49 @@ class Onlylogs::GrepTest < ActiveSupport::TestCase
     assert_equal expected, lines, "Failed with #{engine_name}"
   end
 
+  test "ripgrep returns the lines around each match flagged as context, with their offsets" do
+    Onlylogs.configuration.ripgrep_enabled = true
+    path = ::File.join(@tmpdir, "context.log")
+    ::File.write(path, "one\nneedle a\ntwo\nthree\nfour\nneedle b\n")
+    body = ::File.read(path)
+
+    lines = Onlylogs::Grep.grep("needle", path, context: 1)
+
+    assert_equal ["one", "needle a", "two", "four", "needle b"], lines.map { |line| line[:content] }
+    assert_equal [true, nil, true, true, nil], lines.map { |line| line[:context] }
+    assert_equal %w[one needle\ a two four needle\ b].map { |text| body.index(text) }, lines.map { |line| line[:byte_offset] }
+  end
+
+  test "ripgrep keeps context inside the byte window and its offsets absolute" do
+    Onlylogs.configuration.ripgrep_enabled = true
+    path = ::File.join(@tmpdir, "context_window.log")
+    ::File.write(path, "outside\ninside\nneedle\nafter\n")
+    start = ::File.read(path).index("inside")
+
+    lines = Onlylogs::Grep.grep("needle", path, start_position: start, context: 5)
+
+    assert_equal %w[inside needle after], lines.map { |line| line[:content] }
+    assert_equal start, lines.first[:byte_offset]
+  end
+
+  test "ripgrep counts only matches towards max_matches" do
+    Onlylogs.configuration.ripgrep_enabled = true
+    path = ::File.join(@tmpdir, "context_max.log")
+    ::File.write(path, "needle 1\ntrace\nneedle 2\ntrace\nneedle 3\n")
+
+    lines = Onlylogs::Grep.grep("needle", path, context: 1, max_matches: 2)
+
+    assert_equal ["needle 1", "trace", "needle 2", "trace"], lines.map { |line| line[:content] }
+  end
+
+  test "grep ignores context, since it cannot tell context lines from matches" do
+    Onlylogs.configuration.ripgrep_enabled = false
+    path = ::File.join(@tmpdir, "context_grep.log")
+    ::File.write(path, "one\nneedle\ntwo\n")
+
+    assert_equal ["needle"], Onlylogs::Grep.grep("needle", path, context: 1).map { |line| line[:content] }
+  end
+
   test "match_line? ignores case when asked to" do
     line = "\e[1m\e[36mActiveRecord::SchemaMigration Load (0.0ms)\e[0m  \e[1m\e[34mSELECT ...\e[0m"
 

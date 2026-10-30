@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- **Searches can return context.** `Onlylogs::Grep.grep` takes `context:`, the number of lines before and after
+  each match to return, like `grep -C`. Context lines carry `context: true` and their own byte offset, never reach
+  outside the byte window, and do not count towards `max_matches`. It needs ripgrep and is ignored with plain grep.
+
 ## 0.12.0
 
 - **Searches can be saved.** The star in the query field saves the current query with its Regexp and Ignore case

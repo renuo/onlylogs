@@ -12,6 +12,10 @@ while [[ $# -gt 0 ]]; do
       max_matches="$2"
       shift 2
       ;;
+    --context)
+      context="$2"
+      shift 2
+      ;;
     --start-position)
       start_position="$2"
       shift 2
@@ -67,6 +71,11 @@ query_regex="${query_regex//$placeholder/$actual_color_regex}"
 rg_cmd="rg --color=never --no-filename --byte-offset --no-mmap"
 [ -n "$max_matches" ] && rg_cmd="$rg_cmd --max-count=$max_matches"
 [ "$case_insensitive" = true ] && rg_cmd="$rg_cmd --ignore-case"
+# Context lines come out as "offset-line" instead of "offset:line", with "--" between groups
+case "$context" in
+  "" | *[!0-9]*) ;;
+  *) rg_cmd="$rg_cmd --context=$context" ;;
+esac
 
 # Handle byte range if specified
 if [ -n "$start_position" ] || [ -n "$end_position" ]; then
