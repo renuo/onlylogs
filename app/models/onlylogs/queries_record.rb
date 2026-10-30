@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "sqlite_shards"
+
 module Onlylogs
   # Saved queries live in a database kept in each log directory, shared by all log files in it:
   # see File#with_database.

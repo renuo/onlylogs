@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "sqlite_shards"
+
 module Onlylogs
   class QueriesController < ViewerController
     before_action :set_log_file
