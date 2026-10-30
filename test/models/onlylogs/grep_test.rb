@@ -246,6 +246,66 @@ class Onlylogs::GrepTest < ActiveSupport::TestCase
     assert_equal ["needle 1", "trace", "needle 2", "trace"], lines.map { |line| line[:content] }
   end
 
+  test_both_engine_modes "captures return what the pattern's groups matched, next to the line" do |engine_name|
+    path = ::File.join(@tmpdir, "captures.log")
+    ::File.write(path, "[2026-10-29T00:34:53+00:00] [I] GET /x\nplain line\n")
+
+    lines = Onlylogs::Grep.grep('^\[(\S+)\] \[(\w)\]', path, captures: true)
+
+    assert_equal [["2026-10-29T00:34:53+00:00", "I"]], lines.map { |line| line[:captures] }, "Failed with #{engine_name}"
+    assert_equal ["[2026-10-29T00:34:53+00:00] [I] GET /x"], lines.map { |line| line[:content] }
+  end
+
+  test_both_engine_modes "captures imply regexp mode and hold the whole match when there is no group" do |engine_name|
+    path = ::File.join(@tmpdir, "captures_whole.log")
+    ::File.write(path, "status=500 duration=3.73\nstatus=200 duration=1.00\n")
+
+    lines = Onlylogs::Grep.grep('status=5\d+', path, captures: true)
+
+    assert_equal [["status=500"]], lines.map { |line| line[:captures] }, "Failed with #{engine_name}"
+  end
+
+  test_both_engine_modes "captures are read from the line without its colour codes" do |engine_name|
+    path = ::File.join(@tmpdir, "captures_ansi.log")
+    ::File.write(path, "\e[31m[E]\e[0m boom\n")
+
+    lines = Onlylogs::Grep.grep('\[(E)\] (\w+)', path, captures: true)
+
+    assert_equal [["E", "boom"]], lines.map { |line| line[:captures] }, "Failed with #{engine_name}"
+  end
+
+  test_both_engine_modes "captures fold case along with the search when asked to" do |engine_name|
+    path = ::File.join(@tmpdir, "captures_case.log")
+    ::File.write(path, "Error here\n")
+
+    lines = Onlylogs::Grep.grep("(error)", path, captures: true, case_sensitive: false)
+
+    assert_equal [["Error"]], lines.map { |line| line[:captures] }, "Failed with #{engine_name}"
+  end
+
+  test_both_engine_modes "a pattern Ruby cannot compile is refused before the search when captures are asked for" do |engine_name|
+    assert_raises(Onlylogs::Grep::PatternError, "Failed with #{engine_name}") do
+      Onlylogs::Grep.grep("(", @fixture_path, captures: true)
+    end
+  end
+
+  test_both_engine_modes "lines carry no captures unless asked for" do |engine_name|
+    lines = Onlylogs::Grep.grep("[INFO]", @fixture_path)
+
+    assert_not lines.first.key?(:captures), "Failed with #{engine_name}"
+  end
+
+  test "ripgrep leaves context lines without captures" do
+    Onlylogs.configuration.ripgrep_enabled = true
+    path = ::File.join(@tmpdir, "captures_context.log")
+    ::File.write(path, "needle 1\ntrace\n")
+
+    lines = Onlylogs::Grep.grep('needle (\d)', path, captures: true, context: 1)
+
+    assert_equal [["1"], nil], lines.map { |line| line[:captures] }
+    assert_equal [nil, true], lines.map { |line| line[:context] }
+  end
+
   test "grep ignores context, since it cannot tell context lines from matches" do
     Onlylogs.configuration.ripgrep_enabled = false
     path = ::File.join(@tmpdir, "context_grep.log")

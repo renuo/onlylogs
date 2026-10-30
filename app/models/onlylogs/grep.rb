@@ -7,6 +7,10 @@ module Onlylogs
     # can keep a single rescue.
     class TimeoutError < ::Timeout::Error; end
 
+    # Raised for a pattern Ruby cannot compile, which only matters when +captures+
+    # asks Ruby to read its groups back.
+    class PatternError < ArgumentError; end
+
     # +timeout+ is in seconds and defaults to nil, which is no deadline at all:
     # the search runs until it finishes or the caller abandons it. The default
     # is deliberately not a number, because only the caller knows how long it
@@ -16,9 +20,17 @@ module Onlylogs
     # <tt>context: true</tt>. It needs ripgrep: plain grep is run without byte
     # offsets, so its context lines could not be told apart from matches, and
     # +context+ is ignored there. Context never reaches outside the byte window.
+    # +captures+ treats +pattern+ as a regular expression and yields, under
+    # <tt>captures:</tt>, what its groups matched on each match: one entry per group,
+    # or the whole match when it has none. The engine finds the line and Ruby reads
+    # the groups back from it, so a pattern the two read differently, or one that
+    # times out, yields nil there instead.
     def self.grep(pattern, file_path, start_position: 0, end_position: nil, regexp_mode: false,
-      case_sensitive: true, max_matches: Onlylogs.max_line_matches, context: 0, timeout: nil, &block)
+      case_sensitive: true, max_matches: Onlylogs.max_line_matches, context: 0, captures: false,
+      timeout: nil, &block)
       context = 0 unless Onlylogs.ripgrep_enabled?
+      regexp_mode ||= captures
+      capture_pattern = compile(pattern, case_sensitive: case_sensitive) if captures
       command_args = search_command(pattern, file_path, start_position: start_position,
         end_position: end_position, regexp_mode: regexp_mode, case_sensitive: case_sensitive,
         max_matches: max_matches, context: context)
@@ -51,6 +63,7 @@ module Onlylogs
 
           result = {byte_offset: byte_offset, content: content}
           result[:context] = true if context_line
+          result[:captures] = captures_in(capture_pattern, content) if capture_pattern && !context_line
           matches += 1 unless context_line
 
           if block_given?
@@ -72,6 +85,21 @@ module Onlylogs
     end
 
     GROUP_SEPARATOR = "--"
+
+    def self.compile(pattern, case_sensitive:)
+      Regexp.new(pattern, case_sensitive ? nil : Regexp::IGNORECASE, timeout: MATCH_TIMEOUT)
+    rescue ::RegexpError => e
+      raise PatternError, "invalid regular expression: #{e.message}"
+    end
+
+    def self.captures_in(pattern, content)
+      found = pattern.match(content.gsub(ANSI_COLOR, ""))
+      return nil unless found
+
+      found.captures.empty? ? [found[0]] : found.captures
+    rescue ::Regexp::TimeoutError
+      nil
+    end
 
     # The scripts run under LC_ALL=C. ripgrep folds case over Unicode anyway,
     # grep then folds ASCII only: "error" finds "ERROR" with both engines, but
@@ -186,11 +214,12 @@ module Onlylogs
     end
 
     MATCH_TIMEOUT = 0.1 # seconds
+    ANSI_COLOR = /\e\[[0-9;]*m/
 
     # Folds case over Unicode, like ripgrep. See search_command for grep.
     def self.match_line?(line, string, regexp_mode: false, case_sensitive: true)
       # Strip ANSI color codes from the line before matching
-      stripped_line = line.gsub(/\e\[[0-9;]*m/, "")
+      stripped_line = line.gsub(ANSI_COLOR, "")
       # Normalize multiple spaces to single spaces
       normalized_line = stripped_line.gsub(/\s+/, " ")
 

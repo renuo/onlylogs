@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- **Searches can return what a pattern captured.** `Onlylogs::Grep.grep` takes `captures:`, which treats the
+  pattern as a regular expression and adds `captures:` to each match: one entry per group, or the whole match when
+  the pattern has none. The engine finds the line and Ruby reads the groups back from it, with colour codes
+  stripped, so a pattern the two read differently yields `nil` there. A pattern Ruby cannot compile raises
+  `Onlylogs::Grep::PatternError` before the search starts. Context lines carry no captures.
+
 ## 0.13.0
 
 - **Searches can return context.** `Onlylogs::Grep.grep` takes `context:`, the number of lines before and after
