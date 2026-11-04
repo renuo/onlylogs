@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.14.0
 
 - **Searches can return what a pattern captured.** `Onlylogs::Grep.grep` takes `captures:`, which treats the
   pattern as a regular expression and adds `captures:` to each match: one entry per group, or the whole match when

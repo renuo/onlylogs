@@ -9,7 +9,7 @@ blocks:
   - name: release
     task:
       secrets:
-        - name: onlylogs
+        - name: rubygems-deploy
       jobs:
         - name: gem push
           commands:
