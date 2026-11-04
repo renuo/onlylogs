@@ -630,6 +630,22 @@ bin/rails test test/models/onlylogs/grep_performance_test.rb
 > [!NOTE]
 > Performance tests are automatically skipped in CI environments or if the large fixture files are missing.
 
+### Release
+
+1. Bump the version in `lib/onlylogs/version.rb`, run `bundle install`, move the `Unreleased` entries of
+   `CHANGELOG.md` under the new version and commit to `main`.
+1. Tag the commit with the bare version and push the tag:
+
+   ```bash
+   git tag -a 1.2.3 -m 1.2.3
+   git push origin 1.2.3
+   ```
+
+1. Create a GitHub release for the tag with the changelog section as notes.
+
+Semaphore runs the tests on the tag and, when they pass, promotes the `release` pipeline, which pushes the gem to
+[rubygems.org](https://rubygems.org). It fails when the tag does not match the gem version.
+
 ### Plans for the future
 
 We believe that by simply analysing your logs you can also get error reports and performance reports. The goal is to
