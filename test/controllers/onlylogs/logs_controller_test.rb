@@ -15,6 +15,36 @@ module Onlylogs
 
       @log_file = Onlylogs.available_log_files.first
       @encrypted_path = Onlylogs::SecureFilePath.encrypt(@log_file.to_s)
+      @original_authorize_log_file = Onlylogs.configuration.authorize_log_file
+    end
+
+    teardown { Onlylogs.configuration.authorize_log_file = @original_authorize_log_file }
+
+    test "download is forbidden when the authorization hook refuses the file" do
+      Onlylogs.configuration.authorize_log_file = ->(_path) { false }
+
+      get "/onlylogs/download", params: {log_file_path: @encrypted_path}
+
+      assert_response :forbidden
+    end
+
+    test "index is forbidden for a file the authorization hook refuses" do
+      Onlylogs.configuration.authorize_log_file = ->(_path) { false }
+
+      get "/onlylogs", params: {log_file_path: @encrypted_path}
+
+      assert_response :forbidden
+    end
+
+    test "index lists and opens only the files the authorization hook allows" do
+      allowed = Onlylogs::Engine.root.join("test", "fixtures", "files", "test.log").to_s
+      Onlylogs.configuration.authorize_log_file = ->(path) { path.to_s == allowed }
+
+      get "/onlylogs"
+
+      assert_response :success
+      assert_select "#log_file_path option", count: 1
+      assert_select "#log_file_path option[selected]", text: /test\.log/
     end
 
     test "download sends file for valid encrypted path" do
