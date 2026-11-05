@@ -2,8 +2,10 @@
 
 module Onlylogs
   class LogsController < ApplicationController
+    rescue_from(Onlylogs::ForbiddenPathError) { render plain: "Forbidden: you cannot open this log file.", status: :forbidden }
+
     def index
-      @available_log_files = Onlylogs.available_log_files
+      @available_log_files = Onlylogs.available_log_files.select { |file| authorized?(file.to_s) }
       @log_file_path = selected_log_file_path
     end
 
@@ -31,17 +33,20 @@ module Onlylogs
 
     def authorized_log_file_path(encrypted_path)
       decrypted_path = Onlylogs::SecureFilePath.decrypt(encrypted_path)
-      if Onlylogs.file_path_permitted?(decrypted_path)
-        decrypted_path
-      else
-        raise Onlylogs::ForbiddenPathError, "File path not allowed"
-      end
+      raise Onlylogs::ForbiddenPathError, "File path not allowed" unless authorized?(decrypted_path)
+
+      decrypted_path
+    end
+
+    # The same check the queries endpoints and the viewer use: the allow-list, then the host's hook.
+    def authorized?(path)
+      Onlylogs.file_path_permitted?(path) && Onlylogs.log_file_authorized?(self, path)
     end
 
     def default_log_file_path
       # "/Users/alessandrorodi/RenuoWorkspace/onlylogs/test/fixtures/files/very_big.log"
       configured_default = Onlylogs.default_log_file_path
-      return configured_default if Onlylogs.file_path_permitted?(configured_default) && ::File.exist?(configured_default)
+      return configured_default if authorized?(configured_default) && ::File.exist?(configured_default)
 
       @available_log_files.first&.to_s || configured_default
     end
