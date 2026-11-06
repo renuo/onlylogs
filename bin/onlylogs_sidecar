@@ -70,7 +70,6 @@ def send_batch(uri, lines)
   http.use_ssl = (uri.scheme == "https")
   request = Net::HTTP::Post.new(uri.path)
   request.body = lines.join("\n")
-  puts "[OnlylogsSidecar] Sending #{request.body}"
   request.content_type = "text/plain"
   http.read_timeout = 5
   http.open_timeout = 2
