@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **The sidecar no longer prints every batch to stdout.** It shares Puma's stdout, where `SocketLogger` already
+  writes each line, so every log line came out twice.
 - **`authorize_log_file` now also guards the file list and the download.** The hook was only checked by the saved
   queries, so a user it refused still saw every allowed file in the dropdown and could open or download it. The
   dropdown now lists only the files the hook allows, and opening or downloading another one answers `403`.
