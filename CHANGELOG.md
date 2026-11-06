@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Security: a search filter that starts with `-` no longer reaches grep as options.** Without ripgrep,
+  `super_grep` passed the filter to grep as its first argument, so `-rvf` made grep print every file under the
+  working directory (`config/master.key`, `.env`) to anyone who can open the viewer. The filter now goes after
+  `-e`. Apps with ripgrep were not affected.
 - **`authorize_log_file` now also guards the file list and the download.** The hook was only checked by the saved
   queries, so a user it refused still saw every allowed file in the dropdown and could open or download it. The
   dropdown now lists only the files the hook allows, and opening or downloading another one answers `403`.
