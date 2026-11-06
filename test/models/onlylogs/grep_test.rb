@@ -67,6 +67,22 @@ class Onlylogs::GrepTest < ActiveSupport::TestCase
     assert_equal 1, lines.length, "Failed with #{engine_name}"
   end
 
+  # A filter that starts with a dash is text to find, not options for the engine. Read as options,
+  # "-rvf" made grep print every file under the working directory: master.key, .env.
+  test_both_engine_modes "a filter that looks like options is searched as text" do |engine_name|
+    File.write(File.join(@tmpdir, "secret.txt"), "SECRET=abc\n")
+    log_path = File.join(@tmpdir, "app.log")
+    File.write(log_path, "first line\nrun with -rvf\n")
+
+    Dir.chdir(@tmpdir) do
+      [0, 1].each do |start_position|
+        lines = Onlylogs::Grep.grep("-rvf", log_path, start_position: start_position)
+        assert_equal ["run with -rvf"], lines.map { |l| l[:content] },
+          "Failed with #{engine_name}, start_position #{start_position}"
+      end
+    end
+  end
+
   test_both_engine_modes "it returns empty array when no matches found" do |engine_name|
     lines = Onlylogs::Grep.grep("NONEXISTENT_PATTERN", @fixture_path)
     assert_equal [], lines, "Failed with #{engine_name}"
