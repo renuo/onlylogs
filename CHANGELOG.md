@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Security: a search filter that starts with `-` no longer reaches grep as options.** Without ripgrep,
+  `super_grep` passed the filter to grep as its first argument, so `-rvf` made grep print every file under the
+  working directory (`config/master.key`, `.env`) to anyone who can open the viewer. The filter now goes after
+  `-e`. Apps with ripgrep were not affected.
 - **A search no longer stops at a binary byte.** A NUL byte anywhere in a log file made ripgrep take the file for
   binary and silently return only the matches before it; plain grep returned "Binary file matches" instead of the
   lines. Both engines now read every file as text (`--text`, `-a`), and bytes that are not valid UTF-8 come back
