@@ -87,8 +87,8 @@ if [ -n "$start_position" ] || [ -n "$end_position" ]; then
   [ $range_end -gt $file_size ] && range_end=$file_size && range_size=$((range_end - range_start))
 
   tail -c +$((range_start + 1)) "$file" | head -c $range_size | \
-    "${grep_cmd[@]}" "$query_regex"
+    "${grep_cmd[@]}" -e "$query_regex"
 else
-  # Search entire file
-  "${grep_cmd[@]}" "$query_regex" "$file"
+  # Search entire file. -e and -- keep a query or file that starts with "-" from being read as options.
+  "${grep_cmd[@]}" -e "$query_regex" -- "$file"
 fi
