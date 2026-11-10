@@ -126,7 +126,6 @@ module Onlylogs
       return unless @drain_url
 
       ensure_sender
-      # A binary line (e.g. a Net::HTTP body) cannot be joined with a UTF-8 one into one batch body.
       enqueue(truncate(message.dup.force_encoding(Encoding::UTF_8).scrub.chomp))
     end
 
