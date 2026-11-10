@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- **`HttpLogger` no longer drops a batch that mixes a binary line with a UTF-8 one.** Joining them raised
+  `Encoding::CompatibilityError`, so the whole batch was lost and counted as a drain failure. Lines are now
+  shipped as UTF-8, with invalid bytes replaced.
+
 ## 0.15.0
 
 - **Security: a search filter that starts with `-` no longer reaches grep as options.** Without ripgrep,
