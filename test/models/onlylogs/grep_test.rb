@@ -67,6 +67,18 @@ class Onlylogs::GrepTest < ActiveSupport::TestCase
     assert_equal 1, lines.length, "Failed with #{engine_name}"
   end
 
+  test_both_engine_modes "it keeps searching past a line with binary bytes" do |engine_name|
+    path = File.join(@tmpdir, "binary.log")
+    File.binwrite(path, "[INFO] before\n[INFO] payload \x00\x01\xFF\n[INFO] after\n")
+
+    [{}, {start_position: 0, end_position: File.size(path)}].each do |window|
+      lines = Onlylogs::Grep.grep("[INFO]", path, **window)
+      assert_equal ["[INFO] before", "[INFO] after"], lines.map { |l| l[:content] }.values_at(0, 2),
+        "Failed with #{engine_name} and #{window}"
+      assert_equal 3, lines.length, "Failed with #{engine_name} and #{window}"
+    end
+  end
+
   test_both_engine_modes "it returns empty array when no matches found" do |engine_name|
     lines = Onlylogs::Grep.grep("NONEXISTENT_PATTERN", @fixture_path)
     assert_equal [], lines, "Failed with #{engine_name}"
