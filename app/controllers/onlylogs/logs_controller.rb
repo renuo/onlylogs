@@ -44,11 +44,10 @@ module Onlylogs
     end
 
     def default_log_file_path
-      # "/Users/alessandrorodi/RenuoWorkspace/onlylogs/test/fixtures/files/very_big.log"
       configured_default = Onlylogs.default_log_file_path
       return configured_default if authorized?(configured_default) && ::File.exist?(configured_default)
 
-      @available_log_files.first&.to_s || configured_default
+      @available_log_files.first&.to_s
     end
   end
 end

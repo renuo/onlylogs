@@ -38,6 +38,11 @@
     .download-link:hover {
         background-color: #d7e5fd;
     }
+
+    .no-log-files {
+        padding: 0.65rem;
+        color: #58626f;
+    }
 </style>
 <div class="grid">
   <div class="grid-header">
@@ -56,5 +61,9 @@
       <% end %>
     <% end %>
   </div>
-  <%= render partial: "onlylogs/shared/log_container", locals: { log_file_path: @log_file_path } %>
+  <% if @log_file_path %>
+    <%= render partial: "onlylogs/shared/log_container", locals: { log_file_path: @log_file_path } %>
+  <% else %>
+    <p class="no-log-files">No log files you can open.</p>
+  <% end %>
 </div>

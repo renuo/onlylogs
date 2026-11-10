@@ -47,6 +47,16 @@ module Onlylogs
       assert_select "#log_file_path option[selected]", text: /test\.log/
     end
 
+    test "index opens no file when the authorization hook refuses every file" do
+      Onlylogs.configuration.authorize_log_file = ->(_path) { false }
+
+      get "/onlylogs"
+
+      assert_response :success
+      assert_select "[data-log-streamer-file-path-value]", count: 0
+      assert_select ".grid", text: /No log files/
+    end
+
     test "download sends file for valid encrypted path" do
       get "/onlylogs/download", params: {log_file_path: @encrypted_path}
       assert_response :success
