@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.15.0
 
 - **Security: a search filter that starts with `-` no longer reaches grep as options.** Without ripgrep,
   `super_grep` passed the filter to grep as its first argument, so `-rvf` made grep print every file under the
