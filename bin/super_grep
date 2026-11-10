@@ -60,7 +60,8 @@ query_regex="${query_regex//$placeholder/$actual_color_regex}"
 
 
 # Build grep command
-grep_cmd=(grep -E -h)             # -h = no filename (portable)
+# -a: a NUL byte makes grep take the file for binary and print "Binary file matches" instead of the lines
+grep_cmd=(grep -E -h -a)          # -h = no filename (portable)
 if [ -n "$max_matches" ]; then
   grep_cmd+=(-m "$max_matches")   # -m = max count (portable)
 fi

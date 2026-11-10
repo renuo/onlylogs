@@ -53,13 +53,13 @@ module Onlylogs
         query: pattern, regexp: regexp_mode, case_sensitive: case_sensitive, start_position: start_position,
         end_position: end_position, max_matches: max_matches) do |payload|
         each_output_line(command_args, timeout: timeout) do |line|
-          line = line.chomp
+          line = line.scrub.chomp
           next if context.positive? && line == GROUP_SEPARATOR
 
           byte_offset, content, context_line = parse_line.call(line)
 
           # Use String.new to create a copy and prevent memory retention from IO buffers
-          content = String.new(content, encoding: Encoding::UTF_8).scrub
+          content = String.new(content, encoding: Encoding::UTF_8)
 
           result = {byte_offset: byte_offset, content: content}
           result[:context] = true if context_line

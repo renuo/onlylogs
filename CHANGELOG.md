@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **A search no longer stops at a binary byte.** A NUL byte anywhere in a log file made ripgrep take the file for
+  binary and silently return only the matches before it; plain grep returned "Binary file matches" instead of the
+  lines. Both engines now read every file as text (`--text`, `-a`), and bytes that are not valid UTF-8 come back
+  replaced.
 - **The sidecar no longer prints every batch to stdout.** It shares Puma's stdout, where `SocketLogger` already
   writes each line, so every log line came out twice.
 - **`authorize_log_file` now also guards the file list and the download.** The hook was only checked by the saved
