@@ -95,7 +95,7 @@ class MockDrain
 
     return false unless saw_headers
 
-    body = conn.read(content_length) if content_length > 0
+    body = conn.read(content_length)&.force_encoding(Encoding::UTF_8) if content_length > 0
     @mutex.synchronize { @bodies << body } if body
 
     code = status
