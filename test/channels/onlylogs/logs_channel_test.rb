@@ -95,6 +95,31 @@ module Onlylogs
         "must not stream any lines for a blank token"
     end
 
+    test "denies a file authorize_log_file refuses, whatever token was handed out" do
+      Onlylogs.configuration.authorize_log_file = ->(_path) { false }
+      subscribe
+      perform :initialize_watcher, initialize_data
+
+      assert_equal [{"action" => "error", "content" => "Access denied"}], transmissions
+    end
+
+    test "authorize_log_file runs with the channel as self and reaches the connection's identifiers" do
+      Onlylogs.configuration.authorize_log_file = ->(_path) { current_user == "alice" }
+      stub_connection(current_user: "alice")
+      subscribe
+      perform :initialize_watcher, initialize_data
+
+      assert_equal ["line 1", "line 2", "line 3"], sent_contents
+    end
+
+    test "a hook that needs a controller helper refuses the stream instead of raising" do
+      Onlylogs.configuration.authorize_log_file = ->(_path) { can?(:read, :logs) }
+      subscribe
+      perform :initialize_watcher, initialize_data
+
+      assert_equal [{"action" => "error", "content" => "Access denied"}], transmissions
+    end
+
     # Expand-around-line feature tests
 
     test "a live tail finishes with a reload button when the file is rotated" do

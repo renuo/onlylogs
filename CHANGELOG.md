@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- **Security: `authorize_log_file` now also guards the live stream.** `LogsChannel` only checked that the encrypted
+  path decrypted to an allowed file. An encrypted path never expires and is not tied to a user, so a page left open,
+  or a path copied from it, kept streaming a file after the hook would have refused it, for example once the user
+  lost access. The channel now runs the hook on every stream, with the channel as `self`. **Check your hook:** there
+  only the connection's identifiers (such as `current_user`) exist, so a hook that calls a controller helper like
+  `can?` now refuses every stream and logs why.
+
 ## 0.15.0
 
 - **Security: a search filter that starts with `-` no longer reaches grep as options.** Without ripgrep,
