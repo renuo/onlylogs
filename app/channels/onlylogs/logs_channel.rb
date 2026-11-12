@@ -55,9 +55,11 @@ module Onlylogs
     private
 
     # Decrypts and authorises the requested file. Returns nil (after transmitting
-    # an error) when there is no token, when it cannot be decrypted, or when the
-    # decrypted path is not on the configured allow-list — the three ways a client
-    # can ask for something it is not entitled to stream.
+    # an error) when there is no token, when it cannot be decrypted, when the
+    # decrypted path is not on the configured allow-list, or when
+    # authorize_log_file refuses it. The hook runs on every stream, not only when
+    # the token was handed out: a token never expires, so it must not carry the
+    # access its page had into a later stream.
     def authorized_file_path(encrypted_file_path)
       if encrypted_file_path.blank?
         Rails.logger.error "Onlylogs: initialize_watcher without a file path token; refusing to stream"
@@ -73,9 +75,20 @@ module Onlylogs
         return nil
       end
 
+      unless Onlylogs.log_file_authorized?(self, file_path)
+        Rails.logger.error "Onlylogs: authorize_log_file refused streaming #{file_path}"
+        transmit({action: "error", content: "Access denied"})
+        return nil
+      end
+
       file_path
     rescue Onlylogs::SecureFilePath::SecurityError => e
       Rails.logger.error "Onlylogs: Security violation - #{e.message}"
+      transmit({action: "error", content: "Access denied"})
+      nil
+    rescue NameError => e
+      # Here the hook has only the connection's identifiers (identified_by), not the controller's helpers.
+      Rails.logger.error "Onlylogs: authorize_log_file failed for a stream, refusing it - #{e.message}"
       transmit({action: "error", content: "Access denied"})
       nil
     end

@@ -296,6 +296,11 @@ By default everybody who gets through the authentication can open every file you
 [File Access Security](#file-access-security)). To decide per user and per file, set `authorize_log_file`. It runs
 inside the controller, so you can use your own `current_user`. Return something falsy to refuse the file.
 
+The hook also runs every time the viewer starts streaming a file over the WebSocket, with the channel as `self`. There
+only your connection's identifiers are available (`identified_by :current_user` in
+`ApplicationCable::Connection`), not controller helpers. A hook that calls one, such as CanCanCan's `can?`, refuses
+every stream; build the check from `current_user` instead, e.g. `Ability.new(current_user).can?(:read, file)`.
+
 ```ruby
 # config/initializers/onlylogs.rb
 Onlylogs.configure do |config|
@@ -313,6 +318,10 @@ Logs are streamed through a WebSocket. To stream a file, two things must be true
 - the file path is allowed (see [File Access Security](#file-access-security));
 - the file path is sent encrypted, with `Onlylogs::SecureFilePath.encrypt`. The viewer does this for you. Nobody can
   ask for a path they were not given.
+
+If you set `authorize_log_file`, it must also allow the file for the connection's user, each time a stream starts. An
+encrypted path never expires, so this is what stops a page left open, or a path copied from it, from streaming a
+file after its user has lost access.
 
 An empty or unknown path is refused.
 
