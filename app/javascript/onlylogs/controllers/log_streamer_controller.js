@@ -16,7 +16,7 @@ export default class LogStreamerController extends Controller {
     endPosition: { type: Number, default: 0 }
   };
 
-  static targets = ["logLines", "filterInput", "results", "liveButton", "searchButton", "searchWholeFileButton", "message", "regexpMode", "caseInsensitive", "websocketStatus", "stopButton", "clearButton", "autoscroll", "rangeSliderContainer", "startSlider", "endSlider", "searchPlaceholder"];
+  static targets = ["logLines", "filterInput", "results", "liveButton", "searchButton", "message", "regexpMode", "caseInsensitive", "websocketStatus", "stopButton", "clearButton", "autoscroll", "rangeSliderContainer", "startSlider", "endSlider", "searchPlaceholder"];
 
   // When the current live query started, so "0 matches" can say since when.
   #liveFilterStartedAt = null;
@@ -147,23 +147,20 @@ export default class LogStreamerController extends Controller {
     this.reconnectWithNewMode();
   }
 
-  switchToSearch() {
+  // Leaves live mode: runs what is already typed against the whole file instead of
+  // waiting for a matching line to arrive. Only the Search button moves focus to the
+  // query; a search for selected text keeps it in the lines.
+  switchToSearch(event) {
     if (!this.isLiveMode()) return;
 
-    this.#setMode('static');
-    this.reconnectWithNewMode();
-  }
-
-  // Bound only to the "Search whole file" button, which is shown while tailing.
-  // Leaves live mode: runs what is already typed against the file instead of
-  // waiting for a matching line to arrive.
-  searchWholeFile() {
     this.#clearHighlighting();
     this.#setMode('static');
     this.#setRange(0, this.fileSizeValue);
     this.#updateUrlParams({ start_position: null, end_position: null, byte_offset: null });
     this.reconnectWithNewMode();
-    this.filterInputTarget.focus();
+    if (this.hasSearchButtonTarget && event?.currentTarget === this.searchButtonTarget) {
+      this.filterInputTarget.focus();
+    }
   }
 
   applyFilter() {
