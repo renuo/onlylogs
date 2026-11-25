@@ -12,10 +12,10 @@ Gem::Specification.new do |spec|
 
   spec.metadata["homepage_uri"] = spec.homepage
   spec.metadata["source_code_uri"] = "https://github.com/renuo/onlylogs"
-  spec.metadata["changelog_uri"] = "https://github.com/renuo/onlylogs/CHANGELOG.md"
+  spec.metadata["changelog_uri"] = "https://github.com/renuo/onlylogs/blob/main/CHANGELOG.md"
 
   spec.files = Dir.chdir(File.expand_path(__dir__)) do
-    Dir["{app,config,db,lib}/**/*", "MIT-LICENSE", "Rakefile", "README.md", "bin/onlylogs_sidecar"]
+    Dir["{app,config,lib}/**/*", "LICENSE", "Rakefile", "README.md", "bin/onlylogs_sidecar"]
   end
   spec.bindir = "bin"
   spec.executables = ["onlylogs_sidecar", "super_grep", "super_ripgrep"]
