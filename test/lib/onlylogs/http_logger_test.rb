@@ -35,6 +35,17 @@ module Onlylogs
       assert_includes drain.received, "second line"
     end
 
+    test "ships a binary line and a UTF-8 line logged in the same batch" do
+      drain = build_drain
+      logger = build_logger(drain, batch_size: 2, flush_interval: 10)
+
+      logger.add(Logger::INFO, "body: caf\xC3\xA9".b)
+      logger.add(Logger::INFO, "niño ✓")
+
+      assert wait_until { drain.received.include?("niño ✓") }
+      assert_includes drain.received, "body: café"
+    end
+
     test "flushes on interval when batch size is not reached" do
       drain = build_drain
       logger = build_logger(drain, batch_size: 1000, flush_interval: 0.1)

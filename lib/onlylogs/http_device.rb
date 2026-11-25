@@ -126,7 +126,7 @@ module Onlylogs
       return unless @drain_url
 
       ensure_sender
-      enqueue(truncate(message.chomp))
+      enqueue(truncate(message.dup.force_encoding(Encoding::UTF_8).scrub.chomp))
     end
 
     # Ships everything still queued, then stops the sender. This is the only synchronous path: there
