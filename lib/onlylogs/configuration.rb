@@ -136,10 +136,10 @@ module Onlylogs
     configuration.viewer_parent_controller
   end
 
-  # Runs in the controller, so it can reach the host's current user.
-  def self.log_file_authorized?(controller, file_path)
+  # Runs with the controller, or for a stream the LogsChannel, as self, so it can reach the host's current user.
+  def self.log_file_authorized?(context, file_path)
     hook = configuration.authorize_log_file
-    hook.nil? || controller.instance_exec(file_path, &hook).present?
+    hook.nil? || context.instance_exec(file_path, &hook).present?
   end
 
   def self.disable_basic_authentication?
